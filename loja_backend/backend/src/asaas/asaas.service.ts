@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   Injectable,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -44,6 +45,7 @@ export interface AsaasCheckout {
 // só quando efetivamente chamado sem estar configurado.
 @Injectable()
 export class AsaasService {
+  private readonly logger = new Logger(AsaasService.name);
   private readonly apiKey?: string;
   private readonly baseUrl?: string;
 
@@ -89,6 +91,15 @@ export class AsaasService {
     }
 
     if (!response.ok) {
+      // Diagnóstico temporário (Task 21 — investigação do checkout
+      // recusado): só no log do servidor, nunca repassado ao chamador —
+      // status/corpo do Asaas ajudam a achar o motivo real da recusa sem
+      // vazar nada sensível (API key/token nunca entram aqui, corpo é só o
+      // que o Asaas devolveu sobre a própria requisição de checkout).
+      const corpoErro = await response.text().catch(() => '<corpo ilegível>');
+      this.logger.error(
+        `Asaas recusou ${method} ${path} -> ${response.status} ${response.statusText}: ${corpoErro}`,
+      );
       throw new BadGatewayException('O Asaas recusou a requisição de checkout');
     }
 

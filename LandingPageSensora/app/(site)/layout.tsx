@@ -4,6 +4,7 @@ import "../globals.css";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import PageFadeIn from "@/components/ui/PageFadeIn";
+import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { ToastProvider } from "@/context/ToastContext";
 
@@ -43,7 +44,20 @@ export default function RootLayout({
         <CartProvider>
           <ToastProvider>
             <PageFadeIn>
-              <Navbar />
+              {/* Task 22 (Navbar/login) — AuthProvider escopado só ao Navbar
+                  (único consumidor de useAuth() aqui), não a {children}: as
+                  páginas do site (ex.: /loja/checkout) têm sua própria
+                  guarda de sessão independente (possuiSessaoValida, ver
+                  lib/auth-redirect.ts) com redirect próprio para
+                  /login?redirect=... — se AuthProvider também envolvesse
+                  {children}, o efeito de auto-logout dele (sincronizarComToken,
+                  ver AuthContext.tsx) rodaria depois do guard da página
+                  (efeitos disparam de baixo para cima) e sobrescreveria esse
+                  redirect com um /login sem o parâmetro, perdendo o destino
+                  de retorno. */}
+              <AuthProvider>
+                <Navbar />
+              </AuthProvider>
               <main className="flex-1">{children}</main>
               <Footer />
             </PageFadeIn>

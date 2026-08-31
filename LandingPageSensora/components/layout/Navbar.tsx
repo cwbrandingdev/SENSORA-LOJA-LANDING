@@ -2,14 +2,37 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import Logo from "@/components/ui/Logo";
 import { NAV_CATEGORIES } from "@/lib/content";
 import { ROUTES } from "@/lib/routes";
+import { loginComRedirect } from "@/lib/auth-redirect";
+import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import { PerfilUsuario, STAFF_ROLES } from "@/lib/types/loja";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const { totalItens } = useCart();
+  const pathname = usePathname();
+  const { isAuthenticated, loading, perfil, logout } = useAuth();
+
+  // Task 22 (Navbar/login) — mesmo destino que o próprio /login já usa após
+  // autenticar (ver app/login/page.tsx): CLIENTE vai para a loja, ADMIN/
+  // VENDEDOR para o painel. loginComRedirect é o mesmo helper que /login já
+  // valida do outro lado (isDestinoInternoValido) — nenhuma lógica de
+  // redirect nova foi inventada aqui.
+  let contaLabel = "Entrar";
+  let contaHref: string = loginComRedirect(pathname ?? "/");
+  if (isAuthenticated) {
+    if (perfil === PerfilUsuario.CLIENTE) {
+      contaLabel = "Minha conta";
+      contaHref = ROUTES.LOJA;
+    } else if (perfil !== null && STAFF_ROLES.includes(perfil)) {
+      contaLabel = "Painel administrativo";
+      contaHref = ROUTES.DASHBOARD;
+    }
+  }
 
   return (
     <header className="sticky top-0 z-50 bg-brand-navy text-white">
@@ -76,6 +99,37 @@ export default function Navbar() {
                 />
               </Link>
             </li>
+            {!loading && (
+              <>
+                <li>
+                  <Link
+                    href={contaHref}
+                    className="group relative inline-block text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 hover:text-brand-orange"
+                  >
+                    {contaLabel}
+                    <span
+                      aria-hidden
+                      className="absolute inset-x-0 -bottom-1 h-px origin-left scale-x-0 bg-brand-orange transition-transform duration-300 ease-out group-hover:scale-x-100 motion-reduce:transition-none"
+                    />
+                  </Link>
+                </li>
+                {isAuthenticated && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={logout}
+                      className="group relative inline-block text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 hover:text-brand-orange"
+                    >
+                      Sair
+                      <span
+                        aria-hidden
+                        className="absolute inset-x-0 -bottom-1 h-px origin-left scale-x-0 bg-brand-orange transition-transform duration-300 ease-out group-hover:scale-x-100 motion-reduce:transition-none"
+                      />
+                    </button>
+                  </li>
+                )}
+              </>
+            )}
           </ul>
         </nav>
       </div>
@@ -111,6 +165,33 @@ export default function Navbar() {
               )}
             </Link>
           </li>
+          {!loading && (
+            <>
+              <li>
+                <Link
+                  href={contaHref}
+                  onClick={() => setOpen(false)}
+                  className="block rounded-md px-2 py-3 text-sm font-medium tracking-wide text-white/90 hover:bg-white/10 hover:text-brand-orange"
+                >
+                  {contaLabel}
+                </Link>
+              </li>
+              {isAuthenticated && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      logout();
+                    }}
+                    className="block w-full rounded-md px-2 py-3 text-left text-sm font-medium tracking-wide text-white/90 hover:bg-white/10 hover:text-brand-orange"
+                  >
+                    Sair
+                  </button>
+                </li>
+              )}
+            </>
+          )}
         </ul>
       </nav>
     </header>
