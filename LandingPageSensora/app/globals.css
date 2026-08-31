@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+:root {
+  --background: #faf8f4;
+  --foreground: #171717;
+  --brand-navy: #02183d;
+  --brand-navy-light: #123a66;
+  --brand-orange: #c45a31;
+  --brand-orange-light: #d97f5c;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-navy-light: var(--brand-navy-light);
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-orange-light: var(--brand-orange-light);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-fraunces);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
+}
+
+@keyframes hero-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Parallax extremamente sutil, ligado ao scroll via CSS puro (sem listener
+   de JS): a imagem deriva ±6px enquanto atravessa o viewport. O scale(1.06)
+   fixo em cada keyframe é a folga que garante que a deriva nunca revele a
+   borda da moldura (overflow-hidden do container pai continua cortando o
+   excesso). Some inteiramente em navegadores sem suporte a scroll-timeline
+   (a imagem só fica estática) e é desligado com prefers-reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .parallax-drift {
+      animation: parallax-drift-move linear both;
+      animation-timeline: view();
+      animation-range: cover 0% cover 100%;
+    }
+  }
+}
+
+@keyframes parallax-drift-move {
+  from {
+    transform: scale(1.06) translateY(-6px);
+  }
+  to {
+    transform: scale(1.06) translateY(6px);
+  }
+}

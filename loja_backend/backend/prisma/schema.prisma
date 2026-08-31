@@ -1,0 +1,138 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Usuario {
+  id               Int            @id @default(autoincrement())
+  nome             String
+  email            String         @unique
+  senha            String
+  perfil           PerfilUsuario
+  ativo            Boolean        @default(true)
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  refreshTokens    RefreshToken[]
+  pedidos          Pedido[]
+  enderecos        Endereco[]
+}
+
+// Task 8 (Carrinho/Checkout) — endereços de entrega do próprio usuário
+// autenticado, usados no checkout. `usuarioId` nunca vem do corpo da
+// requisição: sempre extraído do JWT (ver EnderecosController), e todo
+// acesso (find/update/remove) é filtrado por usuarioId + id juntos, para
+// que um usuário nunca veja/altere o endereço de outro.
+model Endereco {
+  id          Int      @id @default(autoincrement())
+  usuarioId   Int
+  rua         String
+  numero      String
+  complemento String?
+  bairro      String
+  cidade      String
+  estado      String
+  cep         String
+  padrao      Boolean  @default(false)
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+// Task 27 — refresh token opaco (não é um JWT): só o hash (SHA-256) é
+// persistido, nunca o token em texto puro, mesmo raciocínio de nunca
+// guardar senha em claro. Uma linha por sessão/dispositivo — várias linhas
+// ativas por usuarioId são o suporte nativo a múltiplas sessões.
+model RefreshToken {
+  id        Int       @id @default(autoincrement())
+  tokenHash String    @unique
+  usuarioId Int
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model Cliente {
+  id       Int    @id @default(autoincrement())
+  nome     String
+  email    String
+  telefone String
+  cpf      String
+  endereco String
+}
+
+model Categoria {
+  id        Int       @id @default(autoincrement())
+  nome      String
+  slug      String    @unique
+  descricao String?
+  produtos  Produto[]
+}
+
+model Produto {
+  id          Int          @id @default(autoincrement())
+  nome        String
+  slug        String       @unique
+  descricao   String?
+  preco       Decimal      @db.Decimal(10, 2)
+  quantidade  Int
+  imagemUrl   String?
+  aroma       String?
+  ativo       Boolean      @default(true)
+  destaque    Boolean      @default(false)
+  categoriaId Int?
+  itensPedido ItemPedido[]
+  categoria   Categoria?   @relation(fields: [categoriaId], references: [id])
+}
+
+model Pedido {
+  id              Int          @id @default(autoincrement())
+  numero          String
+  data            DateTime
+  status          StatusPedido @default(PENDENTE)
+  total           Decimal      @db.Decimal(10, 2)
+  // Legado (Stripe) — preservado só para pedidos antigos e para o modo de
+  // rollback (CHECKOUT_GATEWAY="stripe"), ver Task 21.
+  stripeSessionId String?      @unique
+  // Id do Asaas Checkout — gateway ativo por padrão a partir da Task 21.
+  asaasCheckoutId String?      @unique
+  clienteEmail    String?
+  clienteNome     String?
+  usuarioId       Int?
+  itens           ItemPedido[]
+
+  // Achado da auditoria: usuarioId já era usado pela aplicação (ver
+  // PedidosService.podeAcessar) para restringir VENDEDOR aos próprios
+  // pedidos, mas nunca teve uma FK real no banco. onDelete: SetNull mantém o
+  // histórico do pedido mesmo se o Usuario dono for excluído, em vez de
+  // deixar a coluna apontando para um id que não existe mais.
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+}
+
+model ItemPedido {
+  id            Int     @id @default(autoincrement())
+  pedidoId      Int
+  produtoId     Int
+  quantidade    Int
+  precoUnitario Decimal @db.Decimal(10, 2)
+  subtotal      Decimal @db.Decimal(10, 2)
+  pedido        Pedido  @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto       Produto @relation(fields: [produtoId], references: [id])
+}
+
+enum PerfilUsuario {
+  ADMIN
+  VENDEDOR
+  CLIENTE
+}
+
+enum StatusPedido {
+  PENDENTE
+  PAGO
+  CANCELADO
+}

@@ -1,0 +1,11 @@
+-- Baseline migration: originally reconciled columns that appeared to be
+-- missing from any tracked migration on "Produto" (imagemUrl/aroma/ativo/
+-- categoriaId + Produto_categoriaId_fkey). After restoring the original
+-- content of 20260804120000_candle_store_stripe from its source commit
+-- (checksum-verified against what was actually applied to the real
+-- database), that migration turned out to already cover those exact
+-- columns/FK — so re-adding them here would duplicate them on a fresh
+-- shadow database replay. This migration is intentionally a no-op now: it
+-- stays recorded as already applied (via `prisma migrate resolve
+-- --applied`, applied_steps_count = 0) purely to keep migration history
+-- continuous, without executing any SQL.

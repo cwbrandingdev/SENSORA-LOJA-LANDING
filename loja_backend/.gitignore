@@ -1,0 +1,17 @@
+# Claude / ferramentas locais
+.claude/
+.windsurf/
+
+# Dependências
+node_modules/
+
+# Builds
+dist/
+.next/
+
+# Variáveis de ambiente
+.env
+.env.local
+
+# Logs
+*.log
