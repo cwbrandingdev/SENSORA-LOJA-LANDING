@@ -12,28 +12,46 @@ type CollectionShowcaseProps = {
 
 // Vitrine editorial de uma coleção: apresenta, não vende — nenhum item da
 // grade é clicável, o único caminho de conversão é o CTA final para a loja.
-export default function CollectionShowcase({ collection }: CollectionShowcaseProps) {
+export default function CollectionShowcase({
+  collection,
+}: CollectionShowcaseProps) {
   const headingId = `${collection.slug}-heading`;
 
   return (
-    <section aria-labelledby={headingId} className="mx-auto max-w-7xl px-6 pb-24 sm:pb-32 lg:px-10 lg:pb-40">
+    <section
+      aria-labelledby={headingId}
+      className="mx-auto max-w-7xl px-6 pb-24 sm:pb-32 lg:px-10 lg:pb-40"
+    >
       {collection.heroImageSrc && (
         <RevealOnScroll className="relative mx-auto aspect-[21/9] w-full max-w-6xl overflow-hidden rounded-sm shadow-2xl shadow-brand-navy/10">
           <ImageReveal>
-            <PlaceholderImage src={collection.heroImageSrc} alt={collection.heroImageAlt ?? collection.name} label={collection.name} />
+            <PlaceholderImage
+              src={collection.heroImageSrc}
+              alt={collection.heroImageAlt ?? collection.name}
+              label={collection.name}
+            />
           </ImageReveal>
         </RevealOnScroll>
       )}
 
       <RevealOnScroll className="mx-auto mt-12 max-w-3xl text-center sm:mt-16">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">{collection.eyebrow ?? "Kit"}</p>
-        <h2 id={headingId} className="mt-4 font-serif text-3xl font-normal tracking-tight text-brand-navy sm:text-4xl">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
+          {collection.eyebrow ?? "Kit"}
+        </p>
+        <h2
+          id={headingId}
+          className="mt-4 font-serif text-3xl font-normal tracking-tight text-brand-navy sm:teFdesxt-4xl"
+        >
           <TextReveal>{collection.name}</TextReveal>
         </h2>
         {collection.tagline && (
-          <p className="mt-3 text-sm font-light text-slate-500 sm:text-base">{collection.tagline}</p>
+          <p className="mt-3 text-sm font-light text-slate-500 sm:text-base">
+            {collection.tagline}
+          </p>
         )}
-        <p className="mt-6 text-base leading-relaxed text-slate-600">{collection.description}</p>
+        <p className="mt-6 text-base leading-relaxed text-slate-600">
+          {collection.description}
+        </p>
       </RevealOnScroll>
 
       {/* Flex + justify-center em vez de grid: com uma Collection de menos de
@@ -74,7 +92,11 @@ export default function CollectionShowcase({ collection }: CollectionShowcasePro
             <h3 className="mt-3 font-serif text-xl font-normal text-brand-navy transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5">
               {item.name}
             </h3>
-            {item.mood && <p className="mx-auto mt-2 max-w-[26ch] text-sm leading-relaxed text-slate-600">{item.mood}</p>}
+            {item.mood && (
+              <p className="mx-auto mt-2 max-w-[26ch] text-sm leading-relaxed text-slate-600">
+                {item.mood}
+              </p>
+            )}
           </RevealOnScroll>
         ))}
       </div>

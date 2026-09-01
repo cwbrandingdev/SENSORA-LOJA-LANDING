@@ -86,7 +86,9 @@ function LoginForm() {
       // VENDEDOR) vai para o Admin, onde o ProtectedLayout é quem valida
       // de fato o acesso.
       const perfil = decodeToken(access_token)?.perfil;
-      router.push(perfil === PerfilUsuario.CLIENTE ? ROUTES.LOJA : ROUTES.DASHBOARD);
+      router.push(
+        perfil === PerfilUsuario.CLIENTE ? ROUTES.LOJA : ROUTES.DASHBOARD,
+      );
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 401) {
         setServerError("E-mail ou senha inválidos.");
@@ -115,7 +117,9 @@ function LoginForm() {
               className={inputClass}
               {...register("email")}
             />
-            {errors.email && <p className={errorClass}>{errors.email.message}</p>}
+            {errors.email && (
+              <p className={errorClass}>{errors.email.message}</p>
+            )}
           </div>
 
           <div className="flex flex-col gap-1">
@@ -128,7 +132,9 @@ function LoginForm() {
               className={inputClass}
               {...register("senha")}
             />
-            {errors.senha && <p className={errorClass}>{errors.senha.message}</p>}
+            {errors.senha && (
+              <p className={errorClass}>{errors.senha.message}</p>
+            )}
           </div>
 
           {serverError && (
@@ -144,7 +150,10 @@ function LoginForm() {
 
         <p className="text-center text-sm text-slate-600">
           Não tem conta?{" "}
-          <Link href={ROUTES.REGISTER} className="font-medium text-brand-navy hover:underline">
+          <Link
+            href={ROUTES.REGISTER}
+            className="font-medium text-brand-navy hover:underline"
+          >
             Criar conta
           </Link>
         </p>

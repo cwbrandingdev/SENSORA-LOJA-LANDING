@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Geist_Mono, Inter } from "next/font/google";
 import "../globals.css";
 import Navbar from "@/components/layout/Navbar";
+import SiteMain from "@/components/layout/SiteMain";
 import Footer from "@/components/layout/Footer";
 import PageFadeIn from "@/components/ui/PageFadeIn";
 import { AuthProvider } from "@/context/AuthContext";
@@ -58,7 +59,7 @@ export default function RootLayout({
               <AuthProvider>
                 <Navbar />
               </AuthProvider>
-              <main className="flex-1">{children}</main>
+              <SiteMain>{children}</SiteMain>
               <Footer />
             </PageFadeIn>
           </ToastProvider>

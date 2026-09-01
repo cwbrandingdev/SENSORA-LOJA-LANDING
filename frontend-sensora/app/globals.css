@@ -7,6 +7,7 @@
   --brand-navy-light: #123a66;
   --brand-orange: #c45a31;
   --brand-orange-light: #d97f5c;
+  --navbar-height: 4.5rem;
 }
 
 @theme inline {
