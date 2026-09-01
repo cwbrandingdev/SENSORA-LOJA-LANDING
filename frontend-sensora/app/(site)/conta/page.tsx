@@ -22,9 +22,9 @@ type ContaCard = {
   titulo: string;
   descricao: string;
   // Presente = card funcional (vira link). Ausente = placeholder "Em breve"
-  // (ainda não implementado). "Meus pedidos" (Etapa 2), "Dados pessoais" e
-  // "Segurança" (Etapa 3) já têm href; "Endereços" segue como placeholder
-  // até sua etapa.
+  // (ainda não implementado). "Meus pedidos" (Etapa 2), "Dados pessoais"/
+  // "Segurança" (Etapa 3) e "Endereços" (Etapa 4) já têm href — todos os
+  // cards desta página estão funcionais.
   href?: string;
 };
 
@@ -42,6 +42,7 @@ const CARDS: ContaCard[] = [
   {
     titulo: "Endereços",
     descricao: "Gerencie os endereços de entrega salvos na sua conta.",
+    href: ROUTES.CONTA_ENDERECOS,
   },
   {
     titulo: "Segurança",

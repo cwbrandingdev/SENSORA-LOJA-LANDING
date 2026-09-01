@@ -159,6 +159,10 @@ export type CreateEnderecoPayload = {
   padrao?: boolean;
 };
 
+// Etapa 4 (Minha Conta / Endereços) — espelha UpdateEnderecoDto
+// (PartialType(CreateEnderecoDto) no backend).
+export type UpdateEnderecoPayload = Partial<CreateEnderecoPayload>;
+
 export type Pedido = {
   id: number;
   numero: string;

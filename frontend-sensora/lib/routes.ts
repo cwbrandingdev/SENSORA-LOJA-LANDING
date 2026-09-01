@@ -30,6 +30,8 @@ export const ROUTES = {
   // herdada de /conta.
   CONTA_DADOS_PESSOAIS: "/conta/dados-pessoais",
   CONTA_SEGURANCA: "/conta/seguranca",
+  // Etapa 4 (Minha Conta / Endereços) — mesma proteção herdada de /conta.
+  CONTA_ENDERECOS: "/conta/enderecos",
   // Task 12 (+ Task 21 — migração Stripe → Asaas) — destino de retorno do
   // Asaas Checkout após pagamento concluído (callback.successUrl). Só a
   // página de retorno visual; a confirmação real do pagamento é sempre do

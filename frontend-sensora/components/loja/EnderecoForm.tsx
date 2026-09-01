@@ -3,10 +3,18 @@
 // Mesmo padrão de components/forms/ClientForm.tsx e demais formulários do
 // projeto (react-hook-form + zod + FormButton, mesmas classes de input) —
 // só os campos mudam, para bater com CreateEnderecoDto do backend.
+//
+// Etapa 4 (Minha Conta / Endereços) — acrescentou `initialData` (opcional,
+// mesmo padrão de PedidoForm/ItemPedidoForm) para reaproveitar este mesmo
+// formulário também na edição em /conta/enderecos, sem duplicar campos/
+// validação. Uso existente no checkout (sem initialData) continua
+// idêntico — defaultValues cai no mesmo fallback de string vazia de antes.
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import FormButton from "@/components/ui/FormButton";
+import type { Endereco } from "@/lib/types/loja";
 
 const enderecoSchema = z.object({
   rua: z.string().min(1, "Rua é obrigatória").max(200),
@@ -23,25 +31,43 @@ const enderecoSchema = z.object({
 
 export type EnderecoFormValues = z.infer<typeof enderecoSchema>;
 
+function toDefaultValues(endereco?: Endereco): EnderecoFormValues {
+  return {
+    rua: endereco?.rua ?? "",
+    numero: endereco?.numero ?? "",
+    complemento: endereco?.complemento ?? "",
+    bairro: endereco?.bairro ?? "",
+    cidade: endereco?.cidade ?? "",
+    estado: endereco?.estado ?? "",
+    cep: endereco?.cep ?? "",
+  };
+}
+
 const inputClass =
   "rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy";
 const labelClass = "text-sm font-medium text-slate-700";
 const errorClass = "text-sm text-red-600";
 
 type EnderecoFormProps = {
+  initialData?: Endereco;
   onSubmit: (data: EnderecoFormValues) => void | Promise<void>;
   onCancel?: () => void;
 };
 
-export default function EnderecoForm({ onSubmit, onCancel }: EnderecoFormProps) {
+export default function EnderecoForm({ initialData, onSubmit, onCancel }: EnderecoFormProps) {
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<EnderecoFormValues>({
     resolver: zodResolver(enderecoSchema),
-    defaultValues: { rua: "", numero: "", complemento: "", bairro: "", cidade: "", estado: "", cep: "" },
+    defaultValues: toDefaultValues(initialData),
   });
+
+  useEffect(() => {
+    reset(toDefaultValues(initialData));
+  }, [initialData, reset]);
 
   return (
     <form
@@ -118,7 +144,7 @@ export default function EnderecoForm({ onSubmit, onCancel }: EnderecoFormProps) 
 
       <div className="flex gap-2 pt-2">
         <FormButton type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Salvando..." : "Salvar endereço"}
+          {isSubmitting ? "Salvando..." : initialData ? "Salvar edição" : "Salvar endereço"}
         </FormButton>
 
         {onCancel && (
