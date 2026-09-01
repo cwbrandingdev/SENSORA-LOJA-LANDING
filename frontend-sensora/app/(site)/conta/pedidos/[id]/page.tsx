@@ -13,13 +13,14 @@ import Link from "next/link";
 import { isAxiosError } from "axios";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import EmptyState from "@/components/ui/EmptyState";
+import FormButton from "@/components/ui/FormButton";
 import StatusPedidoBadge from "@/components/conta/StatusPedidoBadge";
 import AcompanhamentoPedido from "@/components/conta/AcompanhamentoPedido";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
-import { buscarMeuPedido } from "@/services/pedidos";
+import { buscarMeuPedido, cancelarMeuPedido } from "@/services/pedidos";
 import { ROUTES } from "@/lib/routes";
-import type { PedidoComItensDetalhado } from "@/lib/types/loja";
+import { StatusPedido, type PedidoComItensDetalhado } from "@/lib/types/loja";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -34,6 +35,7 @@ export default function MeuPedidoDetalhePage() {
   const [dados, setDados] = useState<PedidoComItensDetalhado | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [naoEncontrado, setNaoEncontrado] = useState(false);
+  const [cancelando, setCancelando] = useState(false);
 
   useEffect(() => {
     // Id fora da URL não é um número válido — mesmo resultado prático de um
@@ -57,6 +59,34 @@ export default function MeuPedidoDetalhePage() {
       .finally(() => setCarregando(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoId]);
+
+  // Etapa 5A (Cancelamento de Pedido) — só chamado quando o status já
+  // exibido é PENDENTE (botão só existe nesse caso, ver abaixo), mas o
+  // backend é sempre a autoridade real: se o status mudou entre o
+  // carregamento da página e o clique (ex.: webhook confirmou o pagamento
+  // nesse meio tempo), a API rejeita e o erro específico do backend é
+  // mostrado, sem fingir sucesso.
+  async function handleCancelar() {
+    if (!dados || cancelando) return;
+    if (
+      !window.confirm(
+        `Cancelar o pedido ${dados.pedido.numero}? Esta ação não pode ser desfeita.`,
+      )
+    ) {
+      return;
+    }
+
+    setCancelando(true);
+    try {
+      const pedidoCancelado = await cancelarMeuPedido(dados.pedido.id);
+      setDados((atual) => (atual ? { ...atual, pedido: pedidoCancelado } : atual));
+      toast.success("Pedido cancelado com sucesso.");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Não foi possível cancelar o pedido."));
+    } finally {
+      setCancelando(false);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-6 pt-28 pb-24 sm:pt-36 sm:pb-32 lg:px-10">
@@ -94,7 +124,19 @@ export default function MeuPedidoDetalhePage() {
                 })}
               </h1>
             </div>
-            <StatusPedidoBadge status={dados.pedido.status} />
+            <div className="flex items-center gap-3">
+              <StatusPedidoBadge status={dados.pedido.status} />
+              {dados.pedido.status === StatusPedido.PENDENTE && (
+                <FormButton
+                  type="button"
+                  variant="danger"
+                  onClick={handleCancelar}
+                  disabled={cancelando}
+                >
+                  {cancelando ? "Cancelando..." : "Cancelar pedido"}
+                </FormButton>
+              )}
+            </div>
           </div>
 
           <div className="mt-8">

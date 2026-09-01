@@ -64,6 +64,24 @@ export class PedidosController {
     return this.pedidosService.buscarPedidoComItensDetalhado(id, user);
   }
 
+  // Etapa 5A (Cancelamento de Pedido) — operação específica, não um PUT
+  // genérico: o cliente nunca pode enviar um status arbitrário, só disparar
+  // esta transição exata (PENDENTE -> CANCELADO). Mesma posição/raciocínio
+  // de `meus`/`meus/:id`: rota "meus/:id/cancelar" não colide com `:id`
+  // abaixo (profundidades de path diferentes), mas fica agrupada aqui por
+  // clareza. @Roles(...TODOS_OS_PERFIS): mesmo padrão de autoatendimento —
+  // ownership real é sempre resolvido dentro de PedidosService.cancelar()
+  // (findOne + condição no updateMany), nunca confiado ao guard sozinho.
+  @Post('meus/:id/cancelar')
+  @Roles(...TODOS_OS_PERFIS)
+  @HttpCode(HttpStatus.OK)
+  cancelarMeuPedido(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: UsuarioAutenticado,
+  ): Promise<Pedido> {
+    return this.pedidosService.cancelar(id, user);
+  }
+
   @Get(':id')
   findOne(
     @Param('id', ParseIntPipe) id: number,

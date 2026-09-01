@@ -24,6 +24,15 @@ export async function buscarMeuPedido(id: number): Promise<PedidoComItensDetalha
   return response.data;
 }
 
+// Etapa 5A (Cancelamento de Pedido) — POST /pedidos/meus/:id/cancelar,
+// operação específica (não um PUT genérico): o backend só aceita a
+// transição PENDENTE -> CANCELADO, nunca um status arbitrário enviado
+// daqui. Ownership resolvido inteiramente no backend via @CurrentUser().
+export async function cancelarMeuPedido(id: number): Promise<Pedido> {
+  const response = await api.post<Pedido>(`/pedidos/meus/${id}/cancelar`);
+  return response.data;
+}
+
 export async function listarPedidos(): Promise<Pedido[]> {
   const response = await api.get<Pedido[]>("/pedidos");
   return response.data;

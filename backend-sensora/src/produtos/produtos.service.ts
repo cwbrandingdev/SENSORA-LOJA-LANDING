@@ -126,12 +126,19 @@ export class ProdutosService {
     return this.paraProduto(produtoAtualizado!);
   }
 
+  // Etapa 5A (Cancelamento de Pedido) — mesmo raciocínio de removerEstoque
+  // logo acima: `client` opcional participa de uma transação já aberta pelo
+  // chamador (ex.: PedidosService.cancelar restaurando estoque + mudando
+  // status como uma única operação atômica) sem duplicar esta lógica de
+  // incremento em outro lugar. Default `this.prisma` preserva 100% as
+  // chamadas existentes (ItensPedidoService).
   async adicionarEstoque(
     produtoId: number,
     quantidade: number,
+    client: Prisma.TransactionClient = this.prisma,
   ): Promise<Produto> {
     await this.findOne(produtoId);
-    const atualizado = await this.prisma.produto.update({
+    const atualizado = await client.produto.update({
       where: { id: produtoId },
       data: { quantidade: { increment: quantidade } },
     });

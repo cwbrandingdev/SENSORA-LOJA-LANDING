@@ -10,6 +10,7 @@ import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.inter
 import { ItemPedido } from '../itens-pedido/entities/item-pedido.entity';
 import { ItensPedidoService } from '../itens-pedido/itens-pedido.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProdutosService } from '../produtos/produtos.service';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
 import { CreatePedidoDto } from './dto/create-pedido.dto';
 import { UpdatePedidoDto } from './dto/update-pedido.dto';
@@ -24,6 +25,7 @@ export class PedidosService {
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => ItensPedidoService))
     private readonly itensPedidoService: ItensPedidoService,
+    private readonly produtosService: ProdutosService,
   ) {}
 
   // Etapa 10 / Task 5 (achado A6): ADMIN continua vendo/editando qualquer
@@ -111,6 +113,65 @@ export class PedidosService {
   async remove(id: number, user: UsuarioAutenticado): Promise<void> {
     await this.findOne(id, user);
     await this.prisma.pedido.delete({ where: { id } });
+  }
+
+  // Etapa 5A (Cancelamento de Pedido) — única transição permitida por este
+  // método é PENDENTE -> CANCELADO; PAGO/CANCELADO são sempre rejeitados
+  // (nenhum reembolso/estorno Asaas acontece aqui, de propósito — fora do
+  // escopo desta etapa). Mesmo padrão de CheckoutService.confirmarPagamento:
+  // updateMany condicionado a `status: PENDENTE` no WHERE é o que garante
+  // atomicidade contra duplo cancelamento (duas requisições simultâneas —
+  // o Postgres serializa, só uma vê count=1, a outra vê count=0 e recebe um
+  // erro claro em vez de restaurar estoque duas vezes). Ownership é
+  // resolvido duas vezes de propósito: findOne() já garante 404 para pedido
+  // inexistente/de outro usuário (mesmo padrão de sempre), e `ownerFilter`
+  // repete a mesma condição diretamente no updateMany (defesa em
+  // profundidade dentro da transação, sem custo extra).
+  async cancelar(id: number, user: UsuarioAutenticado): Promise<Pedido> {
+    const pedidoAtual = await this.findOne(id, user);
+    const itens = await this.itensPedidoService.findByPedidoId(id);
+
+    const ownerFilter =
+      user.perfil === PerfilUsuario.ADMIN ? {} : { usuarioId: user.id };
+
+    const pedidoCancelado = await this.prisma.$transaction(async (tx) => {
+      const resultado = await tx.pedido.updateMany({
+        where: { id, ...ownerFilter, status: StatusPedido.PENDENTE },
+        data: { status: StatusPedido.CANCELADO },
+      });
+
+      if (resultado.count === 0) {
+        // Reconsulta o status real dentro da transação: numa corrida
+        // genuína (outra requisição cancelou entre o findOne() acima e
+        // aqui), `pedidoAtual.status` já estaria desatualizado (mostraria
+        // PENDENTE) — a mensagem de erro precisa refletir o estado atual,
+        // não o que foi lido um instante antes.
+        const atual = await tx.pedido.findUnique({
+          where: { id },
+          select: { status: true },
+        });
+        throw new ConflictException(
+          `Pedido com status ${atual?.status ?? pedidoAtual.status} não pode ser cancelado.`,
+        );
+      }
+
+      // Restaura exatamente a quantidade reservada por item — nunca
+      // recalculada, nunca reenviada pelo cliente. adicionarEstoque nunca
+      // deixa o estoque negativo (só incrementa) e participa desta mesma
+      // transação via `tx`: se qualquer passo falhar, o status volta a
+      // PENDENTE junto com o resto (rollback completo).
+      for (const item of itens) {
+        await this.produtosService.adicionarEstoque(
+          item.produtoId,
+          item.quantidade,
+          tx,
+        );
+      }
+
+      return tx.pedido.findUniqueOrThrow({ where: { id } });
+    });
+
+    return this.paraPedido(pedidoCancelado);
   }
 
   async buscarItensDoPedido(
