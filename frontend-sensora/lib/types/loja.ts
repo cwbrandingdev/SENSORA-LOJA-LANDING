@@ -284,6 +284,26 @@ export type Usuario = {
   ativo: boolean;
 };
 
+// Etapa 3 (Minha Conta / Dados Pessoais) — espelha AtualizarMeusDadosDto
+// (backend/src/usuarios/dto/atualizar-meus-dados.dto.ts). Whitelist restrita
+// de propósito: só nome/email, nunca perfil/ativo/senha/id — ver GET/PUT
+// /usuarios/me em services/conta.ts.
+export type AtualizarMeusDadosPayload = {
+  nome: string;
+  email: string;
+};
+
+// Etapa 3 (Minha Conta / Segurança) — espelha AlterarMinhaSenhaDto
+// (backend/src/auth/dto/change-password.dto.ts).
+export type AlterarMinhaSenhaPayload = {
+  senhaAtual: string;
+  novaSenha: string;
+};
+
+export type MessageResponse = {
+  message: string;
+};
+
 export type CreateUsuarioPayload = {
   nome: string;
   email: string;

@@ -21,15 +21,23 @@ import Button from "@/components/ui/Button";
 type ContaCard = {
   titulo: string;
   descricao: string;
+  // Presente = card funcional (vira link). Ausente = placeholder "Em breve"
+  // (ainda não implementado). "Meus pedidos" (Etapa 2), "Dados pessoais" e
+  // "Segurança" (Etapa 3) já têm href; "Endereços" segue como placeholder
+  // até sua etapa.
+  href?: string;
 };
 
-// "Meus pedidos" (Etapa 2) já é funcional — renderizado separadamente logo
-// abaixo como link real. Os demais seguem como placeholder "Em breve"
-// exatamente como na Etapa 1, até suas respectivas etapas.
 const CARDS: ContaCard[] = [
   {
+    titulo: "Meus pedidos",
+    descricao: "Acompanhe o histórico e o status dos seus pedidos.",
+    href: ROUTES.CONTA_PEDIDOS,
+  },
+  {
     titulo: "Dados pessoais",
-    descricao: "Atualize seu nome, e-mail e informações de contato.",
+    descricao: "Atualize seu nome e e-mail de cadastro.",
+    href: ROUTES.CONTA_DADOS_PESSOAIS,
   },
   {
     titulo: "Endereços",
@@ -37,7 +45,8 @@ const CARDS: ContaCard[] = [
   },
   {
     titulo: "Segurança",
-    descricao: "Altere sua senha e revise o acesso à sua conta.",
+    descricao: "Altere sua senha da sua conta.",
+    href: ROUTES.CONTA_SEGURANCA,
   },
 ];
 
@@ -71,42 +80,45 @@ export default function ContaPage() {
 
       <RevealOnScroll delayMs={90}>
         <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Link
-            href={ROUTES.CONTA_PEDIDOS}
-            className="flex flex-col gap-2 rounded-sm border border-slate-200 p-6 transition-colors hover:border-brand-navy/30 hover:bg-slate-50"
-          >
-            <div className="flex items-center justify-between">
-              <h2 className="font-serif text-lg font-normal text-brand-navy">
-                Meus pedidos
-              </h2>
-              <span aria-hidden className="text-brand-orange">
-                →
-              </span>
-            </div>
-            <p className="text-sm leading-relaxed text-slate-600">
-              Acompanhe o histórico e o status dos seus pedidos.
-            </p>
-          </Link>
-
-          {CARDS.map((card) => (
-            <div
-              key={card.titulo}
-              aria-disabled="true"
-              className="flex flex-col gap-2 rounded-sm border border-slate-200 p-6 opacity-60"
-            >
-              <div className="flex items-center justify-between">
-                <h2 className="font-serif text-lg font-normal text-brand-navy">
-                  {card.titulo}
-                </h2>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Em breve
-                </span>
+          {CARDS.map((card) =>
+            card.href ? (
+              <Link
+                key={card.titulo}
+                href={card.href}
+                className="flex flex-col gap-2 rounded-sm border border-slate-200 p-6 transition-colors hover:border-brand-navy/30 hover:bg-slate-50"
+              >
+                <div className="flex items-center justify-between">
+                  <h2 className="font-serif text-lg font-normal text-brand-navy">
+                    {card.titulo}
+                  </h2>
+                  <span aria-hidden className="text-brand-orange">
+                    →
+                  </span>
+                </div>
+                <p className="text-sm leading-relaxed text-slate-600">
+                  {card.descricao}
+                </p>
+              </Link>
+            ) : (
+              <div
+                key={card.titulo}
+                aria-disabled="true"
+                className="flex flex-col gap-2 rounded-sm border border-slate-200 p-6 opacity-60"
+              >
+                <div className="flex items-center justify-between">
+                  <h2 className="font-serif text-lg font-normal text-brand-navy">
+                    {card.titulo}
+                  </h2>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    Em breve
+                  </span>
+                </div>
+                <p className="text-sm leading-relaxed text-slate-600">
+                  {card.descricao}
+                </p>
               </div>
-              <p className="text-sm leading-relaxed text-slate-600">
-                {card.descricao}
-              </p>
-            </div>
-          ))}
+            ),
+          )}
         </div>
       </RevealOnScroll>
 

@@ -12,12 +12,14 @@ import { MailService } from '../mail/mail.service';
 import { Usuario, UsuarioPublico } from '../usuarios/entities/usuario.entity';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
 import { UsuariosService } from '../usuarios/usuarios.service';
+import { AlterarMinhaSenhaDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthToken } from './entities/auth-token.entity';
+import { ChangePasswordResponse } from './entities/change-password-response.entity';
 import { ForgotPasswordResponse } from './entities/forgot-password-response.entity';
 import { LogoutResponse } from './entities/logout-response.entity';
 import { ResetPasswordResponse } from './entities/reset-password-response.entity';
@@ -187,6 +189,25 @@ export class AuthService {
     const tokenHash = this.hashToken(refreshTokenDto.refresh_token);
     await this.usuariosService.revogarRefreshTokenSeAtivo(tokenHash);
     return { message: 'Logout realizado com sucesso.' };
+  }
+
+  // Etapa 3 (Minha Conta / Segurança) — orquestra a troca de senha
+  // autoatendida: valida a senha atual e reaproveita, através de
+  // UsuariosService.alterarMinhaSenha(), o mesmo hash bcrypt + revogação de
+  // refresh tokens já usados por update()/resetPassword() (Task 27) —
+  // nenhuma lógica de senha duplicada aqui. O access token já emitido
+  // continua válido até expirar naturalmente, mesmo comportamento já aceito
+  // em resetPassword() (não há blacklist de access token neste projeto).
+  async changePassword(
+    usuarioId: number,
+    dto: AlterarMinhaSenhaDto,
+  ): Promise<ChangePasswordResponse> {
+    await this.usuariosService.alterarMinhaSenha(
+      usuarioId,
+      dto.senhaAtual,
+      dto.novaSenha,
+    );
+    return { message: 'Senha alterada com sucesso.' };
   }
 
   // FRONTEND_URL não está no ConfigModule.validationSchema (mesmo raciocínio

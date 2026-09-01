@@ -26,6 +26,10 @@ export const ROUTES = {
   // montado com contaPedidoDetalhe abaixo) dos pedidos do usuário
   // autenticado. Mesma proteção herdada de /conta (ProtectedAccountLayout).
   CONTA_PEDIDOS: "/conta/pedidos",
+  // Etapa 3 (Minha Conta / Dados Pessoais + Segurança) — mesma proteção
+  // herdada de /conta.
+  CONTA_DADOS_PESSOAIS: "/conta/dados-pessoais",
+  CONTA_SEGURANCA: "/conta/seguranca",
   // Task 12 (+ Task 21 — migração Stripe → Asaas) — destino de retorno do
   // Asaas Checkout após pagamento concluído (callback.successUrl). Só a
   // página de retorno visual; a confirmação real do pagamento é sempre do
