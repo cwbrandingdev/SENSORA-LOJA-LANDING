@@ -199,6 +199,21 @@ export type CheckoutSessionResponse = {
   url: string;
 };
 
+// Espelha CheckoutSessionStatus (backend/src/checkout/entities/checkout-session.entity.ts).
+// Etapa 2 (Minha Conta) — usado por /checkout/sucesso para confirmar o
+// status real antes de esvaziar o carrinho (ver services/checkout.ts).
+// `status` reflete Pedido.status (StatusPedido: PENDENTE/PAGO/CANCELADO)
+// sempre que há um pedido vinculado ao sessionId — só cai para o valor cru
+// do gateway (ex.: `payment_status` do Stripe legado) no caso raro de não
+// haver nenhum pedido vinculado. Tipado como `string` de propósito (não o
+// enum fechado) por causa desse fallback.
+export type CheckoutSessionStatus = {
+  sessionId: string;
+  status: string;
+  pedidoId?: number;
+  pedidoNumero?: string;
+};
+
 export type CreatePedidoPayload = {
   numero: string;
   data: string;
@@ -226,6 +241,29 @@ export type ItemPedido = {
 export type PedidoComItens = {
   pedido: Pedido;
   itens: ItemPedido[];
+  total: number;
+};
+
+// Espelha ItemPedidoDetalhado/PedidoComItensDetalhado
+// (backend/src/pedidos/entities/pedido-com-itens-detalhado.entity.ts) —
+// resposta de GET /pedidos/meus/:id (Etapa 2, Minha Conta). Distinto de
+// ItemPedido/PedidoComItens (usados pelo Admin): aqui o item já vem com
+// nome/imagem do produto, porque a tela do cliente não deve fazer um
+// segundo fetch de todo o catálogo só para rotular os itens do pedido.
+export type ItemPedidoDetalhado = {
+  id: number;
+  pedidoId: number;
+  produtoId: number;
+  produtoNome: string;
+  produtoImagemUrl?: string | null;
+  quantidade: number;
+  precoUnitario: number;
+  subtotal: number;
+};
+
+export type PedidoComItensDetalhado = {
+  pedido: Pedido;
+  itens: ItemPedidoDetalhado[];
   total: number;
 };
 

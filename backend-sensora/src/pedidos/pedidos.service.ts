@@ -14,6 +14,7 @@ import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
 import { CreatePedidoDto } from './dto/create-pedido.dto';
 import { UpdatePedidoDto } from './dto/update-pedido.dto';
 import { PedidoComItens } from './entities/pedido-com-itens.entity';
+import { PedidoComItensDetalhado } from './entities/pedido-com-itens-detalhado.entity';
 import { Pedido } from './entities/pedido.entity';
 import { StatusPedido } from './enums/status-pedido.enum';
 
@@ -134,6 +135,41 @@ export class PedidosService {
     const pedido = await this.findOne(pedidoId, user);
     const itens = await this.buscarItensDoPedido(pedidoId, user);
     return { pedido, itens, total: this.somarSubtotais(itens) };
+  }
+
+  // Etapa 2 (Minha Conta / Meus Pedidos) — mesma checagem de ownership de
+  // buscarPedidoComItens (reaproveitado sem alteração, inclusive o 404
+  // genérico para pedido inexistente/de outro usuário), só acrescenta
+  // nome/imagem do produto a cada item para a tela do cliente. Busca direta
+  // via `this.prisma.produto` (não ProdutosService.findOne) de propósito:
+  // um produto excluído depois do pedido não pode derrubar a página inteira
+  // com 404 — cai no fallback "Produto não disponível" abaixo.
+  async buscarPedidoComItensDetalhado(
+    pedidoId: number,
+    user: UsuarioAutenticado,
+  ): Promise<PedidoComItensDetalhado> {
+    const { pedido, itens, total } = await this.buscarPedidoComItens(
+      pedidoId,
+      user,
+    );
+
+    const produtoIds = [...new Set(itens.map((item) => item.produtoId))];
+    const produtos = await this.prisma.produto.findMany({
+      where: { id: { in: produtoIds } },
+      select: { id: true, nome: true, imagemUrl: true },
+    });
+    const produtoPorId = new Map(produtos.map((produto) => [produto.id, produto]));
+
+    const itensDetalhados = itens.map((item) => {
+      const produto = produtoPorId.get(item.produtoId);
+      return {
+        ...item,
+        produtoNome: produto?.nome ?? 'Produto não disponível',
+        produtoImagemUrl: produto?.imagemUrl ?? null,
+      };
+    });
+
+    return { pedido, itens: itensDetalhados, total };
   }
 
   private somarSubtotais(itens: ItemPedido[]): number {

@@ -13,7 +13,8 @@ import {
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
+import type { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CheckoutService } from './checkout.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import {
@@ -35,12 +36,19 @@ export class CheckoutController {
     return this.checkoutService.createSession(dto, req.user.id);
   }
 
+  // Etapa 2 (Minha Conta / limpeza do carrinho) — passou a ser chamado pelo
+  // frontend (/checkout/sucesso) para confirmar o status real antes de
+  // esvaziar o carrinho. Achado da auditoria: faltava checagem de ownership
+  // aqui — qualquer autenticado podia consultar QUALQUER sessionId e receber
+  // pedidoId/pedidoNumero de outro cliente. Corrigido em
+  // CheckoutService.getSessionStatus (mesmo padrão de PedidosService.podeAcessar).
   @Get('session/:sessionId')
   @UseGuards(JwtAuthGuard)
   getSessionStatus(
     @Param('sessionId') sessionId: string,
+    @CurrentUser() user: UsuarioAutenticado,
   ): Promise<CheckoutSessionStatus> {
-    return this.checkoutService.getSessionStatus(sessionId);
+    return this.checkoutService.getSessionStatus(sessionId, user);
   }
 
   // Task 15/21 — endpoint público de propósito (o gateway de pagamento é

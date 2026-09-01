@@ -24,7 +24,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { loginComRedirect, possuiSessaoValida } from "@/lib/auth-redirect";
 import { decodeToken } from "@/lib/jwt";
 import { ROUTES } from "@/lib/routes";
-import { getToken } from "@/lib/storage";
+import { getToken, setCheckoutPendente } from "@/lib/storage";
 import { criarEndereco, listarEnderecos } from "@/services/enderecos";
 import { criarSessaoCheckout, isUrlDeCheckoutSegura } from "@/services/checkout";
 import type { CheckoutSessionResponse, Endereco } from "@/lib/types/loja";
@@ -225,6 +225,14 @@ export default function CheckoutPage() {
       setCriandoSessao(false);
       return;
     }
+
+    // Etapa 2 (Minha Conta / limpeza do carrinho) — marca esta sessão como
+    // "pendente de confirmação" ANTES de sair para o Asaas: é o único jeito
+    // de /checkout/sucesso saber depois qual sessão voltou (o successUrl
+    // enviado ao Asaas não carrega nenhum identificador, ver
+    // criarSessaoAsaas no backend). Só isto — nenhuma limpeza do carrinho
+    // acontece aqui, o carrinho continua intacto até a confirmação real.
+    setCheckoutPendente(sessao.sessionId);
 
     // Sucesso: sai para a página hospedada de pagamento (Asaas Checkout). URL externa —
     // router.push() é para rotas internas do Next, não se aplica aqui.

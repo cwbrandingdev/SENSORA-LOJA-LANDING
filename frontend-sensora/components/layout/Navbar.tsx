@@ -65,7 +65,7 @@ export default function Navbar() {
   if (isAuthenticated) {
     if (perfil === PerfilUsuario.CLIENTE) {
       contaLabel = "Minha conta";
-      contaHref = ROUTES.LOJA;
+      contaHref = ROUTES.CONTA;
     } else if (perfil !== null && STAFF_ROLES.includes(perfil)) {
       contaLabel = "Painel administrativo";
       contaHref = ROUTES.DASHBOARD;

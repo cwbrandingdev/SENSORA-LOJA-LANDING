@@ -18,6 +18,14 @@ export const ROUTES = {
   // Rota ainda não implementada (próxima etapa) — só o link do carrinho
   // aponta para cá por enquanto, ver Task 2.
   LOJA_CHECKOUT: "/loja/checkout",
+  // Etapa 1 (Fundação) da área "Minha Conta" — protegida por
+  // components/conta/ProtectedAccountLayout.tsx, acesso liberado para
+  // qualquer usuário autenticado (não só CLIENTE).
+  CONTA: "/conta",
+  // Etapa 2 (Minha Conta / Meus Pedidos) — lista e detalhe (/conta/pedidos/:id,
+  // montado com contaPedidoDetalhe abaixo) dos pedidos do usuário
+  // autenticado. Mesma proteção herdada de /conta (ProtectedAccountLayout).
+  CONTA_PEDIDOS: "/conta/pedidos",
   // Task 12 (+ Task 21 — migração Stripe → Asaas) — destino de retorno do
   // Asaas Checkout após pagamento concluído (callback.successUrl). Só a
   // página de retorno visual; a confirmação real do pagamento é sempre do

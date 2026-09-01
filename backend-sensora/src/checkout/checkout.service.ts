@@ -1,11 +1,17 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import Stripe from 'stripe';
 import { AsaasService } from '../asaas/asaas.service';
+import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
 import { EnderecosService } from '../enderecos/enderecos.service';
+import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import {
@@ -234,12 +240,16 @@ export class CheckoutService {
     return { sessionId: checkout.id, url: checkout.link };
   }
 
-  async getSessionStatus(sessionId: string): Promise<CheckoutSessionStatus> {
+  async getSessionStatus(
+    sessionId: string,
+    user: UsuarioAutenticado,
+  ): Promise<CheckoutSessionStatus> {
     if (this.gateway === 'stripe') {
       const session = await this.stripe!.checkout.sessions.retrieve(sessionId);
       const pedido = await this.prisma.pedido.findUnique({
         where: { stripeSessionId: sessionId },
       });
+      this.garantirSessaoAcessivel(pedido, user);
       return {
         sessionId,
         status: session.payment_status,
@@ -248,16 +258,58 @@ export class CheckoutService {
       };
     }
 
-    const checkout = await this.asaasService.consultarCheckout(sessionId);
     const pedido = await this.prisma.pedido.findUnique({
       where: { asaasCheckoutId: sessionId },
     });
+    this.garantirSessaoAcessivel(pedido, user);
+
+    // Achado da auditoria (Etapa 2, testado contra o Asaas Sandbox real):
+    // um Checkout do Asaas já convertido em Payment (ou seja, exatamente o
+    // caso de quem acabou de pagar e chegou em /checkout/sucesso) deixa de
+    // ser servido por GET /checkouts/{id} — a API do Asaas responde 404
+    // mesmo para o dono legítimo, o que o AsaasService traduz em
+    // BadGatewayException aqui. Depender do Asaas para "status" quebraria
+    // exatamente o caso de uso que este endpoint passou a servir (confirmar
+    // pagamento aprovado antes de esvaziar o carrinho). Pedido.status já é
+    // a fonte de verdade real (mantida pelo webhook CHECKOUT_PAID, nunca
+    // expira) — só cai para consultar o Asaas diretamente se não houver
+    // NENHUM pedido vinculado a este sessionId (não deveria acontecer no
+    // fluxo normal).
+    if (pedido) {
+      return {
+        sessionId,
+        status: pedido.status,
+        pedidoId: pedido.id,
+        pedidoNumero: pedido.numero,
+      };
+    }
+
+    const checkout = await this.asaasService.consultarCheckout(sessionId);
     return {
       sessionId,
       status: checkout.status,
-      pedidoId: pedido?.id,
-      pedidoNumero: pedido?.numero,
+      pedidoId: undefined,
+      pedidoNumero: undefined,
     };
+  }
+
+  // Achado da auditoria (Etapa 2): faltava checagem de ownership aqui —
+  // qualquer autenticado (JwtAuthGuard) podia consultar QUALQUER sessionId e
+  // receber pedidoId/pedidoNumero/status de um pedido de outro usuário. Sem
+  // pedido vinculado (`pedido` null) não há nada de ninguém para proteger —
+  // segue liberado, igual ao comportamento já existente. Mesmo padrão de
+  // PedidosService.podeAcessar/findOne (404 genérico, nunca revela se o
+  // sessionId existe ou só não é seu).
+  private garantirSessaoAcessivel(
+    pedido: { usuarioId: number | null } | null,
+    user: UsuarioAutenticado,
+  ): void {
+    if (!pedido) {
+      return;
+    }
+    if (user.perfil !== PerfilUsuario.ADMIN && pedido.usuarioId !== user.id) {
+      throw new NotFoundException('Sessão de checkout não encontrada');
+    }
   }
 
   async handleWebhook(

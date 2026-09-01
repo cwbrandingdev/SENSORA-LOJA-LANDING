@@ -10,12 +10,32 @@
 // `sessionId` é o id do Asaas Checkout e `url` é a página hospedada de
 // pagamento, mas o frontend não precisa saber disso.
 import api from "./api";
-import type { CheckoutSessionResponse, CriarSessaoCheckoutPayload } from "@/lib/types/loja";
+import type {
+  CheckoutSessionResponse,
+  CheckoutSessionStatus,
+  CriarSessaoCheckoutPayload,
+} from "@/lib/types/loja";
 
 export async function criarSessaoCheckout(
   data: CriarSessaoCheckoutPayload,
 ): Promise<CheckoutSessionResponse> {
   const response = await api.post<CheckoutSessionResponse>("/checkout/session", data);
+  return response.data;
+}
+
+// Etapa 2 (Minha Conta / limpeza do carrinho) — GET /checkout/session/:sessionId
+// (endpoint já existente, ver checkout.controller.ts). Usado por
+// /checkout/sucesso para confirmar o status real da sessão antes de esvaziar
+// o carrinho, em vez de assumir sucesso só pelo fato de ter chegado nessa
+// página (o Asaas Checkout redireciona no navegador, sem garantia
+// criptográfica igual ao webhook — ver comentário em
+// app/(site)/checkout/sucesso/page.tsx).
+export async function buscarStatusSessao(
+  sessionId: string,
+): Promise<CheckoutSessionStatus> {
+  const response = await api.get<CheckoutSessionStatus>(
+    `/checkout/session/${encodeURIComponent(sessionId)}`,
+  );
   return response.data;
 }
 

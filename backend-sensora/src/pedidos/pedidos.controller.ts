@@ -15,11 +15,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { STAFF_ROLES } from '../common/constants/roles.constants';
+import { STAFF_ROLES, TODOS_OS_PERFIS } from '../common/constants/roles.constants';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { CreatePedidoDto } from './dto/create-pedido.dto';
 import { UpdatePedidoDto } from './dto/update-pedido.dto';
 import { PedidoComItens } from './entities/pedido-com-itens.entity';
+import { PedidoComItensDetalhado } from './entities/pedido-com-itens-detalhado.entity';
 import { Pedido } from './entities/pedido.entity';
 import { PedidosService } from './pedidos.service';
 
@@ -32,6 +33,35 @@ export class PedidosController {
   @Get()
   findAll(@CurrentUser() user: UsuarioAutenticado): Promise<Pedido[]> {
     return this.pedidosService.findAll(user);
+  }
+
+  // Etapa 2 (Minha Conta / Meus Pedidos) — autoatendimento: qualquer usuário
+  // autenticado (CLIENTE incluso) só vê os PRÓPRIOS pedidos.
+  // PedidosService.findAll já filtra por usuarioId para qualquer perfil que
+  // não seja ADMIN (mesma lógica já usada para VENDEDOR) — nenhuma mudança
+  // no service foi necessária, só abrir a rota. Declarada ANTES de
+  // `:id`/`:id/itens` de propósito: rota literal precisa vir antes do
+  // parâmetro dinâmico, senão "/pedidos/meus" seria interpretado como
+  // "/pedidos/:id" com id="meus" (ParseIntPipe rejeitaria, e o guard de
+  // STAFF_ROLES do handler abaixo bloquearia CLIENTE antes de chegar aqui).
+  @Get('meus')
+  @Roles(...TODOS_OS_PERFIS)
+  findMeusPedidos(@CurrentUser() user: UsuarioAutenticado): Promise<Pedido[]> {
+    return this.pedidosService.findAll(user);
+  }
+
+  // Mesma lógica de ownership de findOne/buscarPedidoComItens (reaproveitados
+  // sem alteração) — só enriquece os itens com nome/imagem do produto, dado
+  // que a tela de "Meus Pedidos" precisa exibir o produto, não só o
+  // produtoId. Pedido inexistente ou de outro usuário: mesmo 404 genérico de
+  // sempre (ver PedidosService.findOne) — nunca revela qual dos dois casos.
+  @Get('meus/:id')
+  @Roles(...TODOS_OS_PERFIS)
+  findMeuPedidoDetalhado(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: UsuarioAutenticado,
+  ): Promise<PedidoComItensDetalhado> {
+    return this.pedidosService.buscarPedidoComItensDetalhado(id, user);
   }
 
   @Get(':id')
