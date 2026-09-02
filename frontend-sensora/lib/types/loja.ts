@@ -183,6 +183,20 @@ export type Pedido = {
   clienteEmail?: string | null;
   clienteNome?: string | null;
   usuarioId?: number | null;
+  // Etapa 6.5 (Frete) — snapshot do endereço de entrega e do frete
+  // validado nesta compra (ver backend/src/pedidos/entities/pedido.entity.ts).
+  // Ausentes em pedidos criados antes desta etapa.
+  enderecoCep?: string | null;
+  enderecoRua?: string | null;
+  enderecoNumero?: string | null;
+  enderecoComplemento?: string | null;
+  enderecoBairro?: string | null;
+  enderecoCidade?: string | null;
+  enderecoEstado?: string | null;
+  freteValor?: number | null;
+  freteTransportadora?: string | null;
+  freteServico?: string | null;
+  fretePrazoDias?: number | null;
 };
 
 // Payload de POST /checkout/session (Task 10) — espelha exatamente
@@ -195,11 +209,45 @@ export type CheckoutItemPayload = {
   quantidade: number;
 };
 
+// Etapa 6.5 (Frete) — só o id do serviço escolhido na cotação (ver
+// services/frete.ts), nunca preço/prazo: o backend recotiza e valida esta
+// opção antes de aceitar o pedido (mesmo raciocínio de nunca confiar em
+// preço/estoque de produto vindo do frontend).
 export type CriarSessaoCheckoutPayload = {
   itens: CheckoutItemPayload[];
   clienteEmail: string;
   clienteNome: string;
   enderecoId: number;
+  freteServicoId: number;
+};
+
+// Etapa 6.5 (Frete) — payload de POST /checkout/frete/cotacao. Espelha
+// CotarFreteDto (backend/src/checkout/dto/cotar-frete.dto.ts).
+export type CotarFretePayload = {
+  itens: CheckoutItemPayload[];
+  enderecoId: number;
+};
+
+// Espelha OpcaoFreteResponse (backend/src/checkout/entities/opcao-frete.entity.ts).
+export type OpcaoFrete = {
+  id: number;
+  transportadora: string;
+  servico: string;
+  preco: number;
+  prazoDias: number;
+};
+
+// Etapa 6.5 (Painel administrativo) — espelham as respostas de
+// GET /admin/melhor-envio/status e GET /admin/melhor-envio/conectar
+// (backend/src/melhor-envio/melhor-envio.controller.ts). `url` é sempre a
+// página de autorização do próprio Melhor Envio — nunca contém client
+// secret/token (ver MelhorEnvioService, backend).
+export type MelhorEnvioStatusResponse = {
+  conectado: boolean;
+};
+
+export type MelhorEnvioConectarResponse = {
+  url: string;
 };
 
 // Espelha CheckoutSessionResponse (backend/src/checkout/entities/checkout-session.entity.ts).

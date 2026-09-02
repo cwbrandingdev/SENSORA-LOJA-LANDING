@@ -104,6 +104,41 @@ async function seedCart(page: Page, itens: unknown[]) {
   );
 }
 
+// Etapa 6.5 (Frete) — opção única e padrão usada pela maioria dos testes
+// deste arquivo: eles testam o fluxo de endereço/pagamento, não frete em si
+// (que tem sua própria suíte, "Checkout — Etapa 6.5: frete", mais abaixo).
+// Com uma única opção, a página a seleciona automaticamente (mesmo padrão
+// de UX do endereço padrão/único) — testes que precisam de comportamento
+// diferente (vazio, erro, múltiplas opções, seleção manual) sobrescrevem a
+// rota explicitamente com mockFreteCotacao/mockFreteCotacaoError.
+const OPCAO_FRETE_PADRAO = {
+  id: 1,
+  transportadora: "Correios",
+  servico: "PAC",
+  preco: 23.5,
+  prazoDias: 9,
+};
+
+async function mockFreteCotacao(page: Page, opcoes: unknown[] = [OPCAO_FRETE_PADRAO]) {
+  await page.route("**/checkout/frete/cotacao", async (route) => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({ json: opcoes });
+      return;
+    }
+    await route.continue();
+  });
+}
+
+async function mockFreteCotacaoError(page: Page, status = 500) {
+  await page.route("**/checkout/frete/cotacao", async (route) => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({ status, body: "" });
+      return;
+    }
+    await route.continue();
+  });
+}
+
 async function mockEnderecos(page: Page, enderecos: unknown[]) {
   await page.route("**/enderecos", async (route) => {
     if (route.request().method() === "GET") {
@@ -112,6 +147,7 @@ async function mockEnderecos(page: Page, enderecos: unknown[]) {
     }
     await route.continue();
   });
+  await mockFreteCotacao(page);
 }
 
 async function mockEnderecosError(page: Page) {
@@ -326,8 +362,16 @@ test.describe("Checkout — resumo do carrinho", () => {
     // exact: true evita que "Total" bata em "Subtotal" por substring.
     const subtotalRow = page.getByText("Subtotal", { exact: true }).locator("..");
     await expect(subtotalRow).toContainText(subtotalEsperado);
+
+    // Etapa 6.5 (Frete) — Total agora inclui o frete (única opção mockada,
+    // OPCAO_FRETE_PADRAO = R$ 23,50, já auto-selecionada): 119,80 + 23,50.
+    // A cobertura de subtotal/frete/total variando por opção escolhida vive
+    // na suíte "Checkout — Etapa 6.5: frete" (testes K/L/M) — aqui só
+    // confirma que o total não regrediu para "= subtotal apenas".
+    const freteRow = page.getByText("Frete", { exact: true }).locator("..");
+    await expect(freteRow).toContainText("R$ 23,50");
     const totalRow = page.getByText("Total", { exact: true }).locator("..");
-    await expect(totalRow).toContainText(subtotalEsperado);
+    await expect(totalRow).toContainText("R$ 143,30");
   });
 });
 
@@ -343,6 +387,7 @@ test.describe("Checkout — endereços", () => {
       await new Promise((resolve) => setTimeout(resolve, 800));
       await route.fulfill({ json: [ENDERECO_PADRAO] });
     });
+    await mockFreteCotacao(page);
 
     await page.goto(CHECKOUT_URL);
     await expect(page.locator('[aria-busy="true"]')).toBeVisible();
@@ -367,12 +412,14 @@ test.describe("Checkout — endereços", () => {
 
     await page.goto(CHECKOUT_URL);
 
-    const radios = page.getByRole("radio");
-    await expect(radios).toHaveCount(2);
-    await expect(page.getByRole("radio").filter({ hasText: "Rua das Flores" })).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
+    // Etapa 6.5 (Frete) — escopado ao radiogroup de endereço: a página
+    // agora também renderiza um radiogroup de frete (mesmo role="radio"),
+    // então `page.getByRole("radio")` sem escopo bateria nos dois juntos.
+    const radiogroupEndereco = page.getByRole("radiogroup", { name: "Selecione um endereço" });
+    await expect(radiogroupEndereco.getByRole("radio")).toHaveCount(2);
+    await expect(
+      radiogroupEndereco.getByRole("radio").filter({ hasText: "Rua das Flores" }),
+    ).toHaveAttribute("aria-checked", "true");
   });
 
   test("sem endereço padrão, seleciona o primeiro da lista", async ({ page }) => {
@@ -383,7 +430,9 @@ test.describe("Checkout — endereços", () => {
 
     await page.goto(CHECKOUT_URL);
 
-    await expect(page.getByRole("radio").first()).toHaveAttribute("aria-checked", "true");
+    await expect(
+      page.getByRole("radiogroup", { name: "Selecione um endereço" }).getByRole("radio").first(),
+    ).toHaveAttribute("aria-checked", "true");
   });
 
   test("clicar em outro endereço troca a seleção", async ({ page }) => {
@@ -474,9 +523,9 @@ test.describe("Checkout — endereços", () => {
 
     await expect(page.getByText("Endereço cadastrado com sucesso.")).toBeVisible();
 
-    const radios = page.getByRole("radio");
-    await expect(radios).toHaveCount(2);
-    const novoCard = page.getByRole("radio").filter({ hasText: "Rua Nova" });
+    const radiogroupEndereco = page.getByRole("radiogroup", { name: "Selecione um endereço" });
+    await expect(radiogroupEndereco.getByRole("radio")).toHaveCount(2);
+    const novoCard = radiogroupEndereco.getByRole("radio").filter({ hasText: "Rua Nova" });
     await expect(novoCard).toBeVisible();
     await expect(novoCard).toHaveAttribute("aria-checked", "true");
   });
@@ -565,6 +614,9 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
       clienteEmail: "cliente@sensora.dev",
       clienteNome: "cliente",
       enderecoId: ENDERECO_PADRAO.id,
+      // Etapa 6.5 (Frete) — única opção mockada (OPCAO_FRETE_PADRAO), já
+      // auto-selecionada pela página (mesmo padrão de UX do endereço).
+      freteServicoId: OPCAO_FRETE_PADRAO.id,
     });
     // JWT enviado pela infraestrutura já existente (services/api.ts), sem
     // nenhum mecanismo paralelo.
@@ -1128,5 +1180,238 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
     expect(textoVisivel).not.toContain("sk_live");
     expect(textoVisivel).not.toContain("PrismaClientKnownRequestError");
     expect(textoVisivel).not.toContain("stack trace");
+  });
+});
+
+// Etapa 6.5 (Frete), Parte 8 (testes K-O do frontend) — seção "Entrega" do
+// checkout: exibição das opções cotadas, seleção, total recalculado,
+// estados de loading/erro/vazio, e bloqueio de "Continuar" sem frete
+// resolvido. Backend real indisponível neste ambiente (mesmo mecanismo de
+// mock/intercept do resto do arquivo).
+test.describe("Checkout — Etapa 6.5: frete", () => {
+  const OPCAO_CORREIOS = OPCAO_FRETE_PADRAO;
+  const OPCAO_JADLOG = {
+    id: 2,
+    transportadora: "Jadlog",
+    servico: ".Package",
+    preco: 18,
+    prazoDias: 5,
+  };
+
+  // K
+  test("K: opções de frete cotadas são exibidas com transportadora, prazo e preço", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await seedCart(page, [CART_ITEM]);
+    await mockEnderecos(page, [ENDERECO_PADRAO]);
+    await mockFreteCotacao(page, [OPCAO_CORREIOS, OPCAO_JADLOG]);
+
+    await page.goto(CHECKOUT_URL);
+    const radiogroupFrete = page.getByRole("radiogroup", {
+      name: "Selecione uma opção de frete",
+    });
+    await expect(radiogroupFrete.getByRole("radio")).toHaveCount(2);
+
+    const correios = radiogroupFrete.getByRole("radio").filter({ hasText: "Correios" });
+    await expect(correios).toContainText("PAC");
+    await expect(correios).toContainText("9 dias úteis");
+    await expect(correios).toContainText("R$ 23,50");
+
+    const jadlog = radiogroupFrete.getByRole("radio").filter({ hasText: "Jadlog" });
+    await expect(jadlog).toContainText(".Package");
+    await expect(jadlog).toContainText("5 dias úteis");
+    await expect(jadlog).toContainText("R$ 18,00");
+  });
+
+  // L
+  test("L: cliente consegue trocar a opção de frete selecionada", async ({ page }) => {
+    await seedSession(page);
+    await seedCart(page, [CART_ITEM]);
+    await mockEnderecos(page, [ENDERECO_PADRAO]);
+    await mockFreteCotacao(page, [OPCAO_CORREIOS, OPCAO_JADLOG]);
+
+    await page.goto(CHECKOUT_URL);
+    const radiogroupFrete = page.getByRole("radiogroup", {
+      name: "Selecione uma opção de frete",
+    });
+    const correios = radiogroupFrete.getByRole("radio").filter({ hasText: "Correios" });
+    const jadlog = radiogroupFrete.getByRole("radio").filter({ hasText: "Jadlog" });
+
+    // A primeira opção retornada já vem selecionada (mesmo padrão do
+    // endereço padrão/único) — o cliente pode trocar livremente.
+    await expect(correios).toHaveAttribute("aria-checked", "true");
+    await expect(jadlog).toHaveAttribute("aria-checked", "false");
+
+    await jadlog.click();
+
+    await expect(jadlog).toHaveAttribute("aria-checked", "true");
+    await expect(correios).toHaveAttribute("aria-checked", "false");
+  });
+
+  // M
+  test("M: total do resumo é recalculado ao trocar a opção de frete", async ({ page }) => {
+    await seedSession(page);
+    await seedCart(page, [CART_ITEM]); // subtotal = R$ 119,80 (2 × 59,90)
+    await mockEnderecos(page, [ENDERECO_PADRAO]);
+    await mockFreteCotacao(page, [OPCAO_CORREIOS, OPCAO_JADLOG]);
+
+    await page.goto(CHECKOUT_URL);
+    const totalRow = page.getByText("Total", { exact: true }).locator("..");
+    const freteRow = page.getByText("Frete", { exact: true }).locator("..");
+
+    // Correios (R$ 23,50) selecionado por padrão: total = 119,80 + 23,50.
+    await expect(freteRow).toContainText("R$ 23,50");
+    await expect(totalRow).toContainText("R$ 143,30");
+
+    await page
+      .getByRole("radiogroup", { name: "Selecione uma opção de frete" })
+      .getByRole("radio")
+      .filter({ hasText: "Jadlog" })
+      .click();
+
+    // Jadlog (R$ 18,00): total = 119,80 + 18,00.
+    await expect(freteRow).toContainText("R$ 18,00");
+    await expect(totalRow).toContainText("R$ 137,80");
+  });
+
+  // N (loading)
+  test("N: mostra estado de carregando enquanto a cotação de frete está em andamento", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await seedCart(page, [CART_ITEM]);
+    await page.route("**/enderecos", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({ json: [ENDERECO_PADRAO] });
+        return;
+      }
+      await route.continue();
+    });
+    await page.route("**/checkout/frete/cotacao", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.continue();
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      await route.fulfill({ json: [OPCAO_CORREIOS] });
+    });
+
+    await page.goto(CHECKOUT_URL);
+    // Enquanto a cotação (com atraso proposital de 800ms) ainda não voltou,
+    // o skeleton é exibido (sem role="radiogroup" ainda) e "Continuar" já
+    // está desabilitado — checado ANTES de esperar pelo radiogroup, que só
+    // aparece depois que a cotação termina.
+    const button = page.getByRole("button", { name: "Continuar para pagamento →" });
+    await expect(button).toBeDisabled();
+
+    const radiogroupFrete = page.getByRole("radiogroup", {
+      name: "Selecione uma opção de frete",
+    });
+    await expect(radiogroupFrete.getByRole("radio")).toHaveCount(1);
+    await expect(button).toBeEnabled();
+  });
+
+  // N (erro)
+  test("N: erro ao cotar frete mostra mensagem amigável com Tentar novamente", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await seedCart(page, [CART_ITEM]);
+    await page.route("**/enderecos", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({ json: [ENDERECO_PADRAO] });
+        return;
+      }
+      await route.continue();
+    });
+    await mockFreteCotacaoError(page, 500);
+
+    await page.goto(CHECKOUT_URL);
+
+    await expect(
+      page.getByText("Não foi possível calcular o frete. Tente novamente."),
+    ).toBeVisible();
+    const retry = page.getByRole("button", { name: "Tentar novamente" }).last();
+    await expect(retry).toBeVisible();
+
+    await page.unroute("**/checkout/frete/cotacao");
+    await mockFreteCotacao(page, [OPCAO_CORREIOS]);
+    await retry.click();
+
+    await expect(
+      page.getByRole("radiogroup", { name: "Selecione uma opção de frete" }),
+    ).toBeVisible();
+  });
+
+  // N (nenhuma opção)
+  test("N: nenhuma opção de frete disponível mostra mensagem própria, sem travar a página", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await seedCart(page, [CART_ITEM]);
+    await mockEnderecos(page, [ENDERECO_PADRAO]);
+    await mockFreteCotacao(page, []);
+
+    await page.goto(CHECKOUT_URL);
+
+    await expect(
+      page.getByText("Nenhuma opção de frete disponível para este endereço no momento."),
+    ).toBeVisible();
+  });
+
+  // O
+  test("O: não é possível finalizar sem uma opção de frete resolvida (nenhuma disponível) — POST /checkout/session nunca é chamado", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await seedCart(page, [CART_ITEM]);
+    await mockEnderecos(page, [ENDERECO_PADRAO]);
+    await mockFreteCotacao(page, []);
+    const sessionRequests = captureCheckoutSessionRequests(page);
+
+    await page.goto(CHECKOUT_URL);
+    await expect(
+      page.getByText("Nenhuma opção de frete disponível para este endereço no momento."),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "Continuar para pagamento →" }).click();
+
+    await expect(
+      page.getByText("Selecione uma opção de frete para continuar."),
+    ).toBeVisible();
+    expect(sessionRequests).toEqual([]);
+  });
+
+  // Nova cotação quando o endereço selecionado muda.
+  test("nova cotação de frete é solicitada ao trocar de endereço", async ({ page }) => {
+    await seedSession(page);
+    await seedCart(page, [CART_ITEM]);
+    await mockEnderecos(page, [ENDERECO_PADRAO, ENDERECO_SECUNDARIO]);
+
+    const cotacoes: unknown[] = [];
+    await page.route("**/checkout/frete/cotacao", async (route) => {
+      if (route.request().method() === "POST") {
+        cotacoes.push(route.request().postDataJSON());
+        await route.fulfill({ json: [OPCAO_CORREIOS] });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto(CHECKOUT_URL);
+    await page
+      .getByRole("radiogroup", { name: "Selecione uma opção de frete" })
+      .waitFor();
+    const cotacoesAntes = cotacoes.length;
+
+    await page.getByRole("radio").filter({ hasText: "Avenida Brasil" }).click();
+
+    await expect
+      .poll(() => cotacoes.length)
+      .toBeGreaterThan(cotacoesAntes);
+    expect((cotacoes.at(-1) as { enderecoId: number }).enderecoId).toBe(
+      ENDERECO_SECUNDARIO.id,
+    );
   });
 });

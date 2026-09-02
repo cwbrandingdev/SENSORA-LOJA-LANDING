@@ -1,4 +1,10 @@
-import { BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import {
+  BadGatewayException,
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import Stripe from 'stripe';
@@ -47,8 +53,18 @@ const OPCAO_FRETE_FAKE = {
   prazoDias: 9,
 };
 
+const PACOTE_PADRAO_FAKE = {
+  alturaCm: 10,
+  larguraCm: 15,
+  comprimentoCm: 20,
+  pesoGramas: 300,
+};
+
 function melhorEnvioServiceComOpcoes(opcoes: unknown[] = [OPCAO_FRETE_FAKE]) {
-  return { cotar: jest.fn(() => opcoes) };
+  return {
+    cotar: jest.fn(() => opcoes),
+    pacotePadraoConfigurado: PACOTE_PADRAO_FAKE,
+  };
 }
 
 // Task 15 (Stripe, modo de rollback) + Task 21 (Asaas, gateway padrão) —
@@ -1203,6 +1219,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
           provide: UsuariosService,
           useValue: { findOne: jest.fn(() => ({ emailVerificado: false })) },
         },
+        { provide: MelhorEnvioService, useValue: {} },
       ],
     }).compile();
     const service = module.get<CheckoutService>(CheckoutService);
@@ -1214,6 +1231,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
           clienteEmail: 'cliente@sensora.dev',
           clienteNome: 'Cliente',
           enderecoId: 1,
+          freteServicoId: 1,
         },
         1,
       ),
@@ -1229,7 +1247,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
   it('I: usuário com e-mail confirmado consegue criar a sessão normalmente (gate não bloqueia quem já verificou)', async () => {
     const pedidoCreate = jest.fn(() => ({ id: 42, numero: 'PED-1' }));
     const pedidoUpdate = jest.fn();
-    const enderecosService = { findOneForUsuario: jest.fn(() => ({ id: 1 })) };
+    const enderecosService = { findOneForUsuario: jest.fn(() => ENDERECO_FAKE) };
     const produtosService = {
       findOne: jest.fn(() => ({
         id: 5,
@@ -1270,6 +1288,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
         { provide: EnderecosService, useValue: enderecosService },
         { provide: AsaasService, useValue: { criarCheckout } },
         { provide: UsuariosService, useValue: { findOne } },
+        { provide: MelhorEnvioService, useValue: melhorEnvioServiceComOpcoes() },
       ],
     }).compile();
     const service = module.get<CheckoutService>(CheckoutService);
@@ -1280,6 +1299,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
         clienteEmail: 'cliente@sensora.dev',
         clienteNome: 'Cliente',
         enderecoId: 1,
+        freteServicoId: OPCAO_FRETE_FAKE.id,
       },
       7,
     );
@@ -1775,5 +1795,162 @@ describe('CheckoutService — restauração de estoque após reembolso (Etapa 5B
 
     expect(produtosFake.get(10)).toBe(6);
     expect(produtosService.adicionarEstoque).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Etapa 6.5 (Frete), Parte 3/8 — POST /checkout/frete/cotacao
+// (CheckoutService.cotarFrete). Testes A/B/C/E/J da etapa.
+describe('CheckoutService — cotarFrete (Etapa 6.5)', () => {
+  async function criarService(
+    enderecosService: { findOneForUsuario: jest.Mock },
+    produtosService: { findOne: jest.Mock },
+    melhorEnvioService: unknown,
+  ): Promise<CheckoutService> {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({ CHECKOUT_GATEWAY: 'asaas' })[key as 'CHECKOUT_GATEWAY'],
+          },
+        },
+        { provide: PrismaService, useValue: {} },
+        { provide: ProdutosService, useValue: produtosService },
+        { provide: EnderecosService, useValue: enderecosService },
+        { provide: AsaasService, useValue: {} },
+        { provide: UsuariosService, useValue: {} },
+        { provide: MelhorEnvioService, useValue: melhorEnvioService },
+      ],
+    }).compile();
+    return module.get<CheckoutService>(CheckoutService);
+  }
+
+  // A
+  it('A: cotação válida retorna as opções, com CEP de destino do endereço, peso escalado pela quantidade e valor declarado = subtotal real dos produtos', async () => {
+    const enderecosService = { findOneForUsuario: jest.fn(() => ENDERECO_FAKE) };
+    const produtosService = {
+      findOne: jest.fn(() => ({ id: 5, preco: 10.5 })),
+    };
+    const melhorEnvioService = melhorEnvioServiceComOpcoes([
+      OPCAO_FRETE_FAKE,
+      { id: 2, transportadora: 'Jadlog', servico: '.Package', preco: 18, prazoDias: 5 },
+    ]);
+
+    const service = await criarService(
+      enderecosService,
+      produtosService,
+      melhorEnvioService,
+    );
+
+    const resultado = await service.cotarFrete(
+      { itens: [{ produtoId: 5, quantidade: 3 }], enderecoId: 1 },
+      1,
+    );
+
+    expect(enderecosService.findOneForUsuario).toHaveBeenCalledWith(1, 1);
+    expect(melhorEnvioService.cotar).toHaveBeenCalledWith({
+      cepDestino: ENDERECO_FAKE.cep,
+      pacote: { ...PACOTE_PADRAO_FAKE, pesoGramas: PACOTE_PADRAO_FAKE.pesoGramas * 3 },
+      valorDeclarado: 31.5, // 10.5 * 3
+    });
+    expect(resultado).toEqual([
+      OPCAO_FRETE_FAKE,
+      { id: 2, transportadora: 'Jadlog', servico: '.Package', preco: 18, prazoDias: 5 },
+    ]);
+  });
+
+  it('carrinho vazio: rejeita antes de consultar endereço ou o Melhor Envio', async () => {
+    const enderecosService = { findOneForUsuario: jest.fn() };
+    const produtosService = { findOne: jest.fn() };
+    const melhorEnvioService = melhorEnvioServiceComOpcoes();
+
+    const service = await criarService(
+      enderecosService,
+      produtosService,
+      melhorEnvioService,
+    );
+
+    await expect(
+      service.cotarFrete({ itens: [], enderecoId: 1 }, 1),
+    ).rejects.toThrow(BadRequestException);
+    expect(enderecosService.findOneForUsuario).not.toHaveBeenCalled();
+    expect(melhorEnvioService.cotar).not.toHaveBeenCalled();
+  });
+
+  // E (variação para o endpoint de cotação): nenhuma opção disponível não é
+  // um erro — devolve lista vazia, e é o frontend quem mostra o estado
+  // "nenhuma opção disponível" (Parte 6 da etapa).
+  it('nenhuma opção disponível: devolve lista vazia (não é erro)', async () => {
+    const enderecosService = { findOneForUsuario: jest.fn(() => ENDERECO_FAKE) };
+    const produtosService = { findOne: jest.fn(() => ({ id: 5, preco: 10.5 })) };
+    const melhorEnvioService = melhorEnvioServiceComOpcoes([]);
+
+    const service = await criarService(
+      enderecosService,
+      produtosService,
+      melhorEnvioService,
+    );
+
+    const resultado = await service.cotarFrete(
+      { itens: [{ produtoId: 5, quantidade: 1 }], enderecoId: 1 },
+      1,
+    );
+    expect(resultado).toEqual([]);
+  });
+
+  // C: erro do Melhor Envio (fora do ar, recusado etc.) é propagado, nunca
+  // silenciado como se fosse "nenhuma opção disponível".
+  it('C: erro do Melhor Envio é propagado ao chamador, não é engolido como lista vazia', async () => {
+    const enderecosService = { findOneForUsuario: jest.fn(() => ENDERECO_FAKE) };
+    const produtosService = { findOne: jest.fn(() => ({ id: 5, preco: 10.5 })) };
+    const melhorEnvioService = {
+      cotar: jest.fn(() => {
+        throw new BadGatewayException('O Melhor Envio recusou a cotação');
+      }),
+      pacotePadraoConfigurado: PACOTE_PADRAO_FAKE,
+    };
+
+    const service = await criarService(
+      enderecosService,
+      produtosService,
+      melhorEnvioService,
+    );
+
+    await expect(
+      service.cotarFrete(
+        { itens: [{ produtoId: 5, quantidade: 1 }], enderecoId: 1 },
+        1,
+      ),
+    ).rejects.toThrow(BadGatewayException);
+  });
+
+  // B (via ownership do endereço — mesmo mecanismo de proteção de
+  // "CEP inválido"/endereço não pertencente ao cliente já usado em
+  // createSession): endereço de outro usuário (ou inexistente) nunca chega
+  // a consultar o Melhor Envio.
+  it('B: endereço inexistente/de outro usuário é rejeitado antes de cotar', async () => {
+    const enderecosService = {
+      findOneForUsuario: jest.fn(() => {
+        throw new NotFoundException('Endereço com id 999 não encontrado');
+      }),
+    };
+    const produtosService = { findOne: jest.fn() };
+    const melhorEnvioService = melhorEnvioServiceComOpcoes();
+
+    const service = await criarService(
+      enderecosService,
+      produtosService,
+      melhorEnvioService,
+    );
+
+    await expect(
+      service.cotarFrete(
+        { itens: [{ produtoId: 5, quantidade: 1 }], enderecoId: 999 },
+        1,
+      ),
+    ).rejects.toThrow();
+    expect(melhorEnvioService.cotar).not.toHaveBeenCalled();
   });
 });

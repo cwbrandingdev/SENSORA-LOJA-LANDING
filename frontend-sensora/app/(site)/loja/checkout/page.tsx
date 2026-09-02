@@ -18,6 +18,7 @@ import EnderecoCard from "@/components/loja/EnderecoCard";
 import EnderecoCardSkeleton from "@/components/loja/EnderecoCardSkeleton";
 import EnderecoForm, { type EnderecoFormValues } from "@/components/loja/EnderecoForm";
 import CheckoutItemRow from "@/components/loja/CheckoutItemRow";
+import FreteOptions from "@/components/loja/FreteOptions";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
@@ -27,8 +28,9 @@ import { ROUTES } from "@/lib/routes";
 import { getToken, setCheckoutPendente } from "@/lib/storage";
 import { criarEndereco, listarEnderecos } from "@/services/enderecos";
 import { criarSessaoCheckout, isUrlDeCheckoutSegura } from "@/services/checkout";
+import { cotarFrete } from "@/services/frete";
 import { resendVerification } from "@/services/auth";
-import type { CheckoutSessionResponse, Endereco } from "@/lib/types/loja";
+import type { CheckoutSessionResponse, Endereco, OpcaoFrete } from "@/lib/types/loja";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -53,6 +55,18 @@ export default function CheckoutPage() {
   // sem selecionar nenhum — some sozinho, sem exigir outra interação.
   const [destacarEndereco, setDestacarEndereco] = useState(false);
   const enderecoSectionRef = useRef<HTMLDivElement>(null);
+
+  // Etapa 6.5 (Frete) — cotação é sempre reconsultada quando o endereço
+  // selecionado muda (ver useEffect abaixo). `freteSelecionadoId` nunca é
+  // pré-selecionado automaticamente (mesmo com uma única opção disponível):
+  // o cliente precisa escolher ativamente, para que "Continuar" consiga
+  // bloquear de verdade quando nada foi escolhido ainda.
+  const [freteOpcoes, setFreteOpcoes] = useState<OpcaoFrete[]>([]);
+  const [freteCarregando, setFreteCarregando] = useState(false);
+  const [freteErro, setFreteErro] = useState<string | null>(null);
+  const [freteSelecionadoId, setFreteSelecionadoId] = useState<number | null>(null);
+  const [destacarFrete, setDestacarFrete] = useState(false);
+  const freteSectionRef = useRef<HTMLDivElement>(null);
 
   // Task 10/11: true desde o clique até a resposta de POST
   // /checkout/session — evita duplo clique/duplo pedido. Em caso de sucesso
@@ -109,6 +123,59 @@ export default function CheckoutPage() {
     return () => window.clearTimeout(timer);
   }, [destacarEndereco]);
 
+  useEffect(() => {
+    if (!destacarFrete) return;
+    const timer = window.setTimeout(() => setDestacarFrete(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [destacarFrete]);
+
+  // Etapa 6.5 (Frete) — recotiza sempre que o endereço selecionado ou o
+  // carrinho mudam. `itens` entra na dependência do useCallback (não do
+  // useEffect diretamente) porque é ele quem decide o payload enviado —
+  // resultado prático é o mesmo: alterar a sacola nesta página também
+  // dispara uma nova cotação, nunca deixando o preço exibido dessincronizar
+  // do carrinho real. Mesmo padrão de UX do endereço (que auto-seleciona o
+  // padrão/primeiro da lista): a primeira opção retornada já vem
+  // pré-selecionada, mas o cliente pode trocar livremente — "Continuar" só
+  // fica bloqueado quando não há NENHUMA opção selecionada de verdade
+  // (cotação ainda carregando, falhou, ou não devolveu opção nenhuma).
+  const carregarFrete = useCallback(
+    async (enderecoId: number) => {
+      setFreteCarregando(true);
+      setFreteErro(null);
+      setFreteOpcoes([]);
+      setFreteSelecionadoId(null);
+      try {
+        const opcoes = await cotarFrete({
+          itens: itens.map((item) => ({
+            produtoId: item.produtoId,
+            quantidade: item.quantidade,
+          })),
+          enderecoId,
+        });
+        setFreteOpcoes(opcoes);
+        setFreteSelecionadoId(opcoes[0]?.id ?? null);
+      } catch (err) {
+        setFreteErro(
+          getErrorMessage(err, "Não foi possível calcular o frete. Tente novamente."),
+        );
+      } finally {
+        setFreteCarregando(false);
+      }
+    },
+    [itens],
+  );
+
+  useEffect(() => {
+    if (enderecoSelecionadoId !== null && itens.length > 0) {
+      carregarFrete(enderecoSelecionadoId);
+    } else {
+      setFreteOpcoes([]);
+      setFreteSelecionadoId(null);
+      setFreteErro(null);
+    }
+  }, [enderecoSelecionadoId, itens.length, carregarFrete]);
+
   async function handleCadastrarEndereco(data: EnderecoFormValues) {
     try {
       const novoEndereco = await criarEndereco({ ...data, estado: data.estado.toUpperCase() });
@@ -149,6 +216,24 @@ export default function CheckoutPage() {
       return;
     }
 
+    // Etapa 6.5 (Frete) — mesmo padrão de bloqueio local do endereço acima:
+    // nunca deixa "Continuar" seguir sem uma opção de frete escolhida (nem
+    // enquanto a cotação ainda está carregando, nem se a última cotação
+    // falhou) — o backend também recusaria (freteServicoId obrigatório no
+    // DTO), mas bloquear aqui evita uma viagem de rede previsível.
+    if (freteErro || freteCarregando || !freteSelecionadoId) {
+      toast.error(
+        freteErro
+          ? "Não foi possível calcular o frete. Tente novamente."
+          : freteCarregando
+            ? "Aguarde o cálculo do frete para continuar."
+            : "Selecione uma opção de frete para continuar.",
+      );
+      setDestacarFrete(true);
+      freteSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
     // O JWT (Task 3/17 do backend) só carrega sub/email/perfil — não há
     // `nome` nele nem nenhum endpoint self-service que um CLIENTE possa
     // chamar para buscar o próprio nome (GET /usuarios/:id é ADMIN-only,
@@ -174,6 +259,7 @@ export default function CheckoutPage() {
         clienteEmail: payload.email,
         clienteNome: payload.email.split("@")[0],
         enderecoId: enderecoSelecionadoId,
+        freteServicoId: freteSelecionadoId,
       });
     } catch (err) {
       setCriandoSessao(false);
@@ -223,6 +309,22 @@ export default function CheckoutPage() {
         carregarEnderecos();
         setDestacarEndereco(true);
         enderecoSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+
+      // Etapa 6.5 (Frete) — mesmo raciocínio do bloco de endereço acima: a
+      // opção escolhida pode ter deixado de existir entre a cotação exibida
+      // e o clique em continuar (preço mudou, endereço mudou em outra aba
+      // etc.) — CheckoutService.validarFreteEscolhido (backend) já devolve
+      // essa mensagem específica. Recotiza automaticamente em vez de deixar
+      // o cliente preso numa opção que o backend já rejeitou.
+      if (mensagem.toLowerCase().includes("frete")) {
+        toast.error("Essa opção de frete não está mais disponível. Escolha outra.");
+        if (enderecoSelecionadoId !== null) {
+          carregarFrete(enderecoSelecionadoId);
+        }
+        setDestacarFrete(true);
+        freteSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         return;
       }
 
@@ -414,6 +516,38 @@ export default function CheckoutPage() {
                   )}
                 </div>
               </div>
+
+              {/* Etapa 6.5 (Frete) — só aparece depois que um endereço está
+                  selecionado (é o CEP dele que define a cotação); enquanto
+                  isso, nenhuma seção de frete é exibida, evitando um estado
+                  "carregando" sem endereço nenhum para basear a cotação. */}
+              {enderecoSelecionadoId !== null && (
+                <div
+                  ref={freteSectionRef}
+                  className={`mt-10 rounded-sm transition-shadow duration-500 ${
+                    destacarFrete
+                      ? "ring-2 ring-brand-orange ring-offset-4 ring-offset-background"
+                      : ""
+                  }`}
+                >
+                  <div className="border-b border-slate-200 pb-4">
+                    <h2 className="font-serif text-xl font-normal text-brand-navy">
+                      Entrega
+                    </h2>
+                  </div>
+
+                  <div className="mt-6">
+                    <FreteOptions
+                      carregando={freteCarregando}
+                      erro={freteErro}
+                      opcoes={freteOpcoes}
+                      selecionadoId={freteSelecionadoId}
+                      onSelecionar={(opcao) => setFreteSelecionadoId(opcao.id)}
+                      onTentarNovamente={() => carregarFrete(enderecoSelecionadoId)}
+                    />
+                  </div>
+                </div>
+              )}
             </RevealOnScroll>
 
             <RevealOnScroll delayMs={90}>
@@ -433,22 +567,40 @@ export default function CheckoutPage() {
                   ))}
                 </ul>
 
-                {/* Total = subtotal por enquanto — frete/cupom/desconto não
-                    fazem parte desta task. */}
-                <dl className="mt-2 space-y-3 border-t border-slate-200 pt-4 text-sm">
-                  <div className="flex items-center justify-between">
-                    <dt className="text-slate-500">Subtotal</dt>
-                    <dd className="font-medium tabular-nums text-brand-navy">
-                      {formatPrice.format(subtotal)}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-base">
-                    <dt className="font-semibold text-brand-navy">Total</dt>
-                    <dd className="text-lg font-semibold tabular-nums text-brand-navy">
-                      {formatPrice.format(subtotal)}
-                    </dd>
-                  </div>
-                </dl>
+                {/* Etapa 6.5 (Frete) — Total = subtotal + frete (só quando
+                    uma opção já foi escolhida; até lá, mostra um placeholder
+                    em vez de um valor incompleto/enganoso). Cupom/desconto
+                    continuam fora do escopo. */}
+                {(() => {
+                  const opcaoFreteEscolhida = freteOpcoes.find(
+                    (opcao) => opcao.id === freteSelecionadoId,
+                  );
+                  const total = subtotal + (opcaoFreteEscolhida?.preco ?? 0);
+                  return (
+                    <dl className="mt-2 space-y-3 border-t border-slate-200 pt-4 text-sm">
+                      <div className="flex items-center justify-between">
+                        <dt className="text-slate-500">Subtotal</dt>
+                        <dd className="font-medium tabular-nums text-brand-navy">
+                          {formatPrice.format(subtotal)}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <dt className="text-slate-500">Frete</dt>
+                        <dd className="font-medium tabular-nums text-brand-navy">
+                          {opcaoFreteEscolhida
+                            ? formatPrice.format(opcaoFreteEscolhida.preco)
+                            : "A calcular"}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-base">
+                        <dt className="font-semibold text-brand-navy">Total</dt>
+                        <dd className="text-lg font-semibold tabular-nums text-brand-navy">
+                          {formatPrice.format(total)}
+                        </dd>
+                      </div>
+                    </dl>
+                  );
+                })()}
 
                 <div className="mt-6 flex flex-col gap-3">
                   {emailNaoConfirmado && (
@@ -477,7 +629,7 @@ export default function CheckoutPage() {
                     onClick={handleContinuar}
                     variant="primary"
                     className="w-full"
-                    disabled={carregando || criandoSessao}
+                    disabled={carregando || freteCarregando || criandoSessao}
                   >
                     {criandoSessao ? (
                       <span className="inline-flex items-center justify-center gap-2">
