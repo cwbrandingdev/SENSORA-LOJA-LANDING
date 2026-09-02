@@ -33,6 +33,17 @@ export async function cancelarMeuPedido(id: number): Promise<Pedido> {
   return response.data;
 }
 
+// Etapa 5B.7 (Solicitação de Reembolso) — POST /pedidos/meus/:id/cancelar-pago,
+// mesmo padrão de cancelarMeuPedido: operação específica, sem body (o
+// backend só aceita a transição PAGO -> REEMBOLSO_SOLICITADO, e resolve
+// paymentId/ownership inteiramente a partir do token — nunca a partir de
+// nada enviado por aqui). Ver PedidosService.solicitarReembolso
+// (backend-sensora/src/pedidos/pedidos.service.ts).
+export async function solicitarReembolsoMeuPedido(id: number): Promise<Pedido> {
+  const response = await api.post<Pedido>(`/pedidos/meus/${id}/cancelar-pago`);
+  return response.data;
+}
+
 export async function listarPedidos(): Promise<Pedido[]> {
   const response = await api.get<Pedido[]>("/pedidos");
   return response.data;

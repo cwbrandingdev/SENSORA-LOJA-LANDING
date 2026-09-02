@@ -82,6 +82,24 @@ export class PedidosController {
     return this.pedidosService.cancelar(id, user);
   }
 
+  // Etapa 5B.4 (Solicitação de Reembolso) — mesmo padrão de
+  // `cancelar-meu-pedido` acima: operação específica (nunca um PUT
+  // genérico), sem `@Body()` nenhum — o cliente só pode disparar exatamente
+  // esta transição (PAGO -> REEMBOLSO_SOLICITADO), nunca informar
+  // paymentId/value/usuarioId (nada disso é lido do corpo da requisição,
+  // que é ignorado por completo aqui). Ownership real, idempotência e o
+  // claim atômico são sempre resolvidos dentro de
+  // PedidosService.solicitarReembolso(), nunca confiados ao guard sozinho.
+  @Post('meus/:id/cancelar-pago')
+  @Roles(...TODOS_OS_PERFIS)
+  @HttpCode(HttpStatus.OK)
+  solicitarReembolsoMeuPedido(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: UsuarioAutenticado,
+  ): Promise<Pedido> {
+    return this.pedidosService.solicitarReembolso(id, user);
+  }
+
   @Get(':id')
   findOne(
     @Param('id', ParseIntPipe) id: number,

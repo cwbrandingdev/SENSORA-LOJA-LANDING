@@ -28,6 +28,13 @@ export enum StatusPedido {
   PENDENTE = "PENDENTE",
   PAGO = "PAGO",
   CANCELADO = "CANCELADO",
+  // Etapa 5B.7 (fluxo de reembolso) — espelha o enum StatusPedido do backend
+  // (backend-sensora/prisma/schema.prisma), que já tem esses dois valores
+  // desde a Etapa 5B.2. PAGO -> REEMBOLSO_SOLICITADO (POST
+  // /pedidos/meus/:id/cancelar-pago, Etapa 5B.4) -> REEMBOLSADO (confirmado
+  // só pelo webhook PAYMENT_REFUNDED, Etapa 5B.5/5B.6 — nunca pelo frontend).
+  REEMBOLSO_SOLICITADO = "REEMBOLSO_SOLICITADO",
+  REEMBOLSADO = "REEMBOLSADO",
 }
 
 // Resposta de GET /imagekit/auth (backend, Etapa 2) — token/expire/signature

@@ -9,16 +9,22 @@
 // enumeração de IDs).
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import { isAxiosError } from "axios";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import EmptyState from "@/components/ui/EmptyState";
 import FormButton from "@/components/ui/FormButton";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Skeleton from "@/components/ui/Skeleton";
+import { BackLink } from "@/components/conta/AccountPageHeader";
 import StatusPedidoBadge from "@/components/conta/StatusPedidoBadge";
 import AcompanhamentoPedido from "@/components/conta/AcompanhamentoPedido";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
-import { buscarMeuPedido, cancelarMeuPedido } from "@/services/pedidos";
+import {
+  buscarMeuPedido,
+  cancelarMeuPedido,
+  solicitarReembolsoMeuPedido,
+} from "@/services/pedidos";
 import { ROUTES } from "@/lib/routes";
 import { StatusPedido, type PedidoComItensDetalhado } from "@/lib/types/loja";
 
@@ -36,6 +42,9 @@ export default function MeuPedidoDetalhePage() {
   const [carregando, setCarregando] = useState(true);
   const [naoEncontrado, setNaoEncontrado] = useState(false);
   const [cancelando, setCancelando] = useState(false);
+  const [modalCancelarAberto, setModalCancelarAberto] = useState(false);
+  const [modalReembolsoAberto, setModalReembolsoAberto] = useState(false);
+  const [solicitandoReembolso, setSolicitandoReembolso] = useState(false);
 
   useEffect(() => {
     // Id fora da URL não é um número válido — mesmo resultado prático de um
@@ -66,20 +75,29 @@ export default function MeuPedidoDetalhePage() {
   // carregamento da página e o clique (ex.: webhook confirmou o pagamento
   // nesse meio tempo), a API rejeita e o erro específico do backend é
   // mostrado, sem fingir sucesso.
-  async function handleCancelar() {
+  //
+  // Etapa 6.1 (Refinamento) — a confirmação passou de `window.confirm`
+  // (diálogo nativo do navegador) para o mesmo ConfirmDialog usado pelo
+  // fluxo de reembolso abaixo: só troca a UI de confirmação, a lógica de
+  // negócio (endpoint, condição de exibição, mensagens) é exatamente a
+  // mesma de antes.
+  function handleAbrirModalCancelar() {
+    setModalCancelarAberto(true);
+  }
+
+  function handleFecharModalCancelar() {
+    if (cancelando) return;
+    setModalCancelarAberto(false);
+  }
+
+  async function handleConfirmarCancelar() {
     if (!dados || cancelando) return;
-    if (
-      !window.confirm(
-        `Cancelar o pedido ${dados.pedido.numero}? Esta ação não pode ser desfeita.`,
-      )
-    ) {
-      return;
-    }
 
     setCancelando(true);
     try {
       const pedidoCancelado = await cancelarMeuPedido(dados.pedido.id);
       setDados((atual) => (atual ? { ...atual, pedido: pedidoCancelado } : atual));
+      setModalCancelarAberto(false);
       toast.success("Pedido cancelado com sucesso.");
     } catch (err) {
       toast.error(getErrorMessage(err, "Não foi possível cancelar o pedido."));
@@ -88,19 +106,88 @@ export default function MeuPedidoDetalhePage() {
     }
   }
 
+  // Etapa 5B.7 (Solicitação de Reembolso) — fluxo distinto do cancelamento
+  // PENDENTE acima: só chamado quando o status já exibido é PAGO (botão só
+  // existe nesse caso), sempre atrás de uma confirmação explícita (nunca
+  // dispara o POST direto no clique). O backend só devolve
+  // REEMBOLSO_SOLICITADO na resposta de sucesso — nunca REEMBOLSADO, que só
+  // chega depois via GET, quando o webhook PAYMENT_REFUNDED (Etapa 5B.5)
+  // já tiver confirmado do lado do backend.
+  function handleAbrirModalReembolso() {
+    setModalReembolsoAberto(true);
+  }
+
+  function handleFecharModalReembolso() {
+    if (solicitandoReembolso) return;
+    setModalReembolsoAberto(false);
+  }
+
+  async function handleConfirmarReembolso() {
+    if (!dados || solicitandoReembolso) return;
+
+    setSolicitandoReembolso(true);
+    try {
+      const pedidoAtualizado = await solicitarReembolsoMeuPedido(dados.pedido.id);
+      setDados((atual) => (atual ? { ...atual, pedido: pedidoAtualizado } : atual));
+      setModalReembolsoAberto(false);
+      toast.success("Solicitação de reembolso enviada para processamento.");
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 409) {
+        // Conflito de estado: o pedido pode ter mudado entre o carregamento
+        // da página e o clique (outra aba, webhook que já processou nesse
+        // meio tempo) — busca o estado real do backend em vez de deixar a
+        // tela mostrando um botão que já não é mais válido.
+        toast.error(
+          getErrorMessage(
+            err,
+            "O pedido não está mais disponível para solicitação de reembolso.",
+          ),
+        );
+        setModalReembolsoAberto(false);
+        buscarMeuPedido(dados.pedido.id)
+          .then(setDados)
+          .catch(() => {
+            // Falha ao rebuscar não é crítica aqui: a tela só fica com o
+            // status anterior por mais um instante, até o usuário recarregar.
+          });
+      } else {
+        // Cobre 404/422 (mensagem específica do backend, via
+        // getErrorMessage) e 5xx/timeout/rede (fallback genérico) — nunca
+        // afirma que o reembolso foi recusado quando o erro é ambíguo
+        // (ex.: AsaasIndisponivelError no backend mantém
+        // REEMBOLSO_SOLICITADO de propósito).
+        toast.error(
+          getErrorMessage(
+            err,
+            "Não foi possível concluir a solicitação neste momento. Tente novamente.",
+          ),
+        );
+      }
+    } finally {
+      setSolicitandoReembolso(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-4xl px-6 pt-28 pb-24 sm:pt-36 sm:pb-32 lg:px-10">
-      <p>
-        <Link
-          href={ROUTES.CONTA_PEDIDOS}
-          className="text-sm font-semibold uppercase tracking-[0.14em] text-brand-navy hover:text-brand-orange"
-        >
-          ← Voltar para meus pedidos
-        </Link>
-      </p>
+      {/* Item 5/6/19 da Etapa 6.1 — sempre visível, mesmo durante
+          loading/"não encontrado" (nunca depende dos dados do pedido já
+          terem chegado). Volta para a LISTA (/conta/pedidos), não para
+          /conta: é a página imediatamente anterior na navegação. */}
+      <BackLink href={ROUTES.CONTA_PEDIDOS} label="Voltar para Meus Pedidos" />
 
       {carregando ? (
-        <p className="mt-10 text-sm text-slate-500">Carregando pedido...</p>
+        <div className="mt-8 flex flex-col gap-8" aria-busy="true">
+          <div className="flex flex-col gap-2 border-b border-slate-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="h-9 w-56" />
+            </div>
+            <Skeleton className="h-7 w-28 rounded-full" />
+          </div>
+          <Skeleton className="h-16 w-full rounded-sm" />
+          <Skeleton className="h-48 w-full rounded-sm" />
+        </div>
       ) : naoEncontrado || !dados ? (
         <div className="mt-4">
           <EmptyState
@@ -127,17 +214,32 @@ export default function MeuPedidoDetalhePage() {
             <div className="flex items-center gap-3">
               <StatusPedidoBadge status={dados.pedido.status} />
               {dados.pedido.status === StatusPedido.PENDENTE && (
+                <FormButton type="button" variant="danger" onClick={handleAbrirModalCancelar}>
+                  Cancelar pedido
+                </FormButton>
+              )}
+              {/* Etapa 5B.7 — ação de reembolso é exclusiva de PAGO: nunca
+                  aparece para PENDENTE/CANCELADO (fluxo acima) nem para
+                  REEMBOLSO_SOLICITADO/REEMBOLSADO (já solicitado/concluído,
+                  nunca uma segunda solicitação pela interface). */}
+              {dados.pedido.status === StatusPedido.PAGO && (
                 <FormButton
                   type="button"
                   variant="danger"
-                  onClick={handleCancelar}
-                  disabled={cancelando}
+                  onClick={handleAbrirModalReembolso}
                 >
-                  {cancelando ? "Cancelando..." : "Cancelar pedido"}
+                  Solicitar reembolso
                 </FormButton>
               )}
             </div>
           </div>
+
+          {dados.pedido.status === StatusPedido.REEMBOLSO_SOLICITADO && (
+            <p className="mt-4 text-sm leading-relaxed text-slate-600">
+              Sua solicitação de reembolso foi recebida e está em
+              processamento.
+            </p>
+          )}
 
           <div className="mt-8">
             <h2 className="font-serif text-xl font-normal text-brand-navy">
@@ -154,7 +256,10 @@ export default function MeuPedidoDetalhePage() {
             </h2>
             <ul className="mt-4 divide-y divide-slate-200 border-t border-slate-200">
               {dados.itens.map((item) => (
-                <li key={item.id} className="flex items-center justify-between gap-4 py-4">
+                <li
+                  key={item.id}
+                  className="flex items-center justify-between gap-4 py-4 transition-colors duration-200 hover:bg-slate-50/80"
+                >
                   <div>
                     <p className="text-sm font-medium text-brand-navy">{item.produtoNome}</p>
                     <p className="text-sm text-slate-500">
@@ -188,6 +293,44 @@ export default function MeuPedidoDetalhePage() {
             </p>
           </div>
         </RevealOnScroll>
+      )}
+
+      {dados && (
+        <>
+          <ConfirmDialog
+            open={modalCancelarAberto}
+            title="Cancelar pedido?"
+            description={
+              <p>
+                Cancelar o pedido {dados.pedido.numero}? Esta ação não pode
+                ser desfeita.
+              </p>
+            }
+            confirmLabel="Cancelar pedido"
+            confirmingLabel="Cancelando..."
+            confirming={cancelando}
+            onConfirm={handleConfirmarCancelar}
+            onCancel={handleFecharModalCancelar}
+          />
+          <ConfirmDialog
+            open={modalReembolsoAberto}
+            title="Solicitar reembolso?"
+            description={
+              <>
+                <p>Você está solicitando o reembolso deste pedido.</p>
+                <p className="mt-2">
+                  Após confirmar, a solicitação será enviada para
+                  processamento.
+                </p>
+              </>
+            }
+            confirmLabel="Solicitar reembolso"
+            confirmingLabel="Processando..."
+            confirming={solicitandoReembolso}
+            onConfirm={handleConfirmarReembolso}
+            onCancel={handleFecharModalReembolso}
+          />
+        </>
       )}
     </div>
   );

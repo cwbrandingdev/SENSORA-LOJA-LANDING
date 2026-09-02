@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import Stripe from 'stripe';
@@ -72,6 +72,7 @@ describe('CheckoutService — webhook Stripe (Task 15, modo de rollback)', () =>
   };
   let produtosService: { removerEstoque: jest.Mock };
   let txPedidoUpdateMany: jest.Mock;
+  let txItemPedidoUpdate: jest.Mock;
 
   // "Banco" em memória simplificado — permite que os testes de idempotência
   // e "pedido já pago" reflitam uma mudança de estado real entre chamadas,
@@ -79,7 +80,7 @@ describe('CheckoutService — webhook Stripe (Task 15, modo de rollback)', () =>
   let pedidoFake: {
     id: number;
     status: StatusPedido;
-    itens: { produtoId: number; quantidade: number }[];
+    itens: { id: number; produtoId: number; quantidade: number }[];
   };
 
   beforeEach(async () => {
@@ -87,8 +88,8 @@ describe('CheckoutService — webhook Stripe (Task 15, modo de rollback)', () =>
       id: 1,
       status: StatusPedido.PENDENTE,
       itens: [
-        { produtoId: 10, quantidade: 2 },
-        { produtoId: 20, quantidade: 1 },
+        { id: 100, produtoId: 10, quantidade: 2 },
+        { id: 200, produtoId: 20, quantidade: 1 },
       ],
     };
 
@@ -102,13 +103,25 @@ describe('CheckoutService — webhook Stripe (Task 15, modo de rollback)', () =>
       },
     );
 
+    // Correção da infraestrutura de testes — confirmarPagamento (Etapa
+    // 5A.2) chama `tx.itemPedido.update` para marcar `estoqueBaixado: true`
+    // por item, DENTRO da mesma transação usada para `tx.pedido.updateMany`
+    // acima. O mock de `$transaction` precisa expor os dois, senão a
+    // chamada real quebra com `Cannot read properties of undefined
+    // (reading 'update')` — mascarado até agora pelo Jest carregar o `.js`
+    // obsoleto (que não tinha essa chamada) em vez do `.ts` real.
+    txItemPedidoUpdate = jest.fn(() => ({}));
+
     prisma = {
       pedido: {
         findUnique: jest.fn(() => pedidoFake),
       },
       $transaction: jest.fn(
         async (callback: (tx: unknown) => Promise<void>) => {
-          const tx = { pedido: { updateMany: txPedidoUpdateMany } };
+          const tx = {
+            pedido: { updateMany: txPedidoUpdateMany },
+            itemPedido: { update: txItemPedidoUpdate },
+          };
           return callback(tx);
         },
       ),
@@ -253,7 +266,7 @@ describe('CheckoutService — webhook Stripe (Task 15, modo de rollback)', () =>
   });
 
   it('estoque: quantidade descontada vem dos itens persistidos no pedido, nunca de dado externo', async () => {
-    pedidoFake.itens = [{ produtoId: 77, quantidade: 5 }];
+    pedidoFake.itens = [{ id: 300, produtoId: 77, quantidade: 5 }];
     pedidoFake.status = StatusPedido.PENDENTE;
     const { payload, signature } = assinarEventoStripe(
       construirEventoCheckoutCompletoStripe('cs_test_123'),
@@ -369,11 +382,12 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
   };
   let produtosService: { removerEstoque: jest.Mock };
   let txPedidoUpdateMany: jest.Mock;
+  let txItemPedidoUpdate: jest.Mock;
 
   let pedidoFake: {
     id: number;
     status: StatusPedido;
-    itens: { produtoId: number; quantidade: number }[];
+    itens: { id: number; produtoId: number; quantidade: number }[];
   };
 
   function construirEventoCheckoutPago(checkoutId: string) {
@@ -389,8 +403,8 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
       id: 1,
       status: StatusPedido.PENDENTE,
       itens: [
-        { produtoId: 10, quantidade: 2 },
-        { produtoId: 20, quantidade: 1 },
+        { id: 100, produtoId: 10, quantidade: 2 },
+        { id: 200, produtoId: 20, quantidade: 1 },
       ],
     };
 
@@ -404,13 +418,21 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
       },
     );
 
+    // Correção da infraestrutura de testes — mesmo motivo do bloco Stripe
+    // acima: confirmarPagamento chama `tx.itemPedido.update` dentro da
+    // mesma transação, para os dois gateways (Stripe e Asaas).
+    txItemPedidoUpdate = jest.fn(() => ({}));
+
     prisma = {
       pedido: {
         findUnique: jest.fn(() => pedidoFake),
       },
       $transaction: jest.fn(
         async (callback: (tx: unknown) => Promise<void>) => {
-          const tx = { pedido: { updateMany: txPedidoUpdateMany } };
+          const tx = {
+            pedido: { updateMany: txPedidoUpdateMany },
+            itemPedido: { update: txItemPedidoUpdate },
+          };
           return callback(tx);
         },
       ),
@@ -581,6 +603,240 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
   });
 });
 
+// Etapa 5B.5 — eventos de webhook de reembolso do Asaas
+// (PAYMENT_REFUND_IN_PROGRESS, PAYMENT_REFUNDED, PAYMENT_PARTIALLY_REFUNDED,
+// PAYMENT_REFUND_DENIED). Suíte separada da de CHECKOUT_PAID acima porque o
+// "banco" fake precisa localizar o Pedido por `asaasPaymentId` (não por
+// `asaasCheckoutId`) e o método novo (processarEventoReembolsoAsaas) chama
+// `prisma.pedido.updateMany` diretamente (sem `$transaction` — não há
+// baixa de estoque nesta etapa). Mesmo princípio de mock das suítes acima:
+// só Prisma é mockado, a validação real de token (`tokensIguais`) roda de
+// verdade dentro do serviço.
+describe('CheckoutService — webhook Asaas: eventos de reembolso (Etapa 5B.5)', () => {
+  let service: CheckoutService;
+  let prisma: {
+    pedido: {
+      findUnique: jest.Mock;
+      updateMany: jest.Mock;
+    };
+    itemPedido: {
+      findMany: jest.Mock;
+    };
+  };
+  let pedidoFake: {
+    id: number;
+    asaasPaymentId: string | null;
+    status: StatusPedido;
+  };
+
+  function construirEventoPayment(
+    evento: string,
+    paymentId?: string,
+  ): string {
+    return JSON.stringify({
+      id: `evt_${paymentId ?? 'sem_payment'}`,
+      event: evento,
+      ...(paymentId
+        ? { payment: { id: paymentId, status: 'CONFIRMED' } }
+        : {}),
+    });
+  }
+
+  beforeEach(async () => {
+    pedidoFake = {
+      id: 1,
+      asaasPaymentId: 'pay_123',
+      status: StatusPedido.REEMBOLSO_SOLICITADO,
+    };
+
+    prisma = {
+      pedido: {
+        findUnique: jest.fn(
+          ({ where }: { where: { asaasPaymentId: string } }) =>
+            where.asaasPaymentId === pedidoFake.asaasPaymentId
+              ? { ...pedidoFake }
+              : null,
+        ),
+        // Mesmo raciocínio de idempotência de confirmarPagamento: só aplica
+        // (e retorna count:1) se o `status` do WHERE bater com o atual —
+        // é isso que torna a reentrega do mesmo evento (item C) segura de
+        // testar.
+        updateMany: jest.fn(
+          ({
+            where,
+            data,
+          }: {
+            where: { id: number; status: StatusPedido };
+            data: { status: StatusPedido };
+          }) => {
+            if (where.id === pedidoFake.id && where.status === pedidoFake.status) {
+              pedidoFake.status = data.status;
+              return { count: 1 };
+            }
+            return { count: 0 };
+          },
+        ),
+      },
+      // Etapa 5B.6 — processarEventoReembolsoAsaas agora sempre chama
+      // restaurarEstoqueAposReembolso após PAYMENT_REFUNDED (mesmo em
+      // reentrega, ver item 4/14 da etapa). Esta suíte (5B.5) testa só a
+      // transição de status, sem itens de pedido — `findMany` retornando
+      // `[]` faz o helper de restauração encerrar imediatamente (nenhum
+      // item elegível), sem precisar mockar `$transaction`/ProdutosService
+      // aqui. A restauração em si é testada à parte, na suíte 5B.6 abaixo.
+      itemPedido: {
+        findMany: jest.fn(() => []),
+      },
+    };
+
+    const configValues: Record<string, string> = {
+      CHECKOUT_GATEWAY: 'asaas',
+      ASAAS_WEBHOOK_TOKEN,
+      FRONTEND_URL: 'http://localhost:3001',
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        {
+          provide: ConfigService,
+          useValue: { get: (key: string) => configValues[key] },
+        },
+        { provide: PrismaService, useValue: prisma },
+        { provide: ProdutosService, useValue: {} },
+        { provide: EnderecosService, useValue: {} },
+        { provide: AsaasService, useValue: {} },
+      ],
+    }).compile();
+
+    service = module.get(CheckoutService);
+  });
+
+  // A
+  it('A: PAYMENT_REFUND_IN_PROGRESS mantém REEMBOLSO_SOLICITADO', async () => {
+    const resultado = await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(construirEventoPayment('PAYMENT_REFUND_IN_PROGRESS', 'pay_123')),
+    );
+
+    expect(resultado).toEqual({ received: true });
+    expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSO_SOLICITADO);
+    expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+  });
+
+  // B
+  it('B: PAYMENT_REFUNDED transiciona REEMBOLSO_SOLICITADO -> REEMBOLSADO', async () => {
+    const resultado = await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(construirEventoPayment('PAYMENT_REFUNDED', 'pay_123')),
+    );
+
+    expect(resultado).toEqual({ received: true });
+    expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSADO);
+  });
+
+  // C
+  it('C: PAYMENT_REFUNDED entregue 3x resulta em REEMBOLSADO, sem erro nem efeito colateral extra', async () => {
+    const payload = Buffer.from(
+      construirEventoPayment('PAYMENT_REFUNDED', 'pay_123'),
+    );
+
+    for (let i = 0; i < 3; i++) {
+      const resultado = await service.handleWebhook(
+        { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+        payload,
+      );
+      expect(resultado).toEqual({ received: true });
+    }
+
+    expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSADO);
+    expect(prisma.pedido.updateMany).toHaveBeenCalledTimes(3);
+  });
+
+  // D
+  it('D: PAYMENT_REFUNDED para payment.id desconhecido não altera nada', async () => {
+    const resultado = await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(
+        construirEventoPayment('PAYMENT_REFUNDED', 'pay_desconhecido'),
+      ),
+    );
+
+    expect(resultado).toEqual({ received: true });
+    expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+    expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSO_SOLICITADO);
+  });
+
+  // E
+  it('E: PAYMENT_PARTIALLY_REFUNDED não marca REEMBOLSADO', async () => {
+    const resultado = await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(
+        construirEventoPayment('PAYMENT_PARTIALLY_REFUNDED', 'pay_123'),
+      ),
+    );
+
+    expect(resultado).toEqual({ received: true });
+    expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSO_SOLICITADO);
+    expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+  });
+
+  // F
+  it('F: PAYMENT_REFUND_DENIED preserva REEMBOLSO_SOLICITADO para reconciliação', async () => {
+    const resultado = await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(construirEventoPayment('PAYMENT_REFUND_DENIED', 'pay_123')),
+    );
+
+    expect(resultado).toEqual({ received: true });
+    expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSO_SOLICITADO);
+    expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+  });
+
+  // G
+  it('G: PAYMENT_REFUNDED para pedido ainda PAGO não transiciona cegamente (máquina de estados protegida)', async () => {
+    pedidoFake.status = StatusPedido.PAGO;
+
+    const resultado = await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(construirEventoPayment('PAYMENT_REFUNDED', 'pay_123')),
+    );
+
+    expect(resultado).toEqual({ received: true });
+    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+  });
+
+  // H
+  it('H: PAYMENT_REFUNDED sem payment.id não consulta nem atualiza Pedido', async () => {
+    const payload = JSON.stringify({
+      id: 'evt_sem_payment',
+      event: 'PAYMENT_REFUNDED',
+    });
+
+    const resultado = await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(payload),
+    );
+
+    expect(resultado).toEqual({ received: true });
+    expect(prisma.pedido.findUnique).not.toHaveBeenCalled();
+    expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+  });
+
+  // I
+  it('I: token do webhook inválido continua rejeitando (também para eventos de reembolso)', async () => {
+    await expect(
+      service.handleWebhook(
+        { asaasAccessToken: 'x'.repeat(ASAAS_WEBHOOK_TOKEN.length) },
+        Buffer.from(construirEventoPayment('PAYMENT_REFUNDED', 'pay_123')),
+      ),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.pedido.findUnique).not.toHaveBeenCalled();
+    expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+  });
+});
+
 // Task 16 (aprovado) — createSession agora rejeita produto com `ativo:
 // false` antes de chegar no gateway de pagamento. Só testa esse caminho de
 // erro especificamente: não mocka o gateway nem prisma.pedido.create
@@ -718,5 +974,489 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
       sessionId: 'chk_abc',
       url: 'https://sandbox.asaas.com/checkoutSession/show/chk_abc',
     });
+  });
+});
+
+// Etapa 5B.6 — restauração de estoque após confirmação de reembolso
+// (PAYMENT_REFUNDED). "Banco" fake com três partes vivas — pedidoFake,
+// itensFake e produtosFake (Map produtoId -> quantidade) — para que o mock
+// de `$transaction` consiga simular a garantia real do Postgres: TODAS as
+// mutações feitas dentro do callback (tanto `tx.itemPedido.updateMany`
+// quanto `produtosService.adicionarEstoque`, que aqui grava direto em
+// `produtosFake`) são tiradas de um snapshot ANTES do callback rodar e
+// só ficam confirmadas se o callback resolver sem lançar — se lançar, o
+// snapshot é restaurado por inteiro (rollback), exatamente como a
+// Etapa 5A.2 já assume para `confirmarPagamento`. Essa simulação prova a
+// LÓGICA de tudo-ou-nada do código (item 13 da etapa); não substitui um
+// teste de integração contra Postgres real para a garantia de lock de
+// linha em si (ver teste K).
+describe('CheckoutService — restauração de estoque após reembolso (Etapa 5B.6)', () => {
+  let service: CheckoutService;
+  let prisma: {
+    pedido: { findUnique: jest.Mock; updateMany: jest.Mock };
+    itemPedido: { findMany: jest.Mock };
+    $transaction: jest.Mock;
+  };
+  let produtosService: { adicionarEstoque: jest.Mock };
+
+  let pedidoFake: {
+    id: number;
+    asaasPaymentId: string | null;
+    status: StatusPedido;
+  };
+  let itensFake: {
+    id: number;
+    pedidoId: number;
+    produtoId: number;
+    quantidade: number;
+    estoqueBaixado: boolean | null;
+    estoqueRestaurado: boolean;
+  }[];
+  let produtosFake: Map<number, number>;
+  let falharAdicionarEstoquePara: number | null;
+
+  function construirEventoPaymentRefunded(paymentId: string): string {
+    return JSON.stringify({
+      id: `evt_${paymentId}`,
+      event: 'PAYMENT_REFUNDED',
+      payment: { id: paymentId, status: 'CONFIRMED' },
+    });
+  }
+
+  async function enviarPaymentRefunded(): Promise<{ received: boolean }> {
+    return service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(construirEventoPaymentRefunded('pay_123')),
+    );
+  }
+
+  beforeEach(async () => {
+    pedidoFake = {
+      id: 1,
+      asaasPaymentId: 'pay_123',
+      status: StatusPedido.REEMBOLSO_SOLICITADO,
+    };
+    itensFake = [];
+    produtosFake = new Map();
+    falharAdicionarEstoquePara = null;
+
+    prisma = {
+      pedido: {
+        findUnique: jest.fn(
+          ({ where }: { where: { asaasPaymentId: string } }) =>
+            where.asaasPaymentId === pedidoFake.asaasPaymentId
+              ? { ...pedidoFake }
+              : null,
+        ),
+        updateMany: jest.fn(
+          ({
+            where,
+            data,
+          }: {
+            where: { id: number; status: StatusPedido };
+            data: { status: StatusPedido };
+          }) => {
+            if (where.id === pedidoFake.id && where.status === pedidoFake.status) {
+              pedidoFake.status = data.status;
+              return { count: 1 };
+            }
+            return { count: 0 };
+          },
+        ),
+      },
+      itemPedido: {
+        findMany: jest.fn(({ where }: { where: { pedidoId: number } }) =>
+          itensFake
+            .filter((item) => item.pedidoId === where.pedidoId)
+            .map((item) => ({ ...item })),
+        ),
+      },
+      // Ver comentário do describe: snapshot/restore em torno do callback
+      // simula a garantia tudo-ou-nada do Postgres para efeito de testar a
+      // LÓGICA (item 13); o claim condicional em si (WHERE estoqueBaixado/
+      // estoqueRestaurado) roda de verdade dentro de `tx.itemPedido.updateMany`
+      // abaixo, contra o mesmo `itensFake` mutável.
+      $transaction: jest.fn(
+        async (callback: (tx: unknown) => Promise<unknown>) => {
+          const snapshotItens = itensFake.map((item) => ({ ...item }));
+          const snapshotProdutos = new Map(produtosFake);
+          const tx = {
+            itemPedido: {
+              updateMany: jest.fn(
+                ({
+                  where,
+                  data,
+                }: {
+                  where: {
+                    id: number;
+                    estoqueBaixado: boolean;
+                    estoqueRestaurado: boolean;
+                  };
+                  data: { estoqueRestaurado: boolean };
+                }) => {
+                  const item = itensFake.find((i) => i.id === where.id);
+                  if (
+                    item &&
+                    item.estoqueBaixado === where.estoqueBaixado &&
+                    item.estoqueRestaurado === where.estoqueRestaurado
+                  ) {
+                    item.estoqueRestaurado = data.estoqueRestaurado;
+                    return { count: 1 };
+                  }
+                  return { count: 0 };
+                },
+              ),
+            },
+          };
+
+          try {
+            return await callback(tx);
+          } catch (erro) {
+            itensFake.length = 0;
+            itensFake.push(...snapshotItens);
+            produtosFake.clear();
+            for (const [produtoId, quantidade] of snapshotProdutos) {
+              produtosFake.set(produtoId, quantidade);
+            }
+            throw erro;
+          }
+        },
+      ),
+    };
+
+    produtosService = {
+      adicionarEstoque: jest.fn(
+        async (produtoId: number, quantidade: number) => {
+          if (falharAdicionarEstoquePara === produtoId) {
+            throw new Error('Falha simulada no incremento de estoque');
+          }
+          produtosFake.set(
+            produtoId,
+            (produtosFake.get(produtoId) ?? 0) + quantidade,
+          );
+          return {};
+        },
+      ),
+    };
+
+    const configValues: Record<string, string> = {
+      CHECKOUT_GATEWAY: 'asaas',
+      ASAAS_WEBHOOK_TOKEN,
+      FRONTEND_URL: 'http://localhost:3001',
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        {
+          provide: ConfigService,
+          useValue: { get: (key: string) => configValues[key] },
+        },
+        { provide: PrismaService, useValue: prisma },
+        { provide: ProdutosService, useValue: produtosService },
+        { provide: EnderecosService, useValue: {} },
+        { provide: AsaasService, useValue: {} },
+      ],
+    }).compile();
+
+    service = module.get(CheckoutService);
+  });
+
+  // A
+  it('A: restaura o estoque de um item elegível e mantém REEMBOLSADO', async () => {
+    itensFake = [
+      {
+        id: 10,
+        pedidoId: 1,
+        produtoId: 100,
+        quantidade: 3,
+        estoqueBaixado: true,
+        estoqueRestaurado: false,
+      },
+    ];
+    produtosFake.set(100, 5);
+
+    await enviarPaymentRefunded();
+
+    expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSADO);
+    expect(itensFake[0].estoqueRestaurado).toBe(true);
+    expect(produtosFake.get(100)).toBe(8);
+  });
+
+  // B
+  it('B: webhook PAYMENT_REFUNDED duplicado só incrementa o estoque uma vez', async () => {
+    itensFake = [
+      {
+        id: 10,
+        pedidoId: 1,
+        produtoId: 100,
+        quantidade: 3,
+        estoqueBaixado: true,
+        estoqueRestaurado: false,
+      },
+    ];
+    produtosFake.set(100, 5);
+
+    await enviarPaymentRefunded();
+    await enviarPaymentRefunded();
+
+    expect(produtosFake.get(100)).toBe(8);
+    expect(itensFake[0].estoqueRestaurado).toBe(true);
+    expect(produtosService.adicionarEstoque).toHaveBeenCalledTimes(1);
+  });
+
+  // C
+  it('C: item já restaurado não gera novo incremento', async () => {
+    itensFake = [
+      {
+        id: 10,
+        pedidoId: 1,
+        produtoId: 100,
+        quantidade: 3,
+        estoqueBaixado: true,
+        estoqueRestaurado: true,
+      },
+    ];
+    produtosFake.set(100, 5);
+
+    await enviarPaymentRefunded();
+
+    expect(produtosFake.get(100)).toBe(5);
+    expect(produtosService.adicionarEstoque).not.toHaveBeenCalled();
+  });
+
+  // D
+  it('D: item com estoqueBaixado=false nunca incrementa estoque', async () => {
+    itensFake = [
+      {
+        id: 10,
+        pedidoId: 1,
+        produtoId: 100,
+        quantidade: 3,
+        estoqueBaixado: false,
+        estoqueRestaurado: false,
+      },
+    ];
+    produtosFake.set(100, 5);
+
+    await enviarPaymentRefunded();
+
+    expect(produtosFake.get(100)).toBe(5);
+    expect(itensFake[0].estoqueRestaurado).toBe(false);
+    expect(produtosService.adicionarEstoque).not.toHaveBeenCalled();
+  });
+
+  // E
+  it('E: item com estoqueBaixado=null não é restaurado automaticamente e gera warning', async () => {
+    const warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    itensFake = [
+      {
+        id: 10,
+        pedidoId: 1,
+        produtoId: 100,
+        quantidade: 3,
+        estoqueBaixado: null,
+        estoqueRestaurado: false,
+      },
+    ];
+    produtosFake.set(100, 5);
+
+    await enviarPaymentRefunded();
+
+    expect(produtosFake.get(100)).toBe(5);
+    expect(itensFake[0].estoqueRestaurado).toBe(false);
+    expect(produtosService.adicionarEstoque).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('indeterminado'),
+    );
+    warnSpy.mockRestore();
+  });
+
+  // F
+  it('F: pedido com múltiplos itens só restaura os elegíveis', async () => {
+    itensFake = [
+      {
+        id: 1,
+        pedidoId: 1,
+        produtoId: 100,
+        quantidade: 2,
+        estoqueBaixado: true,
+        estoqueRestaurado: false,
+      },
+      {
+        id: 2,
+        pedidoId: 1,
+        produtoId: 200,
+        quantidade: 5,
+        estoqueBaixado: true,
+        estoqueRestaurado: false,
+      },
+      {
+        id: 3,
+        pedidoId: 1,
+        produtoId: 300,
+        quantidade: 10,
+        estoqueBaixado: false,
+        estoqueRestaurado: false,
+      },
+    ];
+    produtosFake.set(100, 0);
+    produtosFake.set(200, 0);
+    produtosFake.set(300, 0);
+
+    await enviarPaymentRefunded();
+
+    expect(produtosFake.get(100)).toBe(2);
+    expect(produtosFake.get(200)).toBe(5);
+    expect(produtosFake.get(300)).toBe(0);
+  });
+
+  // G
+  it('G: dois itens do mesmo produto somam corretamente (+5, não sobrescrevem)', async () => {
+    itensFake = [
+      {
+        id: 1,
+        pedidoId: 1,
+        produtoId: 10,
+        quantidade: 2,
+        estoqueBaixado: true,
+        estoqueRestaurado: false,
+      },
+      {
+        id: 2,
+        pedidoId: 1,
+        produtoId: 10,
+        quantidade: 3,
+        estoqueBaixado: true,
+        estoqueRestaurado: false,
+      },
+    ];
+    produtosFake.set(10, 0);
+
+    await enviarPaymentRefunded();
+
+    expect(produtosFake.get(10)).toBe(5);
+    expect(itensFake.every((item) => item.estoqueRestaurado)).toBe(true);
+  });
+
+  // H
+  it('H: falha no incremento de um item reverte tudo (nenhum item fica parcialmente restaurado)', async () => {
+    itensFake = [
+      {
+        id: 1,
+        pedidoId: 1,
+        produtoId: 10,
+        quantidade: 2,
+        estoqueBaixado: true,
+        estoqueRestaurado: false,
+      },
+      {
+        id: 2,
+        pedidoId: 1,
+        produtoId: 20,
+        quantidade: 3,
+        estoqueBaixado: true,
+        estoqueRestaurado: false,
+      },
+    ];
+    produtosFake.set(10, 0);
+    produtosFake.set(20, 0);
+    falharAdicionarEstoquePara = 20;
+
+    await expect(enviarPaymentRefunded()).rejects.toThrow(
+      'Falha simulada no incremento de estoque',
+    );
+
+    expect(itensFake[0].estoqueRestaurado).toBe(false);
+    expect(itensFake[1].estoqueRestaurado).toBe(false);
+    expect(produtosFake.get(10)).toBe(0);
+    expect(produtosFake.get(20)).toBe(0);
+  });
+
+  // I
+  it('I: retry depois da falha restaura o estoque exatamente uma vez', async () => {
+    itensFake = [
+      {
+        id: 1,
+        pedidoId: 1,
+        produtoId: 10,
+        quantidade: 4,
+        estoqueBaixado: true,
+        estoqueRestaurado: false,
+      },
+    ];
+    produtosFake.set(10, 0);
+    falharAdicionarEstoquePara = 10;
+
+    await expect(enviarPaymentRefunded()).rejects.toThrow();
+    expect(produtosFake.get(10)).toBe(0);
+    expect(itensFake[0].estoqueRestaurado).toBe(false);
+    // A transição de status já ocorre ANTES da restauração (item 4/14 da
+    // etapa) — mesmo com a restauração falhando, o pedido já está
+    // REEMBOLSADO após a 1ª tentativa; a 2ª chamada precisa reprocessar
+    // mesmo assim, e é exatamente isso que este teste confirma.
+    expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSADO);
+
+    falharAdicionarEstoquePara = null;
+    await enviarPaymentRefunded();
+
+    expect(produtosFake.get(10)).toBe(4);
+    expect(itensFake[0].estoqueRestaurado).toBe(true);
+    expect(produtosService.adicionarEstoque).toHaveBeenCalledTimes(2);
+  });
+
+  // J
+  it('J: pedido já REEMBOLSADO com estoqueRestaurado=false ainda restaura o estoque', async () => {
+    pedidoFake.status = StatusPedido.REEMBOLSADO;
+    itensFake = [
+      {
+        id: 1,
+        pedidoId: 1,
+        produtoId: 10,
+        quantidade: 7,
+        estoqueBaixado: true,
+        estoqueRestaurado: false,
+      },
+    ];
+    produtosFake.set(10, 0);
+
+    await enviarPaymentRefunded();
+
+    expect(produtosFake.get(10)).toBe(7);
+    expect(itensFake[0].estoqueRestaurado).toBe(true);
+  });
+
+  // K — concorrência: ver comentário do describe. O mock de
+  // `$transaction`/`tx.itemPedido.updateMany` acima roda o MESMO claim
+  // condicional (WHERE estoqueBaixado/estoqueRestaurado) que o código real
+  // executa contra o Postgres; duas chamadas via Promise.all geram
+  // interleaving genuíno de operações assíncronas (cada `await` cede o
+  // event loop), então esta suíte prova que a LÓGICA do claim é
+  // race-safe sob interleaving real do Node. NÃO é um teste de integração
+  // contra Postgres — o lock de linha de verdade (que é o que impede as
+  // duas transações de lerem `estoqueRestaurado=false` simultaneamente) só
+  // existe num banco real. Não foi criado um teste de integração contra
+  // banco de desenvolvimento nesta etapa por não haver, neste ambiente, uma
+  // forma segura e confirmada de isolar essa gravação concorrente de uma
+  // instância que não seja de produção — ver relatório final, item C.
+  it('K: duas execuções concorrentes do webhook incrementam o estoque só uma vez', async () => {
+    itensFake = [
+      {
+        id: 1,
+        pedidoId: 1,
+        produtoId: 10,
+        quantidade: 6,
+        estoqueBaixado: true,
+        estoqueRestaurado: false,
+      },
+    ];
+    produtosFake.set(10, 0);
+
+    await Promise.all([enviarPaymentRefunded(), enviarPaymentRefunded()]);
+
+    expect(produtosFake.get(10)).toBe(6);
+    expect(produtosService.adicionarEstoque).toHaveBeenCalledTimes(1);
   });
 });

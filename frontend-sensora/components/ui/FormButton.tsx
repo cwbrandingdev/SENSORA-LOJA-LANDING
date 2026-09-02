@@ -27,7 +27,7 @@ export default function FormButton({
   return (
     <button
       type={type}
-      className={`inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${VARIANTS[variant]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium transition-[color,background-color,border-color,transform,box-shadow] duration-200 ease-out hover:-translate-y-px active:translate-y-0 disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 disabled:hover:translate-y-0 motion-reduce:transition-colors motion-reduce:hover:translate-y-0 ${VARIANTS[variant]} ${className}`}
       {...props}
     >
       {children}

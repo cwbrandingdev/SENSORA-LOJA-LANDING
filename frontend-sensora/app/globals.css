@@ -61,3 +61,31 @@ body {
     transform: scale(1.06) translateY(6px);
   }
 }
+
+/* Etapa 6.1 (Refinamento — Minha Conta) — shimmer discreto para os
+   placeholders de loading (components/ui/Skeleton.tsx). Só translada o
+   highlight (transform), nunca anima width/height/position — mesmo
+   princípio de performance já seguido pelo parallax acima. Desligado com
+   prefers-reduced-motion: o skeleton some, o Tailwind (`motion-reduce:`)
+   troca por uma opacidade estática no componente. */
+@keyframes skeleton-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* AcompanhamentoPedido — a barra de progresso entre duas etapas cresce da
+   esquerda para a direita quando a etapa seguinte já foi alcançada,
+   comunicando a transição de estado (não é decorativa). scaleX apenas
+   (transform), nunca width. */
+@keyframes timeline-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}

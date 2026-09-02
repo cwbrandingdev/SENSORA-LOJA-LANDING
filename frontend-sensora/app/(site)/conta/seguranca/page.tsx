@@ -17,11 +17,14 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Eye, EyeOff } from "lucide-react";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import FormButton from "@/components/ui/FormButton";
+import AccountPageHeader from "@/components/conta/AccountPageHeader";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import { alterarMinhaSenha } from "@/services/conta";
+import { ROUTES } from "@/lib/routes";
 
 const senhaSchema = z
   .object({
@@ -37,9 +40,56 @@ const senhaSchema = z
 type SenhaFormValues = z.infer<typeof senhaSchema>;
 
 const inputClass =
-  "rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy";
+  "w-full rounded-md border border-slate-300 px-3 py-2 pr-10 text-sm transition-colors duration-200 focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy";
 const labelClass = "text-sm font-medium text-slate-700";
 const errorClass = "text-sm text-red-600";
+
+// Etapa 6.1 (Refinamento) — nenhum dos 3 campos de senha tinha
+// mostrar/ocultar (auditoria, item 9 da etapa). Um botão só de ícone dentro
+// do próprio input, nunca alterando o `name`/contrato do formulário —
+// react-hook-form continua registrando o campo como senha normalmente, só
+// o atributo `type` alterna entre "password"/"text".
+function CampoSenha({
+  id,
+  label,
+  autoFocus,
+  register,
+  erro,
+}: {
+  id: "senhaAtual" | "novaSenha" | "confirmarNovaSenha";
+  label: string;
+  autoFocus?: boolean;
+  register: ReturnType<typeof useForm<SenhaFormValues>>["register"];
+  erro?: string;
+}) {
+  const [visivel, setVisivel] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className={labelClass}>
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={id}
+          type={visivel ? "text" : "password"}
+          autoFocus={autoFocus}
+          className={inputClass}
+          {...register(id)}
+        />
+        <button
+          type="button"
+          onClick={() => setVisivel((v) => !v)}
+          aria-label={visivel ? `Ocultar ${label.toLowerCase()}` : `Mostrar ${label.toLowerCase()}`}
+          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400 transition-colors duration-200 hover:text-brand-navy focus-visible:text-brand-navy focus-visible:outline-none"
+        >
+          {visivel ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+      {erro && <p className={errorClass}>{erro}</p>}
+    </div>
+  );
+}
 
 export default function SegurancaPage() {
   const toast = useToast();
@@ -85,20 +135,15 @@ export default function SegurancaPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 pt-28 pb-24 sm:pt-36 sm:pb-32 lg:px-10">
-      <RevealOnScroll>
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
-          Minha Conta
-        </p>
-        <h1 className="mt-4 font-serif text-4xl font-normal tracking-tight text-brand-navy sm:text-5xl">
-          Segurança
-        </h1>
-        <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-600">
-          Gerencie a senha de acesso à sua conta.
-        </p>
-      </RevealOnScroll>
+      <AccountPageHeader
+        backHref={ROUTES.CONTA}
+        backLabel="Voltar para Minha Conta"
+        title="Segurança"
+        description="Gerencie a senha de acesso à sua conta."
+      />
 
       <RevealOnScroll delayMs={90}>
-        <div className="mt-10 rounded-sm border border-slate-200 bg-white p-6">
+        <div className="mt-10 rounded-sm border border-slate-200 bg-white p-6 transition-colors duration-300">
           {!editando ? (
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -121,47 +166,25 @@ export default function SegurancaPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1">
-                <label htmlFor="senhaAtual" className={labelClass}>
-                  Senha atual
-                </label>
-                <input
-                  id="senhaAtual"
-                  type="password"
-                  autoFocus
-                  className={inputClass}
-                  {...register("senhaAtual")}
-                />
-                {errors.senhaAtual && <p className={errorClass}>{errors.senhaAtual.message}</p>}
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label htmlFor="novaSenha" className={labelClass}>
-                  Nova senha
-                </label>
-                <input
-                  id="novaSenha"
-                  type="password"
-                  className={inputClass}
-                  {...register("novaSenha")}
-                />
-                {errors.novaSenha && <p className={errorClass}>{errors.novaSenha.message}</p>}
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label htmlFor="confirmarNovaSenha" className={labelClass}>
-                  Confirmar nova senha
-                </label>
-                <input
-                  id="confirmarNovaSenha"
-                  type="password"
-                  className={inputClass}
-                  {...register("confirmarNovaSenha")}
-                />
-                {errors.confirmarNovaSenha && (
-                  <p className={errorClass}>{errors.confirmarNovaSenha.message}</p>
-                )}
-              </div>
+              <CampoSenha
+                id="senhaAtual"
+                label="Senha atual"
+                autoFocus
+                register={register}
+                erro={errors.senhaAtual?.message}
+              />
+              <CampoSenha
+                id="novaSenha"
+                label="Nova senha"
+                register={register}
+                erro={errors.novaSenha?.message}
+              />
+              <CampoSenha
+                id="confirmarNovaSenha"
+                label="Confirmar nova senha"
+                register={register}
+                erro={errors.confirmarNovaSenha?.message}
+              />
 
               {serverError && (
                 <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">

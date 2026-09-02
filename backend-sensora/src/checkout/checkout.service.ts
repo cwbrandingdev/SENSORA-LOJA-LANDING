@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -46,6 +47,7 @@ function tokensIguais(recebido: string, esperado: string): boolean {
 
 @Injectable()
 export class CheckoutService {
+  private readonly logger = new Logger(CheckoutService.name);
   private readonly gateway: CheckoutGateway;
   private readonly frontendUrl: string;
   // Legado (Task 21) — só instanciado no modo de rollback
@@ -53,6 +55,17 @@ export class CheckoutService {
   // original (Task 15): é o caminho que garante que voltar para o Stripe
   // continua funcionando se o Asaas precisar ser revertido.
   private readonly stripe?: Stripe;
+
+  // Etapa 5B.5 — eventos de webhook do Asaas relacionados a reembolso.
+  // PAYMENT_REFUNDED é o único que confirma reembolso completo (ver
+  // processarEventoReembolsoAsaas); os outros três só existem aqui para
+  // serem reconhecidos e registrados — nenhum deles altera Pedido/estoque.
+  private static readonly EVENTOS_REEMBOLSO_ASAAS = new Set([
+    'PAYMENT_REFUND_IN_PROGRESS',
+    'PAYMENT_REFUNDED',
+    'PAYMENT_PARTIALLY_REFUNDED',
+    'PAYMENT_REFUND_DENIED',
+  ]);
 
   constructor(
     private readonly configService: ConfigService,
@@ -98,6 +111,7 @@ export class CheckoutService {
       quantidade: number;
       precoUnitario: number;
       subtotal: number;
+      estoqueBaixado: boolean;
     }[] = [];
     const itensSelecionados: ItemSelecionado[] = [];
 
@@ -128,6 +142,11 @@ export class CheckoutService {
         quantidade: item.quantidade,
         precoUnitario: produto.preco,
         subtotal,
+        // Etapa 5A.2 (achado da auditoria 5A.1) — explícito, nunca implícito:
+        // este método NUNCA decrementa estoque (só valida), então o item
+        // nasce com estoqueBaixado:false. Só confirmarPagamento (abaixo)
+        // decrementa de fato e atualiza este campo para true.
+        estoqueBaixado: false,
       });
       itensSelecionados.push({
         nome: produto.nome,
@@ -381,11 +400,20 @@ export class CheckoutService {
       throw new BadRequestException('Token do webhook inválido');
     }
 
-    let body: { event?: string; checkout?: { id?: string } };
+    let body: {
+      event?: string;
+      checkout?: { id?: string };
+      // Etapa 5B.5 — envelope dos eventos PAYMENT_* (refund incluso): a
+      // Asaas embute o Payment completo no campo `payment` do webhook (ver
+      // docs.asaas.com/docs/webhook-para-cobrancas). Só tipamos os campos
+      // que realmente usamos aqui — não é um espelho completo do objeto.
+      payment?: { id?: string; status?: string; value?: number };
+    };
     try {
       body = JSON.parse(rawBody.toString('utf8')) as {
         event?: string;
         checkout?: { id?: string };
+        payment?: { id?: string; status?: string; value?: number };
       };
     } catch {
       throw new BadRequestException('Payload do webhook inválido');
@@ -397,9 +425,199 @@ export class CheckoutService {
     // com segurança: não marcam pedido como pago, não alteram estoque.
     if (body.event === 'CHECKOUT_PAID' && body.checkout?.id) {
       await this.confirmarPagamento({ asaasCheckoutId: body.checkout.id });
+    } else if (
+      body.event &&
+      CheckoutService.EVENTOS_REEMBOLSO_ASAAS.has(body.event)
+    ) {
+      // Etapa 5B.5 — eventos de reembolso, tratados à parte de
+      // CHECKOUT_PAID: identificam o Pedido por Payment (asaasPaymentId),
+      // não por Checkout (asaasCheckoutId) — são recursos diferentes.
+      await this.processarEventoReembolsoAsaas(
+        body.event,
+        body.payment?.id,
+      );
     }
 
+    // Mesmo padrão de sempre (CHECKOUT_PAID, e qualquer evento
+    // desconhecido/ignorado): sempre confirma recebimento ao Asaas, mesmo
+    // quando o evento não resultou em nenhuma mutação — nunca faz o Asaas
+    // reentregar por engano algo que já foi tratado (ou que nunca vai
+    // encontrar Pedido nenhum, ver item 4 da Etapa 5B.5).
     return { received: true };
+  }
+
+  // Etapa 5B.5 — trata os eventos de webhook de reembolso do Asaas
+  // (PAYMENT_REFUND_IN_PROGRESS, PAYMENT_REFUNDED, PAYMENT_PARTIALLY_REFUNDED,
+  // PAYMENT_REFUND_DENIED). Localiza o Pedido por Pedido.asaasPaymentId —
+  // NUNCA por asaasCheckoutId (Checkout e Payment são recursos diferentes
+  // na Asaas, ver AsaasService). Não chama a API do Asaas para confirmar
+  // nada: o próprio webhook (já autenticado por handleWebhookAsaas via
+  // ASAAS_WEBHOOK_TOKEN, comparação em tempo constante) é a confirmação —
+  // payment.id em si nunca prova autenticidade, só serve para localizar o
+  // Pedido depois que o token já validou a origem da requisição.
+  private async processarEventoReembolsoAsaas(
+    evento: string,
+    paymentId: string | undefined,
+  ): Promise<void> {
+    if (!paymentId) {
+      // Item H da etapa: payload incompleto — nunca tenta atualizar Pedido
+      // "na tentativa" (ex.: por asaasCheckoutId) só porque um evento de
+      // refund chegou sem payment.id.
+      this.logger.warn(
+        `Webhook Asaas ${evento} recebido sem payment.id — ignorado (nenhum Pedido pode ser identificado).`,
+      );
+      return;
+    }
+
+    const pedido = await this.prisma.pedido.findUnique({
+      where: { asaasPaymentId: paymentId },
+    });
+
+    if (!pedido) {
+      // Item 4 da etapa: webhook legítimo (token já validado), mas nenhum
+      // Pedido tem este paymentId salvo ainda — nunca cria Pedido, nunca
+      // altera nada, só registra para investigação.
+      this.logger.warn(
+        `Webhook Asaas ${evento} para paymentId ${paymentId} sem Pedido correspondente (Pedido.asaasPaymentId) — ignorado.`,
+      );
+      return;
+    }
+
+    if (evento !== 'PAYMENT_REFUNDED') {
+      // PAYMENT_REFUND_IN_PROGRESS (item 5): continua REEMBOLSO_SOLICITADO.
+      // PAYMENT_PARTIALLY_REFUNDED (item 9): MVP só suporta reembolso
+      // total — nunca tratado como concluído, e não criamos um status novo
+      // (ex.: REEMBOLSO_PARCIAL) só para representá-lo.
+      // PAYMENT_REFUND_DENIED (item 10): preserva REEMBOLSO_SOLICITADO para
+      // reconciliação manual — nunca volta sozinho para PAGO só com base
+      // neste evento (o payload não traz garantia inequívoca de que nenhum
+      // refund foi criado). Nenhum dos três altera status ou estoque; só
+      // fica registrado para observabilidade/reconciliação futura.
+      this.logger.warn(
+        `Webhook Asaas ${evento} recebido para o pedido ${pedido.id} (status atual ${pedido.status}) — nenhuma transição de status aplicada nesta etapa.`,
+      );
+      return;
+    }
+
+    // PAYMENT_REFUNDED — confirmação definitiva de reembolso completo (item
+    // 6): a transição válida é REEMBOLSO_SOLICITADO -> REEMBOLSADO, sem
+    // depender de nenhuma chamada adicional ao Asaas. Idempotência real via
+    // updateMany condicional (mesmo padrão de confirmarPagamento): só
+    // transiciona se o status ainda for REEMBOLSO_SOLICITADO no exato
+    // instante da escrita — reentrega do mesmo evento (item 7) encontra o
+    // pedido já REEMBOLSADO, `count` vem 0, e o método simplesmente
+    // termina sem erro nem efeito colateral.
+    const resultado = await this.prisma.pedido.updateMany({
+      where: { id: pedido.id, status: StatusPedido.REEMBOLSO_SOLICITADO },
+      data: { status: StatusPedido.REEMBOLSADO },
+    });
+
+    // Etapa 5B.6 (item 4) — REEMBOLSADO não significa "estoque já
+    // restaurado": só ItemPedido.estoqueRestaurado prova isso. Por isso o
+    // pedido já estar REEMBOLSADO (reentrega do mesmo evento, ou uma
+    // tentativa anterior que transicionou o status mas falhou na
+    // restauração) NUNCA é motivo para retornar cedo — precisamos
+    // distinguir esse caso (idempotência normal) do caso "fora de ordem"
+    // (item 8/16: pedido ainda PAGO/PENDENTE/CANCELADO, nunca chegou a
+    // REEMBOLSO_SOLICITADO), que continua protegido exatamente como na
+    // Etapa 5B.5 — sem transição forçada, sem restauração de estoque.
+    const jaEstavaReembolsado = pedido.status === StatusPedido.REEMBOLSADO;
+
+    if (resultado.count === 0 && !jaEstavaReembolsado) {
+      this.logger.warn(
+        `Webhook Asaas PAYMENT_REFUNDED para o pedido ${pedido.id}, mas o status atual é ${pedido.status} (esperado REEMBOLSO_SOLICITADO) — nenhuma transição aplicada; requer investigação manual.`,
+      );
+      return;
+    }
+
+    // `resultado.count === 1` (transição feita agora) OU o pedido já estava
+    // REEMBOLSADO (reentrega/retry) — em ambos os casos prosseguimos para a
+    // restauração idempotente de estoque; é o próprio helper quem decide,
+    // item a item, o que ainda precisa ser restaurado.
+    await this.restaurarEstoqueAposReembolso(pedido.id);
+  }
+
+  // Etapa 5B.6 — rotina única e reutilizável de restauração de estoque após
+  // reembolso confirmado (PAYMENT_REFUNDED). Pode ser chamada com segurança
+  // mais de uma vez para o mesmo pedido (webhook duplicado, retry manual
+  // após falha, reconciliação futura) — cada ItemPedido decide por si só,
+  // via `estoqueRestaurado`, se ainda precisa ser processado.
+  //
+  // Fonte de verdade dupla, nunca confundida (item 2 da etapa):
+  // `estoqueBaixado` prova que o item ALGUM DIA decrementou estoque;
+  // `estoqueRestaurado` prova que essa baixa JÁ FOI devolvida. Só itens com
+  // estoqueBaixado === true entram na tentativa de restauração — `false`
+  // nunca altera Produto.quantidade (item nunca teve estoque decrementado),
+  // e `null` (histórico anterior à migration 5A.2, indeterminado) NUNCA é
+  // tratado como true nem como false: fica de fora, registrado via warning,
+  // aguardando reconciliação manual — igual ao mesmo raciocínio já usado em
+  // PedidosService.cancelar() para o mesmo campo.
+  private async restaurarEstoqueAposReembolso(pedidoId: number): Promise<void> {
+    const itens = await this.prisma.itemPedido.findMany({
+      where: { pedidoId },
+    });
+
+    const itensElegiveis = itens.filter((item) => {
+      if (item.estoqueBaixado === null) {
+        this.logger.warn(
+          `Restauração de estoque bloqueada para reconciliação manual: ` +
+            `itemPedido ${item.id} do pedido ${pedidoId} (produto ${item.produtoId}) ` +
+            `tem estoqueBaixado indeterminado (histórico anterior à migration 5A.2).`,
+        );
+        return false;
+      }
+      return item.estoqueBaixado === true;
+    });
+
+    if (itensElegiveis.length === 0) {
+      return;
+    }
+
+    // Etapa 5B.6 (itens 6–9) — uma única transação para todo o pedido,
+    // mesmo padrão já usado em confirmarPagamento: se qualquer incremento
+    // falhar, o ROLLBACK desfaz TODAS as marcações/incrementos já feitos
+    // neste mesmo processamento (nenhum item fica marcado restaurado sem o
+    // incremento correspondente ter sido confirmado) — uma nova tentativa
+    // futura (reentrega do webhook, reconciliação manual) encontra
+    // novamente `estoqueRestaurado: false` e processa do zero com segurança.
+    //
+    // Dentro da transação, cada item usa um claim atômico condicional
+    // (idêntico em espírito ao updateMany já usado em cancelar()/
+    // confirmarPagamento()/solicitarReembolso() neste mesmo arquivo/
+    // serviço): a UPDATE em si adquire o lock de linha do ItemPedido no
+    // Postgres, então duas transações concorrentes (dois webhooks
+    // PAYMENT_REFUNDED simultâneos para o mesmo pedido) nunca conseguem as
+    // duas `count === 1` para o mesmo item — a segunda só prossegue depois
+    // que a primeira commita, e nesse ponto a condição `estoqueRestaurado:
+    // false` do WHERE já não bate mais (a primeira já commitou `true`),
+    // então a segunda recebe `count === 0` e NUNCA chama
+    // `produtosService.adicionarEstoque` para aquele item — impossível
+    // dobrar o incremento por corrida.
+    await this.prisma.$transaction(async (tx) => {
+      for (const item of itensElegiveis) {
+        const claim = await tx.itemPedido.updateMany({
+          where: { id: item.id, estoqueBaixado: true, estoqueRestaurado: false },
+          data: { estoqueRestaurado: true },
+        });
+
+        if (claim.count === 0) {
+          // Já restaurado por outro processamento (idempotência) — nunca
+          // incrementa estoque de novo para este item.
+          continue;
+        }
+
+        // Mesmo produto pode aparecer em mais de um item do pedido (item 10
+        // da etapa) — cada item soma sua própria quantidade independentemente,
+        // dentro da mesma transação: dois itens do Produto 10 (quantidades 2
+        // e 3) resultam em +2 e +3 nesta mesma `tx`, nunca em uma agregação
+        // prematura que perderia a rastreabilidade por item.
+        await this.produtosService.adicionarEstoque(
+          item.produtoId,
+          item.quantidade,
+          tx,
+        );
+      }
+    });
   }
 
   // Pagamento confirmado pelo gateway -> Pedido PENDENTE -> Pedido PAGO ->
@@ -455,6 +673,16 @@ export class CheckoutService {
           item.quantidade,
           tx,
         );
+        // Etapa 5A.2 (achado da auditoria 5A.1) — só marca true DEPOIS do
+        // removerEstoque acima ter dado certo, dentro da mesma `tx`: se
+        // qualquer item não tiver estoque suficiente, a exceção desfaz tudo,
+        // inclusive marcações já feitas neste loop — nenhum item fica
+        // marcado true sem o decremento correspondente ter realmente
+        // acontecido.
+        await tx.itemPedido.update({
+          where: { id: item.id },
+          data: { estoqueBaixado: true },
+        });
       }
     });
   }

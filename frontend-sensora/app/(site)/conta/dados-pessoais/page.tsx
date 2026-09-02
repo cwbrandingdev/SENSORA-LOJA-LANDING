@@ -22,9 +22,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import FormButton from "@/components/ui/FormButton";
+import Skeleton from "@/components/ui/Skeleton";
+import AccountPageHeader from "@/components/conta/AccountPageHeader";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import { atualizarMeuPerfil, buscarMeuPerfil } from "@/services/conta";
+import { ROUTES } from "@/lib/routes";
 import type { Usuario } from "@/lib/types/loja";
 
 const dadosSchema = z.object({
@@ -36,7 +39,7 @@ type DadosFormValues = z.infer<typeof dadosSchema>;
 type Campo = "nome" | "email";
 
 const inputClass =
-  "rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy";
+  "rounded-md border border-slate-300 px-3 py-2 text-sm transition-colors duration-200 focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy";
 const errorClass = "text-sm text-red-600";
 
 export default function DadosPessoaisPage() {
@@ -92,25 +95,23 @@ export default function DadosPessoaisPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 pt-28 pb-24 sm:pt-36 sm:pb-32 lg:px-10">
-      <RevealOnScroll>
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
-          Minha Conta
-        </p>
-        <h1 className="mt-4 font-serif text-4xl font-normal tracking-tight text-brand-navy sm:text-5xl">
-          Dados pessoais
-        </h1>
-        <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-600">
-          Veja e atualize seu nome e e-mail de cadastro.
-        </p>
-      </RevealOnScroll>
+      <AccountPageHeader
+        backHref={ROUTES.CONTA}
+        backLabel="Voltar para Minha Conta"
+        title="Dados pessoais"
+        description="Veja e atualize seu nome e e-mail de cadastro."
+      />
 
       <RevealOnScroll delayMs={90}>
         {carregando || !usuario ? (
-          <p className="mt-10 text-sm text-slate-500">Carregando seus dados...</p>
+          <div className="mt-10 flex flex-col gap-4" aria-busy="true">
+            <Skeleton className="h-[84px] rounded-sm" />
+            <Skeleton className="h-[84px] rounded-sm" />
+          </div>
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="mt-10 flex flex-col gap-4">
             {/* Nome */}
-            <div className="rounded-sm border border-slate-200 bg-white p-6">
+            <div className="rounded-sm border border-slate-200 bg-white p-6 transition-colors duration-300 focus-within:border-brand-navy/40">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
@@ -160,7 +161,7 @@ export default function DadosPessoaisPage() {
             </div>
 
             {/* E-mail */}
-            <div className="rounded-sm border border-slate-200 bg-white p-6">
+            <div className="rounded-sm border border-slate-200 bg-white p-6 transition-colors duration-300 focus-within:border-brand-navy/40">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">

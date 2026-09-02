@@ -70,6 +70,12 @@ export class ItensPedidoService {
     // aconteceria se o item fosse criado antes do decremento.
     await this.produtosService.removerEstoque(produtoId, quantidade);
 
+    // Etapa 5A.2 (achado da auditoria 5A.1) — marca o item como
+    // estoqueBaixado:true só depois do decremento acima ter dado certo
+    // (removerEstoque já lançou BadRequestException e nada abaixo executa
+    // se não houvesse estoque suficiente) — nunca criado com o estoque
+    // ainda "no ar". É este flag, não a origem do Pedido, que
+    // PedidosService.cancelar() usa para decidir se restaura estoque.
     const item = await this.prisma.itemPedido.create({
       data: {
         pedidoId,
@@ -77,6 +83,7 @@ export class ItensPedidoService {
         quantidade,
         precoUnitario,
         subtotal: quantidade * precoUnitario,
+        estoqueBaixado: true,
       },
     });
 

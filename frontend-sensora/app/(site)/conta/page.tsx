@@ -11,16 +11,19 @@
 // fallback já usado ali.
 import { useMemo } from "react";
 import Link from "next/link";
+import { Package, User, MapPin, ShieldCheck, ArrowRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { decodeToken } from "@/lib/jwt";
 import { getToken } from "@/lib/storage";
 import { ROUTES } from "@/lib/routes";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import Button from "@/components/ui/Button";
+import AccountPageHeader from "@/components/conta/AccountPageHeader";
 
 type ContaCard = {
   titulo: string;
   descricao: string;
+  icon: typeof Package;
   // Presente = card funcional (vira link). Ausente = placeholder "Em breve"
   // (ainda não implementado). "Meus pedidos" (Etapa 2), "Dados pessoais"/
   // "Segurança" (Etapa 3) e "Endereços" (Etapa 4) já têm href — todos os
@@ -32,21 +35,25 @@ const CARDS: ContaCard[] = [
   {
     titulo: "Meus pedidos",
     descricao: "Acompanhe o histórico e o status dos seus pedidos.",
+    icon: Package,
     href: ROUTES.CONTA_PEDIDOS,
   },
   {
     titulo: "Dados pessoais",
     descricao: "Atualize seu nome e e-mail de cadastro.",
+    icon: User,
     href: ROUTES.CONTA_DADOS_PESSOAIS,
   },
   {
     titulo: "Endereços",
     descricao: "Gerencie os endereços de entrega salvos na sua conta.",
+    icon: MapPin,
     href: ROUTES.CONTA_ENDERECOS,
   },
   {
     titulo: "Segurança",
     descricao: "Altere sua senha da sua conta.",
+    icon: ShieldCheck,
     href: ROUTES.CONTA_SEGURANCA,
   },
 ];
@@ -64,66 +71,70 @@ export default function ContaPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 pt-28 pb-24 sm:pt-36 sm:pb-32 lg:px-10">
-      <RevealOnScroll>
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
-          Minha Conta
-        </p>
-        <h1 className="mt-4 font-serif text-4xl font-normal tracking-tight text-brand-navy sm:text-5xl">
-          {nomeExibicao ? `Olá, ${nomeExibicao}` : "Olá"}
-        </h1>
-        <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-600">
-          Aqui você vai poder acompanhar seus pedidos, gerenciar seus dados
-          pessoais e endereços, e cuidar da segurança da sua conta. Estamos
-          construindo essa área aos poucos — em breve, mais novidades por
-          aqui.
-        </p>
-      </RevealOnScroll>
+      <AccountPageHeader
+        title={nomeExibicao ? `Olá, ${nomeExibicao}` : "Olá"}
+        description="Aqui você vai poder acompanhar seus pedidos, gerenciar seus dados pessoais e endereços, e cuidar da segurança da sua conta. Estamos construindo essa área aos poucos — em breve, mais novidades por aqui."
+      />
 
-      <RevealOnScroll delayMs={90}>
-        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {CARDS.map((card) =>
-            card.href ? (
-              <Link
-                key={card.titulo}
-                href={card.href}
-                className="flex flex-col gap-2 rounded-sm border border-slate-200 p-6 transition-colors hover:border-brand-navy/30 hover:bg-slate-50"
-              >
-                <div className="flex items-center justify-between">
+      <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {CARDS.map((card, index) => {
+          const Icon = card.icon;
+          return (
+            <RevealOnScroll key={card.titulo} delayMs={90 + index * 60}>
+              {card.href ? (
+                <Link
+                  href={card.href}
+                  className="group flex h-full flex-col gap-3 rounded-sm border border-slate-200 bg-white p-6 transition-[transform,border-color,box-shadow] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:border-brand-navy/30 hover:shadow-lg hover:shadow-brand-navy/5 motion-reduce:hover:translate-y-0"
+                >
+                  <div className="flex items-center justify-between">
+                    <span
+                      aria-hidden
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-navy/5 text-brand-navy transition-colors duration-300 group-hover:bg-brand-orange/10 group-hover:text-brand-orange"
+                    >
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <ArrowRight
+                      aria-hidden
+                      className="h-4 w-4 text-brand-orange opacity-0 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0.5 group-hover:opacity-100"
+                    />
+                  </div>
                   <h2 className="font-serif text-lg font-normal text-brand-navy">
                     {card.titulo}
                   </h2>
-                  <span aria-hidden className="text-brand-orange">
-                    →
-                  </span>
-                </div>
-                <p className="text-sm leading-relaxed text-slate-600">
-                  {card.descricao}
-                </p>
-              </Link>
-            ) : (
-              <div
-                key={card.titulo}
-                aria-disabled="true"
-                className="flex flex-col gap-2 rounded-sm border border-slate-200 p-6 opacity-60"
-              >
-                <div className="flex items-center justify-between">
+                  <p className="text-sm leading-relaxed text-slate-600">
+                    {card.descricao}
+                  </p>
+                </Link>
+              ) : (
+                <div
+                  aria-disabled="true"
+                  className="flex h-full flex-col gap-3 rounded-sm border border-slate-200 p-6 opacity-60"
+                >
+                  <div className="flex items-center justify-between">
+                    <span
+                      aria-hidden
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-400"
+                    >
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      Em breve
+                    </span>
+                  </div>
                   <h2 className="font-serif text-lg font-normal text-brand-navy">
                     {card.titulo}
                   </h2>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    Em breve
-                  </span>
+                  <p className="text-sm leading-relaxed text-slate-600">
+                    {card.descricao}
+                  </p>
                 </div>
-                <p className="text-sm leading-relaxed text-slate-600">
-                  {card.descricao}
-                </p>
-              </div>
-            ),
-          )}
-        </div>
-      </RevealOnScroll>
+              )}
+            </RevealOnScroll>
+          );
+        })}
+      </div>
 
-      <RevealOnScroll delayMs={180}>
+      <RevealOnScroll delayMs={330}>
         <div className="mt-12 border-t border-slate-200 pt-8">
           <Button onClick={logout} variant="navy">
             Sair da conta

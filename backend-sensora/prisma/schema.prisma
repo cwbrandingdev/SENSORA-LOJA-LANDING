@@ -101,6 +101,16 @@ model Pedido {
   stripeSessionId String?      @unique
   // Id do Asaas Checkout — gateway ativo por padrão a partir da Task 21.
   asaasCheckoutId String?      @unique
+  // Etapa 5B.2 (modelagem para reembolso) — id do Payment real na Asaas
+  // (formato pay_xxx), distinto de asaasCheckoutId (id do Checkout). Ainda
+  // não é preenchido por nenhum código nesta etapa — a resolução (via
+  // GET /payments?checkoutSession= ou persistido em confirmarPagamento)
+  // fica para uma etapa futura (5B.3+). @unique: um Payment real da Asaas
+  // nunca se repete entre pedidos diferentes (é o identificador primário
+  // deles); nulo não conflita com nulo no Postgres, então não há risco de
+  // violar a constraint enquanto o campo não é populado — mesmo padrão já
+  // usado em asaasCheckoutId/stripeSessionId acima.
+  asaasPaymentId  String?      @unique
   clienteEmail    String?
   clienteNome     String?
   usuarioId       Int?
@@ -115,12 +125,35 @@ model Pedido {
 }
 
 model ItemPedido {
-  id            Int     @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   pedidoId      Int
   produtoId     Int
   quantidade    Int
-  precoUnitario Decimal @db.Decimal(10, 2)
-  subtotal      Decimal @db.Decimal(10, 2)
+  precoUnitario Decimal  @db.Decimal(10, 2)
+  subtotal      Decimal  @db.Decimal(10, 2)
+  // Etapa 5A.2 (achado da auditoria 5A.1) — rastreia POR ITEM se o estoque
+  // deste item específico já foi efetivamente decrementado (via
+  // ItensPedidoService.create no fluxo admin, ou via
+  // CheckoutService.confirmarPagamento na confirmação de pagamento).
+  // Nunca inferido pela origem do Pedido inteiro (asaasCheckoutId etc.):
+  // um mesmo pedido pode ter itens mistos (ex.: item do checkout + item
+  // adicionado depois pelo admin), e só o rastreio por item resolve isso
+  // corretamente. Permanece `true` para sempre depois de decrementado —
+  // não é "saldo atual", é proveniência: PedidosService.cancelar() só lê
+  // este campo para decidir se restaura, nunca escreve `false` de volta.
+  // `null` = registro histórico anterior a esta migration, indeterminado —
+  // nunca tratar como true/false automaticamente (ver PedidosService.cancelar,
+  // que bloqueia o cancelamento com erro controlado nesse caso).
+  estoqueBaixado Boolean?
+  // Etapa 5B.2 (modelagem para reembolso) — distinto de estoqueBaixado:
+  // aquele é proveniência (o estoque deste item foi decrementado alguma
+  // vez?), este é se essa baixa já foi devolvida (seja por cancelamento de
+  // PENDENTE — Etapa 5A.2 — seja, futuramente, por reembolso confirmado de
+  // PAGO). Nenhum código ainda seta este campo como true nesta etapa
+  // (PedidosService.cancelar continua sem alteração de comportamento) —
+  // só a coluna existe, com default false, preparando a idempotência da
+  // restauração de estoque no reembolso (5B.6).
+  estoqueRestaurado Boolean @default(false)
   pedido        Pedido  @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
   produto       Produto @relation(fields: [produtoId], references: [id])
 }
@@ -135,4 +168,10 @@ enum StatusPedido {
   PENDENTE
   PAGO
   CANCELADO
+  // Etapa 5B.2 (modelagem para reembolso, ver auditoria 5B.1) — nenhum
+  // código ainda transiciona um Pedido para estes dois estados nesta etapa;
+  // só a modelagem existe, preparando PAGO -> REEMBOLSO_SOLICITADO ->
+  // REEMBOLSADO das próximas etapas (5B.3+).
+  REEMBOLSO_SOLICITADO
+  REEMBOLSADO
 }
