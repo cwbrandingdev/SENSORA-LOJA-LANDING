@@ -27,6 +27,7 @@ import { ROUTES } from "@/lib/routes";
 import { getToken, setCheckoutPendente } from "@/lib/storage";
 import { criarEndereco, listarEnderecos } from "@/services/enderecos";
 import { criarSessaoCheckout, isUrlDeCheckoutSegura } from "@/services/checkout";
+import { resendVerification } from "@/services/auth";
 import type { CheckoutSessionResponse, Endereco } from "@/lib/types/loja";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
@@ -59,6 +60,15 @@ export default function CheckoutPage() {
   // está saindo para a página de pagamento, então o botão nunca volta a
   // ficar clicável.
   const [criandoSessao, setCriandoSessao] = useState(false);
+
+  // Etapa 6.4 (Confirmação de e-mail) — backend responde 403 (não 401: a
+  // sessão continua válida, é o estado da conta que bloqueia) quando o
+  // usuário ainda não confirmou o e-mail (ver CheckoutService.createSession).
+  // Estado próprio (não um toast) porque essa mensagem precisa vir com uma
+  // ação (reenviar), não só um aviso que desaparece sozinho.
+  const [emailNaoConfirmado, setEmailNaoConfirmado] = useState(false);
+  const [reenviandoConfirmacao, setReenviandoConfirmacao] = useState(false);
+  const [confirmacaoReenviada, setConfirmacaoReenviada] = useState(false);
 
   useEffect(() => {
     if (possuiSessaoValida()) {
@@ -125,6 +135,9 @@ export default function CheckoutPage() {
     }
     if (itens.length === 0 || carregando || criandoSessao) return;
 
+    setEmailNaoConfirmado(false);
+    setConfirmacaoReenviada(false);
+
     if (erro || !enderecoSelecionadoId) {
       toast.error(
         erro
@@ -172,6 +185,14 @@ export default function CheckoutPage() {
       // mostra toast nem tenta mais nada, pra não competir com essa
       // navegação nem confundir o usuário com uma mensagem genérica.
       if (isAxiosError(err) && err.response?.status === 401) {
+        return;
+      }
+
+      // Etapa 6.4 (Confirmação de e-mail) — 403 aqui é sempre "e-mail não
+      // confirmado" (o único bloqueio de perfil deste endpoint): mostra o
+      // aviso com a opção de reenviar em vez do toast genérico de erro.
+      if (isAxiosError(err) && err.response?.status === 403) {
+        setEmailNaoConfirmado(true);
         return;
       }
 
@@ -240,6 +261,24 @@ export default function CheckoutPage() {
     // está navegando para fora desta página, e nenhuma outra lógica de
     // checkout deve rodar depois disto.
     window.location.assign(sessao.url);
+  }
+
+  // Etapa 6.4 (Confirmação de e-mail) — mesma mensagem genérica sempre,
+  // vinda do backend (AuthService.resendVerification nunca revela se o
+  // reenvio de fato aconteceu, para não vazar o e-mail/estado da conta).
+  async function handleReenviarConfirmacao() {
+    const payload = decodeToken(getToken());
+    if (!payload?.email || reenviandoConfirmacao) return;
+
+    setReenviandoConfirmacao(true);
+    try {
+      await resendVerification({ email: payload.email });
+      setConfirmacaoReenviada(true);
+    } catch {
+      toast.error("Não foi possível reenviar o e-mail agora. Tente novamente.");
+    } finally {
+      setReenviandoConfirmacao(false);
+    }
   }
 
   if (!autorizado) {
@@ -412,6 +451,28 @@ export default function CheckoutPage() {
                 </dl>
 
                 <div className="mt-6 flex flex-col gap-3">
+                  {emailNaoConfirmado && (
+                    <div className="flex flex-col gap-2 rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      <p>Confirme seu e-mail para finalizar a compra.</p>
+                      {confirmacaoReenviada ? (
+                        <p className="text-red-600">
+                          Se ainda não estiver confirmado, você receberá um
+                          novo link em instantes.
+                        </p>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleReenviarConfirmacao}
+                          disabled={reenviandoConfirmacao}
+                          className="w-fit text-[13px] font-semibold uppercase tracking-[0.14em] underline underline-offset-4 hover:text-red-800 disabled:opacity-60"
+                        >
+                          {reenviandoConfirmacao
+                            ? "Enviando..."
+                            : "Reenviar e-mail de confirmação"}
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <Button
                     onClick={handleContinuar}
                     variant="primary"

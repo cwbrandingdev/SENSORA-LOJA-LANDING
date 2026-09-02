@@ -3,7 +3,11 @@ import CollectionShowcase from "@/components/collections/CollectionShowcase";
 import CategoryProducts from "@/components/sections/CategoryProducts";
 import EmptyState from "@/components/ui/EmptyState";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
-import { CATEGORIES, getCategory, getCollectionsByCategory } from "@/lib/content";
+import {
+  CATEGORIES,
+  getCategory,
+  getCollectionsByCategory,
+} from "@/lib/content";
 
 export function generateStaticParams() {
   return CATEGORIES.map((category) => ({ category: category.slug }));
@@ -27,11 +31,15 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     <>
       <section className="relative mx-auto max-w-3xl overflow-hidden px-6 pt-28 pb-8 text-center sm:pt-36 lg:px-10">
         <RevealOnScroll>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">Categoria</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
+            Categoria
+          </p>
           <h1 className="mt-4 font-serif text-4xl font-normal tracking-tight text-brand-navy sm:text-5xl">
             {category.label}
           </h1>
-          <p className="mt-6 text-base leading-relaxed text-slate-600">{category.description}</p>
+          <p className="mt-6 text-base leading-relaxed text-slate-600">
+            {category.description}
+          </p>
         </RevealOnScroll>
       </section>
 

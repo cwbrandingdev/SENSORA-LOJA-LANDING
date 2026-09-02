@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -12,13 +13,21 @@ import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.inter
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
 import { EnderecosService } from '../enderecos/enderecos.service';
+import { Endereco } from '../enderecos/entities/endereco.entity';
+import { UsuariosService } from '../usuarios/usuarios.service';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
+import {
+  MelhorEnvioPacote,
+  MelhorEnvioService,
+} from '../melhor-envio/melhor-envio.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
+import { CotarFreteDto } from './dto/cotar-frete.dto';
 import {
   CheckoutSessionResponse,
   CheckoutSessionStatus,
 } from './entities/checkout-session.entity';
+import { OpcaoFreteResponse } from './entities/opcao-frete.entity';
 
 type CheckoutGateway = 'asaas' | 'stripe';
 type PedidoCriado = Awaited<ReturnType<PrismaService['pedido']['create']>>;
@@ -73,6 +82,8 @@ export class CheckoutService {
     private readonly produtosService: ProdutosService,
     private readonly enderecosService: EnderecosService,
     private readonly asaasService: AsaasService,
+    private readonly usuariosService: UsuariosService,
+    private readonly melhorEnvioService: MelhorEnvioService,
   ) {
     this.gateway =
       (this.configService.get<string>('CHECKOUT_GATEWAY') as
@@ -93,19 +104,34 @@ export class CheckoutService {
     dto: CreateCheckoutSessionDto,
     usuarioId: number,
   ): Promise<CheckoutSessionResponse> {
+    // Etapa 6.4 (Confirmação de e-mail, decisão aprovada) — checkout bloqueado
+    // para quem ainda não confirmou o e-mail. Consulta o estado REAL no
+    // banco a cada chamada (nunca um claim do JWT/valor vindo do frontend) —
+    // usuariosService.findOne já busca fresco do Prisma, mesmo raciocínio de
+    // JwtStrategy.validate() nunca confiar só no payload do token.
+    const usuario = await this.usuariosService.findOne(usuarioId);
+    if (!usuario.emailVerificado) {
+      throw new ForbiddenException(
+        'Confirme seu e-mail para finalizar a compra.',
+      );
+    }
+
     if (!dto.itens.length) {
       throw new BadRequestException('O carrinho está vazio');
     }
 
-    // Task 15 (achado da auditoria): valida que o endereço existe e pertence
-    // a este usuário (404 caso contrário) — mas o schema atual de Pedido não
-    // tem NENHUM campo de endereço (nem enderecoId, nem snapshot), então não
-    // há onde persistir qual endereço foi escolhido. Decisão registrada:
-    // manter só a validação de posse aqui, sem migração Prisma nesta task —
-    // ver relatório da Task 15 para a limitação completa.
-    await this.enderecosService.findOneForUsuario(dto.enderecoId, usuarioId);
+    // Task 15 (achado da auditoria, resolvido na Etapa 6.5): valida que o
+    // endereço existe e pertence a este usuário (404 caso contrário) — a
+    // partir daqui, além de validar, o endereço TAMBÉM é persistido como
+    // snapshot no Pedido (ver pedido abaixo) e usado como CEP de destino da
+    // cotação de frete.
+    const endereco = await this.enderecosService.findOneForUsuario(
+      dto.enderecoId,
+      usuarioId,
+    );
 
-    let total = 0;
+    let subtotal = 0;
+    let quantidadeTotal = 0;
     const itensPedido: {
       produtoId: number;
       quantidade: number;
@@ -135,13 +161,14 @@ export class CheckoutService {
         );
       }
 
-      const subtotal = produto.preco * item.quantidade;
-      total += subtotal;
+      const itemSubtotal = produto.preco * item.quantidade;
+      subtotal += itemSubtotal;
+      quantidadeTotal += item.quantidade;
       itensPedido.push({
         produtoId: produto.id,
         quantidade: item.quantidade,
         precoUnitario: produto.preco,
-        subtotal,
+        subtotal: itemSubtotal,
         // Etapa 5A.2 (achado da auditoria 5A.1) — explícito, nunca implícito:
         // este método NUNCA decrementa estoque (só valida), então o item
         // nasce com estoqueBaixado:false. Só confirmarPagamento (abaixo)
@@ -158,6 +185,25 @@ export class CheckoutService {
       });
     }
 
+    // Etapa 6.5 (Frete), Parte 4 — a opção de frete é sempre RECALCULADA
+    // aqui contra o Melhor Envio, nunca aceita a partir do preço/prazo que
+    // o cliente possa ter guardado da cotação anterior: o frontend só manda
+    // `freteServicoId` (CreateCheckoutSessionDto), e é este método quem
+    // resolve o preço oficial. Mesmo princípio de nunca confiar em
+    // preço/estoque vindo do cliente já aplicado a produto, acima.
+    const opcaoFrete = await this.validarFreteEscolhido(
+      endereco,
+      dto.freteServicoId,
+      subtotal,
+      quantidadeTotal,
+    );
+    itensSelecionados.push({
+      nome: `Frete - ${opcaoFrete.transportadora} ${opcaoFrete.servico}`,
+      preco: opcaoFrete.preco,
+      quantidade: 1,
+    });
+    const total = subtotal + opcaoFrete.preco;
+
     const numero = `PED-${Date.now()}`;
     const pedido = await this.prisma.pedido.create({
       data: {
@@ -168,6 +214,23 @@ export class CheckoutService {
         clienteEmail: dto.clienteEmail,
         clienteNome: dto.clienteNome,
         usuarioId,
+        // Etapa 6.5 (Frete), Parte 1 — snapshot do endereço usado NESTA
+        // compra, copiado de `endereco` (nunca lido de volta de Endereco
+        // depois de criado, ver comentário no schema.prisma).
+        enderecoCep: endereco.cep,
+        enderecoRua: endereco.rua,
+        enderecoNumero: endereco.numero,
+        enderecoComplemento: endereco.complemento ?? null,
+        enderecoBairro: endereco.bairro,
+        enderecoCidade: endereco.cidade,
+        enderecoEstado: endereco.estado,
+        // Etapa 6.5 (Frete), Parte 1 — resultado já validado da cotação
+        // (nunca o preço/prazo enviados pelo cliente).
+        freteValor: opcaoFrete.preco,
+        freteTransportadora: opcaoFrete.transportadora,
+        freteServico: opcaoFrete.servico,
+        fretePrazoDias: opcaoFrete.prazoDias,
+        freteServicoId: opcaoFrete.id,
         itens: {
           create: itensPedido,
         },
@@ -177,6 +240,83 @@ export class CheckoutService {
     return this.gateway === 'stripe'
       ? this.criarSessaoStripe(dto, pedido, itensSelecionados)
       : this.criarSessaoAsaas(pedido, itensSelecionados);
+  }
+
+  // Etapa 6.5 (Frete), Parte 3 — POST /checkout/frete/cotacao. Mesmo
+  // raciocínio de segurança de createSession: recebe só produtoId+
+  // quantidade+enderecoId (nunca peso/preço/dimensão do frontend), recarrega
+  // os produtos reais para o valor declarado e devolve só o necessário para
+  // o cliente escolher (nunca dados internos do Melhor Envio).
+  async cotarFrete(
+    dto: CotarFreteDto,
+    usuarioId: number,
+  ): Promise<OpcaoFreteResponse[]> {
+    if (!dto.itens.length) {
+      throw new BadRequestException('O carrinho está vazio');
+    }
+
+    const endereco = await this.enderecosService.findOneForUsuario(
+      dto.enderecoId,
+      usuarioId,
+    );
+
+    let subtotal = 0;
+    let quantidadeTotal = 0;
+    for (const item of dto.itens) {
+      const produto = await this.produtosService.findOne(item.produtoId);
+      subtotal += produto.preco * item.quantidade;
+      quantidadeTotal += item.quantidade;
+    }
+
+    return this.cotarOpcoes(endereco, subtotal, quantidadeTotal);
+  }
+
+  // Recotiza contra o Melhor Envio e resolve `freteServicoId` entre as
+  // opções REALMENTE disponíveis agora — nunca aceita o preço/prazo/
+  // transportadora que o cliente possa ter guardado de uma cotação
+  // anterior. Cobre tanto "nenhuma opção disponível" quanto "esta opção
+  // específica não está mais entre as disponíveis" com o mesmo erro: do
+  // ponto de vista do cliente, é a mesma situação (precisa cotar de novo).
+  private async validarFreteEscolhido(
+    endereco: Pick<Endereco, 'cep'>,
+    freteServicoId: number,
+    subtotal: number,
+    quantidadeTotal: number,
+  ): Promise<OpcaoFreteResponse> {
+    const opcoes = await this.cotarOpcoes(endereco, subtotal, quantidadeTotal);
+    const opcao = opcoes.find((item) => item.id === freteServicoId);
+    if (!opcao) {
+      throw new BadRequestException(
+        'Opção de frete indisponível. Atualize a cotação e tente novamente.',
+      );
+    }
+    return opcao;
+  }
+
+  private async cotarOpcoes(
+    endereco: Pick<Endereco, 'cep'>,
+    subtotal: number,
+    quantidadeTotal: number,
+  ): Promise<OpcaoFreteResponse[]> {
+    const opcoes = await this.melhorEnvioService.cotar({
+      cepDestino: endereco.cep,
+      pacote: this.calcularPacote(quantidadeTotal),
+      valorDeclarado: subtotal,
+    });
+    return opcoes.map((opcao) => ({ ...opcao }));
+  }
+
+  // Etapa 6.5 (achado da auditoria 6.5) — Produto não tem peso/dimensões
+  // modelados (fora do escopo desta etapa alterar o cadastro de produto).
+  // Pacote único e configurável (MelhorEnvioService.pacotePadraoConfigurado)
+  // para o carrinho inteiro, com o peso escalado pela quantidade total de
+  // itens — limitação conhecida, documentada no relatório final da etapa.
+  private calcularPacote(quantidadeTotal: number): MelhorEnvioPacote {
+    const pacotePadrao = this.melhorEnvioService.pacotePadraoConfigurado;
+    return {
+      ...pacotePadrao,
+      pesoGramas: pacotePadrao.pesoGramas * Math.max(quantidadeTotal, 1),
+    };
   }
 
   private async criarSessaoStripe(

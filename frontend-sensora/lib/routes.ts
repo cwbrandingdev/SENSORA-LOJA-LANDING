@@ -6,6 +6,9 @@ export const ROUTES = {
   REGISTER: "/register",
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",
+  // Etapa 6.4 (Confirmação de e-mail) — destino do link enviado por e-mail
+  // após o cadastro (ver AuthService.enviarEmailVerificacao, backend).
+  CONFIRM_EMAIL: "/confirmar-email",
   DASHBOARD: "/admin",
   PRODUTOS: "/admin/produtos",
   CATEGORIAS: "/admin/categorias",

@@ -17,10 +17,12 @@ import type { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CheckoutService } from './checkout.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
+import { CotarFreteDto } from './dto/cotar-frete.dto';
 import {
   CheckoutSessionResponse,
   CheckoutSessionStatus,
 } from './entities/checkout-session.entity';
+import { OpcaoFreteResponse } from './entities/opcao-frete.entity';
 
 @Controller('checkout')
 export class CheckoutController {
@@ -34,6 +36,21 @@ export class CheckoutController {
     @Req() req: { user: UsuarioAutenticado },
   ): Promise<CheckoutSessionResponse> {
     return this.checkoutService.createSession(dto, req.user.id);
+  }
+
+  // Etapa 6.5 (Frete), Parte 3/4 — chamado pelo frontend ao entrar no
+  // checkout e sempre que o endereço selecionado muda (ver
+  // FreteOptions/checkout/page.tsx). Só uma prévia: o valor final só é
+  // travado (recotizado) de verdade dentro de POST /checkout/session (ver
+  // CheckoutService.createSession).
+  @Post('frete/cotacao')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  cotarFrete(
+    @Body() dto: CotarFreteDto,
+    @Req() req: { user: UsuarioAutenticado },
+  ): Promise<OpcaoFreteResponse[]> {
+    return this.checkoutService.cotarFrete(dto, req.user.id);
   }
 
   // Etapa 2 (Minha Conta / limpeza do carrinho) — passou a ser chamado pelo

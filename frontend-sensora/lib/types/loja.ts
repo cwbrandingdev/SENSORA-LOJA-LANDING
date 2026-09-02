@@ -293,6 +293,21 @@ export type Usuario = {
   email: string;
   perfil: PerfilUsuario;
   ativo: boolean;
+  // Etapa 6.4 (Confirmação de e-mail) — só leitura/exibição no frontend;
+  // quem decide de verdade continua sendo o backend (checkout consulta o
+  // estado real no banco a cada tentativa, nunca confia neste valor vindo
+  // daqui). Ver backend/src/usuarios/entities/usuario.entity.ts.
+  emailVerificado: boolean;
+};
+
+// Etapa 6.4 (Confirmação de e-mail) — espelha VerifyEmailDto/
+// ResendVerificationDto (backend/src/auth/dto).
+export type VerifyEmailPayload = {
+  token: string;
+};
+
+export type ResendVerificationPayload = {
+  email: string;
 };
 
 // Etapa 3 (Minha Conta / Dados Pessoais) — espelha AtualizarMeusDadosDto

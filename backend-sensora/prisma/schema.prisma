@@ -9,17 +9,35 @@ datasource db {
 }
 
 model Usuario {
-  id               Int            @id @default(autoincrement())
-  nome             String
-  email            String         @unique
-  senha            String
-  perfil           PerfilUsuario
-  ativo            Boolean        @default(true)
-  resetToken       String?
-  resetTokenExpiry DateTime?
-  refreshTokens    RefreshToken[]
-  pedidos          Pedido[]
-  enderecos        Endereco[]
+  id                      Int            @id @default(autoincrement())
+  nome                    String
+  email                   String         @unique
+  senha                   String
+  perfil                  PerfilUsuario
+  ativo                   Boolean        @default(true)
+  resetToken              String?
+  resetTokenExpiry        DateTime?
+  // Etapa 6.4 (Confirmação de e-mail) — @default(true) é deliberado, não um
+  // descuido: cobre de uma vez só duas exigências aprovadas (i) contas já
+  // existentes no banco recebem `true` automaticamente quando a coluna é
+  // criada (backfill do Postgres via DEFAULT, sem passo de migração
+  // separado) e (ii) contas criadas pelo painel administrativo (ADMIN/
+  // VENDEDOR, UsuariosController.create -> UsuariosService.create sem a
+  // opção emailVerificado) também nascem `true`, sem precisar de nenhum
+  // código especial para elas. Só o cadastro público (AuthService.register)
+  // grava `false` explicitamente ao criar a conta — ver UsuariosService.create.
+  emailVerificado         Boolean        @default(true)
+  emailVerificadoEm       DateTime?
+  // Hash SHA-256 do token de confirmação (nunca o token em texto puro —
+  // mesmo raciocínio de RefreshToken.tokenHash). Campo próprio, nunca
+  // reaproveita resetToken/resetTokenExpiry: são fluxos diferentes (trocar
+  // senha vs. confirmar e-mail), e misturar os dois no mesmo campo abriria
+  // a possibilidade de um token de um fluxo ser aceito no outro.
+  emailVerificationHash   String?        @unique
+  emailVerificationExpiry DateTime?
+  refreshTokens           RefreshToken[]
+  pedidos                 Pedido[]
+  enderecos               Endereco[]
 }
 
 // Task 8 (Carrinho/Checkout) — endereços de entrega do próprio usuário
@@ -28,7 +46,7 @@ model Usuario {
 // acesso (find/update/remove) é filtrado por usuarioId + id juntos, para
 // que um usuário nunca veja/altere o endereço de outro.
 model Endereco {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   usuarioId   Int
   rua         String
   numero      String
@@ -37,7 +55,7 @@ model Endereco {
   cidade      String
   estado      String
   cep         String
-  padrao      Boolean  @default(false)
+  padrao      Boolean @default(false)
 
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 }
@@ -116,6 +134,36 @@ model Pedido {
   usuarioId       Int?
   itens           ItemPedido[]
 
+  // Etapa 6.5 (Frete) — snapshot do endereço de entrega usado NESTA compra,
+  // copiado de Endereco no momento da criação do pedido (CheckoutService.
+  // createSession). Deliberadamente SEM relação/FK com Endereco: um pedido
+  // já criado nunca pode mudar de endereço de entrega junto com uma edição
+  // futura do cadastro do cliente, nem sumir se o cliente excluir aquele
+  // endereço depois — por isso são campos soltos, não uma referência.
+  // `clienteNome` (já existente acima) é reaproveitado como nome do
+  // destinatário: é o mesmo nome informado no checkout para o mesmo pedido,
+  // nunca um segundo campo redundante para a mesma informação.
+  enderecoCep         String?
+  enderecoRua         String?
+  enderecoNumero      String?
+  enderecoComplemento String?
+  enderecoBairro      String?
+  enderecoCidade      String?
+  enderecoEstado      String?
+
+  // Etapa 6.5 (Frete) — resultado da cotação escolhida pelo cliente e
+  // validada pelo backend (nunca o preço/prazo enviados pelo cliente, ver
+  // CheckoutService.criarSessaoAsaas/criarSessaoStripe). `freteServicoId` é
+  // o id do serviço na Melhor Envio (ex.: 1 = Correios PAC) — preservado
+  // separado de `freteTransportadora`/`freteServico` (nomes, só para
+  // exibição) porque é o identificador estável para uma eventual compra de
+  // etiqueta futura (Parte 7 da etapa, ainda não implementada).
+  freteValor          Decimal? @db.Decimal(10, 2)
+  freteTransportadora String?
+  freteServico        String?
+  fretePrazoDias      Int?
+  freteServicoId      Int?
+
   // Achado da auditoria: usuarioId já era usado pela aplicação (ver
   // PedidosService.podeAcessar) para restringir VENDEDOR aos próprios
   // pedidos, mas nunca teve uma FK real no banco. onDelete: SetNull mantém o
@@ -125,12 +173,12 @@ model Pedido {
 }
 
 model ItemPedido {
-  id            Int      @id @default(autoincrement())
-  pedidoId      Int
-  produtoId     Int
-  quantidade    Int
-  precoUnitario Decimal  @db.Decimal(10, 2)
-  subtotal      Decimal  @db.Decimal(10, 2)
+  id                Int      @id @default(autoincrement())
+  pedidoId          Int
+  produtoId         Int
+  quantidade        Int
+  precoUnitario     Decimal  @db.Decimal(10, 2)
+  subtotal          Decimal  @db.Decimal(10, 2)
   // Etapa 5A.2 (achado da auditoria 5A.1) — rastreia POR ITEM se o estoque
   // deste item específico já foi efetivamente decrementado (via
   // ItensPedidoService.create no fluxo admin, ou via
@@ -144,7 +192,7 @@ model ItemPedido {
   // `null` = registro histórico anterior a esta migration, indeterminado —
   // nunca tratar como true/false automaticamente (ver PedidosService.cancelar,
   // que bloqueia o cancelamento com erro controlado nesse caso).
-  estoqueBaixado Boolean?
+  estoqueBaixado    Boolean?
   // Etapa 5B.2 (modelagem para reembolso) — distinto de estoqueBaixado:
   // aquele é proveniência (o estoque deste item foi decrementado alguma
   // vez?), este é se essa baixa já foi devolvida (seja por cancelamento de
@@ -153,9 +201,23 @@ model ItemPedido {
   // (PedidosService.cancelar continua sem alteração de comportamento) —
   // só a coluna existe, com default false, preparando a idempotência da
   // restauração de estoque no reembolso (5B.6).
-  estoqueRestaurado Boolean @default(false)
-  pedido        Pedido  @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-  produto       Produto @relation(fields: [produtoId], references: [id])
+  estoqueRestaurado Boolean  @default(false)
+  pedido            Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto           Produto  @relation(fields: [produtoId], references: [id])
+}
+
+// Etapa 6.5 (Frete) — par access_token/refresh_token OAuth2 da conta da loja
+// no Melhor Envio. Linha única (id sempre 1, ver MelhorEnvioService): não há
+// "um token por usuário" aqui — é a credencial da LOJA junto ao Melhor
+// Envio, obtida uma vez via fluxo de autorização (Parte 2 da etapa) e
+// renovada sozinha via refresh_token quando expira. Nunca exposta em
+// nenhuma resposta de API — só lida/escrita pelo próprio MelhorEnvioService.
+model MelhorEnvioToken {
+  id           Int      @id @default(1)
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  atualizadoEm DateTime @updatedAt
 }
 
 enum PerfilUsuario {

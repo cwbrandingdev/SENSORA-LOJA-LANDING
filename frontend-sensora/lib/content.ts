@@ -143,7 +143,7 @@ const VELAS_4_ESTACOES: Collection = {
   tagline: "Primavera, Verão, Outono e Inverno em um kit.",
   description:
     "Quatro atmosferas, infinitas memórias. Um kit criado para transformar cada momento do ano em uma experiência de aconchego, beleza e sensações que permanecem.",
-  heroImageSrc: "/images/hero/colecao-4-estacoes-banner.png",
+  heroImageSrc: "/images/hero/velas.png",
   heroImageAlt:
     "Kit de velas aromáticas 4 Estações da Sensora, com as quatro velas lado a lado sobre uma bancada",
   items: [

@@ -16,12 +16,16 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 import { AuthToken } from './entities/auth-token.entity';
 import { ChangePasswordResponse } from './entities/change-password-response.entity';
 import { ForgotPasswordResponse } from './entities/forgot-password-response.entity';
 import { LogoutResponse } from './entities/logout-response.entity';
+import { ResendVerificationResponse } from './entities/resend-verification-response.entity';
 import { ResetPasswordResponse } from './entities/reset-password-response.entity';
+import { VerifyEmailResponse } from './entities/verify-email-response.entity';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 // Etapa 10 / Task 4 (achado A2): ThrottlerGuard só neste controller — as
@@ -61,6 +65,23 @@ export class AuthController {
     @Body() resetPasswordDto: ResetPasswordDto,
   ): Promise<ResetPasswordResponse> {
     return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  // Etapa 6.4 (Confirmação de e-mail) — pública de propósito, igual a
+  // forgot-password/reset-password: quem chama ainda não tem sessão (acabou
+  // de clicar num link de e-mail). O token em si é a única credencial.
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  verifyEmail(@Body() dto: VerifyEmailDto): Promise<VerifyEmailResponse> {
+    return this.authService.verifyEmail(dto);
+  }
+
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  resendVerification(
+    @Body() dto: ResendVerificationDto,
+  ): Promise<ResendVerificationResponse> {
+    return this.authService.resendVerification(dto);
   }
 
   @Post('refresh')

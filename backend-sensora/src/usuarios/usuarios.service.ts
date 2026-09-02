@@ -55,7 +55,18 @@ export class UsuariosService {
     return { ...usuario, perfil: usuario.perfil as PerfilUsuario };
   }
 
-  async create(createUsuarioDto: CreateUsuarioDto): Promise<UsuarioPublico> {
+  // Etapa 6.4 (Confirmação de e-mail) — `opcoes.emailVerificado` é um
+  // parâmetro só de uso interno (nunca exposto em CreateUsuarioDto/rota
+  // HTTP): omitido, o Prisma aplica o @default(true) do schema, que é
+  // exatamente o que se quer tanto para contas administrativas
+  // (UsuariosController.create, ADMIN/VENDEDOR/CLIENTE criados pelo painel)
+  // quanto para qualquer outro chamador futuro deste método — nascer
+  // "verificado" é o padrão seguro. Só AuthService.register() (cadastro
+  // público) passa explicitamente `{ emailVerificado: false }`.
+  async create(
+    createUsuarioDto: CreateUsuarioDto,
+    opcoes?: { emailVerificado?: boolean },
+  ): Promise<UsuarioPublico> {
     const senhaCriptografada = await bcrypt.hash(
       createUsuarioDto.senha,
       SALT_ROUNDS,
@@ -65,6 +76,9 @@ export class UsuariosService {
         ...createUsuarioDto,
         senha: senhaCriptografada,
         ativo: createUsuarioDto.ativo ?? true,
+        ...(opcoes?.emailVerificado !== undefined && {
+          emailVerificado: opcoes.emailVerificado,
+        }),
       },
     });
     return this.paraPublico(usuario);
@@ -197,6 +211,72 @@ export class UsuariosService {
     });
   }
 
+  // Etapa 6.4 (Confirmação de e-mail) — grava o HASH (SHA-256, calculado em
+  // AuthService) do token de verificação, nunca o token em texto puro,
+  // mesmo raciocínio de criarRefreshToken. Usado tanto pelo primeiro envio
+  // (AuthService.register) quanto pelo reenvio (AuthService.resendVerification)
+  // — por isso também garante emailVerificado:false explicitamente aqui, em
+  // vez de assumir que quem chamou já cuidou disso.
+  async emitirTokenVerificacaoEmail(
+    id: number,
+    emailVerificationHash: string,
+    emailVerificationExpiry: Date,
+  ): Promise<void> {
+    await this.prisma.usuario.update({
+      where: { id },
+      data: {
+        emailVerificado: false,
+        emailVerificationHash,
+        emailVerificationExpiry,
+      },
+    });
+  }
+
+  async buscarPorHashVerificacaoEmail(emailVerificationHash: string): Promise<{
+    id: number;
+    nome: string;
+    email: string;
+    emailVerificado: boolean;
+    emailVerificationExpiry: Date | null;
+  } | null> {
+    return this.prisma.usuario.findFirst({
+      where: { emailVerificationHash },
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        emailVerificado: true,
+        emailVerificationExpiry: true,
+      },
+    });
+  }
+
+  // Confirmação atômica condicional: só marca emailVerificado se o hash
+  // informado ainda for exatamente o que está gravado no momento da escrita
+  // — mesmo padrão de revogarRefreshTokenSeAtivo (Task 27), usado aqui para
+  // que duas confirmações concorrentes do mesmo link nunca dupliquem efeito
+  // (a segunda encontra `count: 0` e a chamada trata isso como "já
+  // confirmado" em vez de repetir a escrita). O hash é sempre limpo junto
+  // (uso único): uma segunda tentativa com o mesmo token, depois deste
+  // ponto, deixa de encontrar qualquer usuário por
+  // buscarPorHashVerificacaoEmail — indistinguível de um token que nunca
+  // existiu, por design (mesmo raciocínio de redefinirSenha/resetToken).
+  async confirmarEmailSeHashValido(
+    id: number,
+    emailVerificationHash: string,
+  ): Promise<number> {
+    const resultado = await this.prisma.usuario.updateMany({
+      where: { id, emailVerificationHash },
+      data: {
+        emailVerificado: true,
+        emailVerificadoEm: new Date(),
+        emailVerificationHash: null,
+        emailVerificationExpiry: null,
+      },
+    });
+    return resultado.count;
+  }
+
   // Task 27 — só o hash (SHA-256, calculado em AuthService) é gravado;
   // o refresh token em texto puro nunca chega ao banco.
   async criarRefreshToken(
@@ -263,6 +343,7 @@ export class UsuariosService {
       email: usuario.email,
       perfil: usuario.perfil as PerfilUsuario,
       ativo: usuario.ativo,
+      emailVerificado: usuario.emailVerificado,
     };
   }
 }

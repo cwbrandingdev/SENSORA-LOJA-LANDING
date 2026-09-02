@@ -10,6 +10,7 @@ import { ClientesModule } from './clientes/clientes.module';
 import { EnderecosModule } from './enderecos/enderecos.module';
 import { ImagekitModule } from './imagekit/imagekit.module';
 import { ItensPedidoModule } from './itens-pedido/itens-pedido.module';
+import { MelhorEnvioModule } from './melhor-envio/melhor-envio.module';
 import { PedidosModule } from './pedidos/pedidos.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProdutosModule } from './produtos/produtos.module';
@@ -61,6 +62,24 @@ import { UsuariosModule } from './usuarios/usuarios.module';
           then: Joi.required(),
           otherwise: Joi.optional(),
         }),
+        // Etapa 6.5 (Frete) — todas opcionais na validação de boot
+        // (diferente de ASAAS_*, que já bloqueiam o startup): MelhorEnvioService
+        // valida preguiçosamente (mesmo padrão de AsaasService), lançando só
+        // quando efetivamente chamado sem estar configurado. Isso evita
+        // quebrar ambientes (dev/CI) que ainda não têm uma conta Melhor
+        // Envio conectada — a funcionalidade de frete é nova, ainda não é
+        // universalmente obrigatória para a aplicação subir.
+        MELHOR_ENVIO_ENV: Joi.string().valid('sandbox', 'production'),
+        MELHOR_ENVIO_CLIENT_ID: Joi.string(),
+        MELHOR_ENVIO_CLIENT_SECRET: Joi.string(),
+        MELHOR_ENVIO_REDIRECT_URI: Joi.string(),
+        MELHOR_ENVIO_SCOPE: Joi.string(),
+        MELHOR_ENVIO_USER_AGENT: Joi.string(),
+        MELHOR_ENVIO_CEP_ORIGEM: Joi.string(),
+        MELHOR_ENVIO_PACOTE_ALTURA_CM: Joi.number().positive(),
+        MELHOR_ENVIO_PACOTE_LARGURA_CM: Joi.number().positive(),
+        MELHOR_ENVIO_PACOTE_COMPRIMENTO_CM: Joi.number().positive(),
+        MELHOR_ENVIO_PACOTE_PESO_GRAMAS: Joi.number().positive(),
       }),
     }),
     PrismaModule,
@@ -69,6 +88,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     CheckoutModule,
     ClientesModule,
     EnderecosModule,
+    MelhorEnvioModule,
     PedidosModule,
     ItensPedidoModule,
     UsuariosModule,

@@ -940,6 +940,56 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
     expect(JSON.parse(cartRaw ?? "[]")).toEqual([CART_ITEM]);
   });
 
+  // Etapa 6.4 (Confirmação de e-mail) — 403 é o único status que
+  // CheckoutService.createSession usa para "e-mail não confirmado" (ver
+  // backend/src/checkout/checkout.service.ts). Diferente do 401 (sessão
+  // inválida, redireciona para /login), aqui a sessão continua válida — só
+  // mostra o aviso com a opção de reenviar, sem navegar para nenhum lugar.
+  test("403/e-mail não confirmado: mostra aviso com opção de reenviar, não redireciona, permite reenviar a confirmação", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await seedCart(page, [CART_ITEM]);
+    await mockEnderecos(page, [ENDERECO_PADRAO]);
+    await mockCheckoutSessionError(
+      page,
+      403,
+      "Confirme seu e-mail para finalizar a compra.",
+    );
+    let resendBody: unknown = null;
+    await page.route("**/auth/resend-verification", async (route) => {
+      resendBody = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        json: {
+          message:
+            "Se existir uma conta com esse e-mail ainda não confirmada, você receberá um novo link de confirmação.",
+        },
+      });
+    });
+    const asaasCalls = trackAsaasCalls(page);
+
+    await page.goto(CHECKOUT_URL);
+    const button = page.getByRole("button", { name: "Continuar para pagamento →" });
+    await button.click();
+
+    await expect(
+      page.getByText("Confirme seu e-mail para finalizar a compra."),
+    ).toBeVisible();
+    await expect(button).toBeEnabled();
+    await expect(page).toHaveURL(new RegExp(CHECKOUT_URL.replace("/", "\\/")));
+    expect(asaasCalls).toEqual([]);
+
+    await page
+      .getByRole("button", { name: "Reenviar e-mail de confirmação" })
+      .click();
+
+    await expect(
+      page.getByText(/receberá um novo link em instantes/),
+    ).toBeVisible();
+    expect(resendBody).toEqual({ email: "cliente@sensora.dev" });
+  });
+
   test("erro 500: mostra mensagem amigável (nunca o texto técnico do backend), reabilita o botão", async ({
     page,
   }) => {

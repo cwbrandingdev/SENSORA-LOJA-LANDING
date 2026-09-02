@@ -456,6 +456,18 @@ export class PedidosService {
       data: pedido.data,
       status: pedido.status as StatusPedido,
       total: Number(pedido.total),
+      enderecoCep: pedido.enderecoCep ?? undefined,
+      enderecoRua: pedido.enderecoRua ?? undefined,
+      enderecoNumero: pedido.enderecoNumero ?? undefined,
+      enderecoComplemento: pedido.enderecoComplemento ?? undefined,
+      enderecoBairro: pedido.enderecoBairro ?? undefined,
+      enderecoCidade: pedido.enderecoCidade ?? undefined,
+      enderecoEstado: pedido.enderecoEstado ?? undefined,
+      freteValor:
+        pedido.freteValor !== null ? Number(pedido.freteValor) : undefined,
+      freteTransportadora: pedido.freteTransportadora ?? undefined,
+      freteServico: pedido.freteServico ?? undefined,
+      fretePrazoDias: pedido.fretePrazoDias ?? undefined,
     };
   }
 }

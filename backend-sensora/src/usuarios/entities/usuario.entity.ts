@@ -7,6 +7,11 @@ export class Usuario {
   senha: string;
   perfil: PerfilUsuario;
   ativo: boolean;
+  // Etapa 6.4 (Confirmação de e-mail).
+  emailVerificado: boolean;
+  emailVerificadoEm: Date | null;
+  emailVerificationHash: string | null;
+  emailVerificationExpiry: Date | null;
 }
 
 export class UsuarioPublico {
@@ -15,4 +20,7 @@ export class UsuarioPublico {
   email: string;
   perfil: PerfilUsuario;
   ativo: boolean;
+  // Etapa 6.4 (Confirmação de e-mail) — só o booleano é público; hash/
+  // expiração do token nunca saem daqui (ver Usuario, acima).
+  emailVerificado: boolean;
 }

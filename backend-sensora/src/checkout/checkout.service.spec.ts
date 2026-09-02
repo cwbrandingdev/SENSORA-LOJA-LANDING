@@ -1,13 +1,55 @@
-import { BadRequestException, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import Stripe from 'stripe';
 import { AsaasService } from '../asaas/asaas.service';
 import { EnderecosService } from '../enderecos/enderecos.service';
+import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
+import { UsuariosService } from '../usuarios/usuarios.service';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { CheckoutService } from './checkout.service';
+
+// Etapa 6.4 (Confirmação de e-mail) — CheckoutService agora também injeta
+// UsuariosService (checagem de emailVerificado em createSession), então
+// TODO Test.createTestingModule que constrói CheckoutService precisa prover
+// esse dependency, mesmo nas suítes de webhook que nunca chamam
+// createSession (o Nest resolve o construtor inteiro, não só os métodos
+// exercitados pelo teste). Stub vazio ({}) é suficiente para elas; só as
+// suítes que chamam createSession precisam de um `findOne` de verdade.
+const usuariosServiceVerificado = {
+  findOne: jest.fn(() => ({ emailVerificado: true })),
+};
+
+// Etapa 6.5 (Frete) — endereço/opção de frete "de verdade" reaproveitados
+// pelas suítes de createSession que chegam até o fim do fluxo (ver
+// CheckoutService.validarFreteEscolhido, que agora sempre recotiza contra
+// MelhorEnvioService antes de aceitar o pedido).
+const ENDERECO_FAKE = {
+  id: 1,
+  usuarioId: 1,
+  rua: 'Rua das Flores',
+  numero: '123',
+  complemento: undefined,
+  bairro: 'Centro',
+  cidade: 'Curitiba',
+  estado: 'PR',
+  cep: '80000-000',
+  padrao: true,
+};
+
+const OPCAO_FRETE_FAKE = {
+  id: 1,
+  transportadora: 'Correios',
+  servico: 'PAC',
+  preco: 23.5,
+  prazoDias: 9,
+};
+
+function melhorEnvioServiceComOpcoes(opcoes: unknown[] = [OPCAO_FRETE_FAKE]) {
+  return { cotar: jest.fn(() => opcoes) };
+}
 
 // Task 15 (Stripe, modo de rollback) + Task 21 (Asaas, gateway padrão) —
 // suíte de testes automatizados com MOCKS controlados (Prisma,
@@ -149,6 +191,8 @@ describe('CheckoutService — webhook Stripe (Task 15, modo de rollback)', () =>
         { provide: ProdutosService, useValue: produtosService },
         { provide: EnderecosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
+        { provide: UsuariosService, useValue: {} },
+        { provide: MelhorEnvioService, useValue: {} },
       ],
     }).compile();
 
@@ -353,6 +397,8 @@ describe('CheckoutService — webhook Stripe (Task 15, modo de rollback)', () =>
         { provide: ProdutosService, useValue: produtosService },
         { provide: EnderecosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
+        { provide: UsuariosService, useValue: {} },
+        { provide: MelhorEnvioService, useValue: {} },
       ],
     }).compile();
     const servicoSemWebhookSecret =
@@ -459,6 +505,8 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
         { provide: ProdutosService, useValue: produtosService },
         { provide: EnderecosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
+        { provide: UsuariosService, useValue: {} },
+        { provide: MelhorEnvioService, useValue: {} },
       ],
     }).compile();
 
@@ -589,6 +637,8 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
         { provide: ProdutosService, useValue: produtosService },
         { provide: EnderecosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
+        { provide: UsuariosService, useValue: {} },
+        { provide: MelhorEnvioService, useValue: {} },
       ],
     }).compile();
     const servicoSemWebhookToken = module.get<CheckoutService>(CheckoutService);
@@ -706,6 +756,8 @@ describe('CheckoutService — webhook Asaas: eventos de reembolso (Etapa 5B.5)',
         { provide: ProdutosService, useValue: {} },
         { provide: EnderecosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
+        { provide: UsuariosService, useValue: {} },
+        { provide: MelhorEnvioService, useValue: {} },
       ],
     }).compile();
 
@@ -875,6 +927,8 @@ describe('CheckoutService — createSession: produto inativo (Task 16)', () => {
         { provide: ProdutosService, useValue: produtosService },
         { provide: EnderecosService, useValue: enderecosService },
         { provide: AsaasService, useValue: {} },
+        { provide: UsuariosService, useValue: usuariosServiceVerificado },
+        { provide: MelhorEnvioService, useValue: {} },
       ],
     }).compile();
     const service = module.get<CheckoutService>(CheckoutService);
@@ -886,6 +940,7 @@ describe('CheckoutService — createSession: produto inativo (Task 16)', () => {
           clienteEmail: 'cliente@sensora.dev',
           clienteNome: 'Cliente',
           enderecoId: 1,
+          freteServicoId: 1,
         },
         1,
       ),
@@ -900,7 +955,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
     const pedidoCreate = jest.fn(() => ({ id: 42, numero: 'PED-1' }));
     const pedidoUpdate = jest.fn();
     const enderecosService = {
-      findOneForUsuario: jest.fn(() => ({ id: 1 })),
+      findOneForUsuario: jest.fn(() => ENDERECO_FAKE),
     };
     const produtosService = {
       findOne: jest.fn(() => ({
@@ -919,6 +974,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
       link: 'https://sandbox.asaas.com/checkoutSession/show/chk_abc',
       status: 'ACTIVE',
     }));
+    const melhorEnvioService = melhorEnvioServiceComOpcoes();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -942,6 +998,8 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         { provide: ProdutosService, useValue: produtosService },
         { provide: EnderecosService, useValue: enderecosService },
         { provide: AsaasService, useValue: { criarCheckout } },
+        { provide: UsuariosService, useValue: usuariosServiceVerificado },
+        { provide: MelhorEnvioService, useValue: melhorEnvioService },
       ],
     }).compile();
     const service = module.get<CheckoutService>(CheckoutService);
@@ -952,14 +1010,43 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         clienteEmail: 'cliente@sensora.dev',
         clienteNome: 'Cliente',
         enderecoId: 1,
+        freteServicoId: OPCAO_FRETE_FAKE.id,
       },
       1,
     );
 
+    // Etapa 6.5 (Frete), teste H/G — o pedido persiste o snapshot do
+    // endereço e o resultado da cotação já validada, e `total` já soma
+    // subtotal (2 × 39,90 = 79,80) + frete (23,50).
+    expect(pedidoCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          total: 103.3,
+          enderecoCep: ENDERECO_FAKE.cep,
+          enderecoRua: ENDERECO_FAKE.rua,
+          enderecoNumero: ENDERECO_FAKE.numero,
+          enderecoBairro: ENDERECO_FAKE.bairro,
+          enderecoCidade: ENDERECO_FAKE.cidade,
+          enderecoEstado: ENDERECO_FAKE.estado,
+          freteValor: OPCAO_FRETE_FAKE.preco,
+          freteTransportadora: OPCAO_FRETE_FAKE.transportadora,
+          freteServico: OPCAO_FRETE_FAKE.servico,
+          fretePrazoDias: OPCAO_FRETE_FAKE.prazoDias,
+          freteServicoId: OPCAO_FRETE_FAKE.id,
+        }),
+      }),
+    );
+
+    // Etapa 6.5 (Frete), teste J — o valor enviado ao Asaas inclui o frete
+    // como um item próprio, calculado pelo backend (nunca o preço do
+    // cliente): o total cobrado no gateway reflete produtos + frete.
     expect(criarCheckout).toHaveBeenCalledWith(
       expect.objectContaining({
         externalReference: '42',
-        items: [{ name: 'Vela de Lavanda', quantity: 2, value: 39.9 }],
+        items: [
+          { name: 'Vela de Lavanda', quantity: 2, value: 39.9 },
+          { name: 'Frete - Correios PAC', quantity: 1, value: 23.5 },
+        ],
         callback: {
           successUrl: 'http://localhost:3001/checkout/sucesso',
           cancelUrl: 'http://localhost:3001/checkout/cancelado',
@@ -973,6 +1060,234 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
     expect(resultado).toEqual({
       sessionId: 'chk_abc',
       url: 'https://sandbox.asaas.com/checkoutSession/show/chk_abc',
+    });
+  });
+
+  // Etapa 6.5 (Frete), teste D — cliente manda um `freteServicoId` que não
+  // está entre as opções REALMENTE disponíveis na recotização (ele pode ter
+  // adulterado o valor, ou a cotação simplesmente ficou desatualizada) —
+  // nunca aceito, mesmo que pareça um id válido de outra cotação qualquer.
+  it('freteServicoId que não existe entre as opções recotizadas é rejeitado, pedido nunca é criado', async () => {
+    const pedidoCreate = jest.fn();
+    const enderecosService = {
+      findOneForUsuario: jest.fn(() => ENDERECO_FAKE),
+    };
+    const produtosService = {
+      findOne: jest.fn(() => ({
+        id: 5,
+        nome: 'Vela de Lavanda',
+        ativo: true,
+        quantidade: 10,
+        preco: 39.9,
+      })),
+    };
+    const melhorEnvioService = melhorEnvioServiceComOpcoes([OPCAO_FRETE_FAKE]);
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({ CHECKOUT_GATEWAY: 'asaas' })[key as 'CHECKOUT_GATEWAY'],
+          },
+        },
+        { provide: PrismaService, useValue: { pedido: { create: pedidoCreate } } },
+        { provide: ProdutosService, useValue: produtosService },
+        { provide: EnderecosService, useValue: enderecosService },
+        { provide: AsaasService, useValue: {} },
+        { provide: UsuariosService, useValue: usuariosServiceVerificado },
+        { provide: MelhorEnvioService, useValue: melhorEnvioService },
+      ],
+    }).compile();
+    const service = module.get<CheckoutService>(CheckoutService);
+
+    await expect(
+      service.createSession(
+        {
+          itens: [{ produtoId: 5, quantidade: 1 }],
+          clienteEmail: 'cliente@sensora.dev',
+          clienteNome: 'Cliente',
+          enderecoId: 1,
+          freteServicoId: 999, // não existe em OPCAO_FRETE_FAKE
+        },
+        1,
+      ),
+    ).rejects.toThrow('Opção de frete indisponível');
+
+    expect(pedidoCreate).not.toHaveBeenCalled();
+  });
+
+  // Etapa 6.5 (Frete), teste D (variação) — nenhuma opção disponível para o
+  // endereço/rota (Melhor Envio devolve lista vazia) resulta no mesmo erro
+  // controlado, nunca um pedido criado com frete indefinido.
+  it('nenhuma opção de frete disponível: rejeita, pedido nunca é criado', async () => {
+    const pedidoCreate = jest.fn();
+    const enderecosService = {
+      findOneForUsuario: jest.fn(() => ENDERECO_FAKE),
+    };
+    const produtosService = {
+      findOne: jest.fn(() => ({
+        id: 5,
+        nome: 'Vela de Lavanda',
+        ativo: true,
+        quantidade: 10,
+        preco: 39.9,
+      })),
+    };
+    const melhorEnvioService = melhorEnvioServiceComOpcoes([]);
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({ CHECKOUT_GATEWAY: 'asaas' })[key as 'CHECKOUT_GATEWAY'],
+          },
+        },
+        { provide: PrismaService, useValue: { pedido: { create: pedidoCreate } } },
+        { provide: ProdutosService, useValue: produtosService },
+        { provide: EnderecosService, useValue: enderecosService },
+        { provide: AsaasService, useValue: {} },
+        { provide: UsuariosService, useValue: usuariosServiceVerificado },
+        { provide: MelhorEnvioService, useValue: melhorEnvioService },
+      ],
+    }).compile();
+    const service = module.get<CheckoutService>(CheckoutService);
+
+    await expect(
+      service.createSession(
+        {
+          itens: [{ produtoId: 5, quantidade: 1 }],
+          clienteEmail: 'cliente@sensora.dev',
+          clienteNome: 'Cliente',
+          enderecoId: 1,
+          freteServicoId: 1,
+        },
+        1,
+      ),
+    ).rejects.toThrow('Opção de frete indisponível');
+
+    expect(pedidoCreate).not.toHaveBeenCalled();
+  });
+});
+
+// Etapa 6.4 (Confirmação de e-mail) — createSession agora consulta o estado
+// REAL de emailVerificado no banco (via UsuariosService.findOne) antes de
+// qualquer outra validação, e bloqueia com ForbiddenException se a conta
+// ainda não confirmou o e-mail. Testes H/I da etapa.
+describe('CheckoutService — createSession: bloqueio por e-mail não confirmado (Etapa 6.4)', () => {
+  it('H: usuário com e-mail não confirmado não consegue criar sessão de checkout', async () => {
+    const pedidoCreate = jest.fn();
+    const produtosService = { findOne: jest.fn() };
+    const enderecosService = { findOneForUsuario: jest.fn() };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({ CHECKOUT_GATEWAY: 'asaas' })[key as 'CHECKOUT_GATEWAY'],
+          },
+        },
+        { provide: PrismaService, useValue: { pedido: { create: pedidoCreate } } },
+        { provide: ProdutosService, useValue: produtosService },
+        { provide: EnderecosService, useValue: enderecosService },
+        { provide: AsaasService, useValue: {} },
+        {
+          provide: UsuariosService,
+          useValue: { findOne: jest.fn(() => ({ emailVerificado: false })) },
+        },
+      ],
+    }).compile();
+    const service = module.get<CheckoutService>(CheckoutService);
+
+    await expect(
+      service.createSession(
+        {
+          itens: [{ produtoId: 5, quantidade: 1 }],
+          clienteEmail: 'cliente@sensora.dev',
+          clienteNome: 'Cliente',
+          enderecoId: 1,
+        },
+        1,
+      ),
+    ).rejects.toThrow(ForbiddenException);
+
+    // A checagem de verificação acontece ANTES de qualquer outra coisa —
+    // nem o carrinho/endereço/produto chegam a ser consultados.
+    expect(produtosService.findOne).not.toHaveBeenCalled();
+    expect(enderecosService.findOneForUsuario).not.toHaveBeenCalled();
+    expect(pedidoCreate).not.toHaveBeenCalled();
+  });
+
+  it('I: usuário com e-mail confirmado consegue criar a sessão normalmente (gate não bloqueia quem já verificou)', async () => {
+    const pedidoCreate = jest.fn(() => ({ id: 42, numero: 'PED-1' }));
+    const pedidoUpdate = jest.fn();
+    const enderecosService = { findOneForUsuario: jest.fn(() => ({ id: 1 })) };
+    const produtosService = {
+      findOne: jest.fn(() => ({
+        id: 5,
+        nome: 'Vela de Lavanda',
+        descricao: null,
+        aroma: 'Lavanda',
+        imagemUrl: null,
+        ativo: true,
+        quantidade: 10,
+        preco: 39.9,
+      })),
+    };
+    const criarCheckout = jest.fn(() => ({
+      id: 'chk_verificado',
+      link: 'https://sandbox.asaas.com/checkoutSession/show/chk_verificado',
+      status: 'ACTIVE',
+    }));
+    const findOne = jest.fn(() => ({ emailVerificado: true }));
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({
+                CHECKOUT_GATEWAY: 'asaas',
+                FRONTEND_URL: 'http://localhost:3001',
+              })[key as 'CHECKOUT_GATEWAY' | 'FRONTEND_URL'],
+          },
+        },
+        {
+          provide: PrismaService,
+          useValue: { pedido: { create: pedidoCreate, update: pedidoUpdate } },
+        },
+        { provide: ProdutosService, useValue: produtosService },
+        { provide: EnderecosService, useValue: enderecosService },
+        { provide: AsaasService, useValue: { criarCheckout } },
+        { provide: UsuariosService, useValue: { findOne } },
+      ],
+    }).compile();
+    const service = module.get<CheckoutService>(CheckoutService);
+
+    const resultado = await service.createSession(
+      {
+        itens: [{ produtoId: 5, quantidade: 1 }],
+        clienteEmail: 'cliente@sensora.dev',
+        clienteNome: 'Cliente',
+        enderecoId: 1,
+      },
+      7,
+    );
+
+    expect(findOne).toHaveBeenCalledWith(7);
+    expect(resultado).toEqual({
+      sessionId: 'chk_verificado',
+      url: 'https://sandbox.asaas.com/checkoutSession/show/chk_verificado',
     });
   });
 });
@@ -1156,6 +1471,8 @@ describe('CheckoutService — restauração de estoque após reembolso (Etapa 5B
         { provide: ProdutosService, useValue: produtosService },
         { provide: EnderecosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
+        { provide: UsuariosService, useValue: {} },
+        { provide: MelhorEnvioService, useValue: {} },
       ],
     }).compile();
 

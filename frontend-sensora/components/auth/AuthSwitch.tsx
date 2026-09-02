@@ -113,7 +113,7 @@ export default function AuthSwitch({ initialMode }: { initialMode: AuthMode }) {
                   showTagline={false}
                   className="authswitch-logo"
                 />
-                <h3>Já é dos nossos?</h3>
+                <h3>Já tem uma conta?</h3>
                 <p>
                   Que bom te ver de novo. Entre para continuar sua experiência
                   Sensora.
@@ -357,7 +357,7 @@ function SignUpForm({
       // estamos na mesma experiência (Auth Switch), então só volta ao modo
       // Entrar via estado do React, sem navegar de rota (uma rota nova
       // recarregaria a página — root layouts distintos, ver topo do arquivo).
-      setTimeout(onSuccess, 1200);
+      setTimeout(onSuccess, 2200);
     } catch {
       setServerError("Não foi possível criar a conta.");
     }
@@ -480,7 +480,8 @@ function SignUpForm({
 
       {success && (
         <p role="status" className="authswitch-alert success">
-          Conta criada! Voltando para o login...
+          Conta criada! Enviamos um e-mail de confirmação — voltando para o
+          login...
         </p>
       )}
 
