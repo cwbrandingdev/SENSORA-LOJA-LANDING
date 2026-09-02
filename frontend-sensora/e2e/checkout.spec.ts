@@ -266,9 +266,16 @@ test.describe("Checkout — autenticação (Task 7, preservada)", () => {
     });
 
     await page.goto("/login?redirect=%2Floja%2Fcheckout");
-    await page.getByLabel("Email").fill("cliente@sensora.dev");
-    await page.getByLabel("Senha").fill("senha123");
-    await page.getByRole("button", { name: "Entrar" }).click();
+    // Etapa 6.2 (Auth Switch): os formulários de Login e Cadastro ficam
+    // sempre montados simultaneamente (alternam via opacity/z-index, não
+    // por desmontagem — ver components/auth/AuthSwitch.tsx), então ambos
+    // têm um campo rotulado "Email"/"Senha". Usa o id específico do
+    // formulário de login para não ser ambíguo.
+    await page.locator("#login-email").fill("cliente@sensora.dev");
+    await page.locator("#login-senha").fill("senha123");
+    // O painel de marca também tem um botão "Entrar" (troca para o modo
+    // Login) — escopa ao botão de submit do próprio formulário de login.
+    await page.locator('form:has(#login-senha) button[type="submit"]').click();
 
     await expect(page).toHaveURL(new RegExp(CHECKOUT_URL.replace("/", "\\/")));
     await expect(page.getByRole("heading", { name: "Checkout" })).toBeVisible();
