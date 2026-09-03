@@ -10,6 +10,7 @@ import PlaceholderImage from "@/components/ui/PlaceholderImage";
 import QuantityStepper from "@/components/ui/QuantityStepper";
 import { useCart, type CartItem } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
+import { estoqueInsuficienteNoCarrinho, mensagemEstoque } from "@/lib/estoque";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -30,6 +31,16 @@ export default function CartItemRow({ item }: CartItemRowProps) {
   }
 
   const produtoHref = `/loja/produtos/${item.slug}`;
+
+  // Etapa 6.6 (aviso de estoque) — item.estoqueConhecido é o snapshot mais
+  // recente já visto para este produto (ver CartContext.adicionarItem);
+  // ausente em carrinhos salvos antes desta mudança, tratado como "sem
+  // limite conhecido" (nem aviso, nem teto no "+"). O problema (quantidade
+  // já no carrinho maior que o estoque conhecido) só é informado — nunca
+  // corrige a quantidade nem remove o item sozinho.
+  const problemaEstoque = estoqueInsuficienteNoCarrinho(item.quantidade, item.estoqueConhecido);
+  const avisoEstoque =
+    typeof item.estoqueConhecido === "number" ? mensagemEstoque(item.estoqueConhecido) : null;
 
   return (
     // Task 17: imagem e conteúdo sempre lado a lado (nunca empilhados, nem
@@ -74,6 +85,17 @@ export default function CartItemRow({ item }: CartItemRowProps) {
           <p className="mt-1 text-sm text-slate-500">
             {formatPrice.format(item.preco)} / unidade
           </p>
+
+          {problemaEstoque ? (
+            <p className="mt-1.5 text-[13px] font-medium text-red-600">
+              Estoque disponível: {item.estoqueConhecido}{" "}
+              {item.estoqueConhecido === 1 ? "unidade" : "unidades"} — ajuste a quantidade.
+            </p>
+          ) : (
+            avisoEstoque && (
+              <p className="mt-1.5 text-[13px] font-medium text-brand-orange">{avisoEstoque}</p>
+            )
+          )}
         </div>
 
         <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end sm:gap-6">
@@ -81,6 +103,7 @@ export default function CartItemRow({ item }: CartItemRowProps) {
             value={item.quantidade}
             onIncrease={() => aumentarQuantidade(item.produtoId)}
             onDecrease={() => diminuirQuantidade(item.produtoId)}
+            max={item.estoqueConhecido}
           />
 
           <p className="w-20 shrink-0 text-right text-[15px] font-semibold tabular-nums text-brand-navy sm:w-24 sm:text-base">

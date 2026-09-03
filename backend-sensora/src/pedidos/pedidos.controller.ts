@@ -30,9 +30,13 @@ import { PedidosService } from './pedidos.service';
 export class PedidosController {
   constructor(private readonly pedidosService: PedidosService) {}
 
+  // Listagem do Admin — mais recente primeiro (ordenarPorDataDesc), usando
+  // o campo `data` (data de criação do pedido). GET /pedidos/meus abaixo
+  // continua chamando findAll sem essa opção, então a ordem de "Meus
+  // Pedidos" não muda.
   @Get()
   findAll(@CurrentUser() user: UsuarioAutenticado): Promise<Pedido[]> {
-    return this.pedidosService.findAll(user);
+    return this.pedidosService.findAll(user, { ordenarPorDataDesc: true });
   }
 
   // Etapa 2 (Minha Conta / Meus Pedidos) — autoatendimento: qualquer usuário

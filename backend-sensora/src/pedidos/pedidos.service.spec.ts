@@ -10,6 +10,7 @@ import {
   AsaasRefund,
   AsaasService,
 } from '../asaas/asaas.service';
+import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { ItensPedidoService } from '../itens-pedido/itens-pedido.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
@@ -347,5 +348,66 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
 
     expect(resultado.status).toBe(StatusPedido.REEMBOLSO_SOLICITADO);
     expect(resultado.status).not.toBe(StatusPedido.REEMBOLSADO);
+  });
+});
+
+// Tarefa "Ordenar pedidos do Admin do mais recente para o mais antigo" —
+// prova que `ordenarPorDataDesc` (opt-in, usado só pelo controller em
+// GET /pedidos) pede ao Prisma `orderBy: { data: 'desc' }`, e que sem a
+// opção (GET /pedidos/meus) o comportamento anterior é preservado — nenhum
+// `orderBy` é passado. Não reusa o describe acima: findAll não precisa de
+// ItensPedidoService/AsaasService, só do Prisma mockado.
+describe('PedidosService — findAll (ordenação da listagem do Admin)', () => {
+  let service: PedidosService;
+  let findMany: jest.Mock;
+
+  const ADMIN: UsuarioAutenticado = {
+    id: 99,
+    email: 'admin@sensora.dev',
+    perfil: PerfilUsuario.ADMIN,
+  };
+
+  beforeEach(async () => {
+    findMany = jest.fn().mockResolvedValue([]);
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        PedidosService,
+        { provide: PrismaService, useValue: { pedido: { findMany } } },
+        { provide: ItensPedidoService, useValue: {} },
+        { provide: ProdutosService, useValue: {} },
+        { provide: AsaasService, useValue: {} },
+      ],
+    }).compile();
+
+    service = module.get(PedidosService);
+  });
+
+  it('com ordenarPorDataDesc: pede ao Prisma orderBy: { data: "desc" } (usado pelo GET /pedidos do Admin)', async () => {
+    await service.findAll(ADMIN, { ordenarPorDataDesc: true });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { data: 'desc' } }),
+    );
+  });
+
+  it('sem a opção (GET /pedidos/meus): nenhum orderBy é passado — comportamento anterior preservado', async () => {
+    await service.findAll(CLIENTE);
+
+    const argumentos = findMany.mock.calls[0][0] as Record<string, unknown>;
+    expect(argumentos).not.toHaveProperty('orderBy');
+  });
+
+  it('pedido mais recente aparece primeiro, mais antigo depois (ordem devolvida pelo Prisma é preservada)', async () => {
+    const maisAntigo = { id: 1, data: new Date('2026-01-01'), status: StatusPedido.PAGO };
+    const maisRecente = { id: 2, data: new Date('2026-09-01'), status: StatusPedido.PAGO };
+    // Simula o Postgres já aplicando `orderBy: { data: 'desc' }' — devolve
+    // na ordem que o banco devolveria com essa cláusula.
+    findMany.mockResolvedValueOnce([maisRecente, maisAntigo]);
+
+    const resultado = await service.findAll(ADMIN, { ordenarPorDataDesc: true });
+
+    expect(resultado[0].id).toBe(maisRecente.id);
+    expect(resultado[1].id).toBe(maisAntigo.id);
   });
 });

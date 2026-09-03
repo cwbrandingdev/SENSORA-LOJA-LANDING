@@ -132,6 +132,7 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
                 slug: produto.slug,
                 imagemUrl: produto.imagemUrl,
                 preco: produto.preco,
+                estoqueConhecido: produto.quantidade,
               }}
             />
           </div>

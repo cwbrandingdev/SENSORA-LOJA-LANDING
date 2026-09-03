@@ -56,10 +56,23 @@ export class PedidosService {
     }
   }
 
-  async findAll(user: UsuarioAutenticado): Promise<Pedido[]> {
+  // `ordenarPorDataDesc` é opt-in (default false) para não alterar o
+  // comportamento de GET /pedidos/meus (Minha Conta), que reaproveita este
+  // mesmo método sem passar a opção — só a listagem do Admin (GET /pedidos)
+  // pede a ordenação. `data` é o campo já existente que funciona como data
+  // de criação do pedido (setado uma única vez em CheckoutService.
+  // createSession/PedidosService.create, nunca tocado por update() a menos
+  // que explicitamente enviado).
+  async findAll(
+    user: UsuarioAutenticado,
+    opts?: { ordenarPorDataDesc?: boolean },
+  ): Promise<Pedido[]> {
     const where =
       user.perfil === PerfilUsuario.ADMIN ? {} : { usuarioId: user.id };
-    const pedidos = await this.prisma.pedido.findMany({ where });
+    const pedidos = await this.prisma.pedido.findMany({
+      where,
+      ...(opts?.ordenarPorDataDesc && { orderBy: { data: 'desc' } }),
+    });
     return pedidos.map((pedido) => this.paraPedido(pedido));
   }
 

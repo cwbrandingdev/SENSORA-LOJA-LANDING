@@ -24,6 +24,14 @@ export type CartItem = {
   imagemUrl?: string;
   preco: number;
   quantidade: number;
+  // Etapa 6.6 (aviso de estoque) — snapshot do Produto.quantidade da API
+  // pública no momento em que o item foi adicionado/atualizado pela última
+  // vez (ver adicionarItem abaixo). Só UX: permite ao carrinho avisar
+  // quando a quantidade guardada ficou maior que o estoque conhecido mais
+  // recente, sem nunca decidir nada por conta própria — a validação real
+  // continua só no backend, no checkout. Opcional para aceitar carrinhos já
+  // salvos no localStorage antes desta mudança (isCartItemValido abaixo).
+  estoqueConhecido?: number;
 };
 
 // O que a UI precisa passar para adicionar um item — igual a CartItem, só
@@ -65,7 +73,8 @@ function isCartItemValido(valor: unknown): valor is CartItem {
     typeof item.slug === "string" &&
     typeof item.preco === "number" &&
     typeof item.quantidade === "number" &&
-    (item.imagemUrl === undefined || typeof item.imagemUrl === "string")
+    (item.imagemUrl === undefined || typeof item.imagemUrl === "string") &&
+    (item.estoqueConhecido === undefined || typeof item.estoqueConhecido === "number")
   );
 }
 
@@ -115,7 +124,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
         if (existente) {
           return prev.map((item) =>
             item.produtoId === produto.produtoId
-              ? { ...item, quantidade: item.quantidade + quantidadeNormalizada }
+              ? {
+                  ...item,
+                  quantidade: item.quantidade + quantidadeNormalizada,
+                  // Refresca o snapshot de estoque conhecido com o valor
+                  // que a página de origem tinha na hora deste clique —
+                  // mais atual que o que já estava salvo.
+                  estoqueConhecido: produto.estoqueConhecido,
+                }
               : item,
           );
         }

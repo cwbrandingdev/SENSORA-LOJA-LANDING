@@ -27,6 +27,10 @@ export type ProdutoPublico = {
   destaque: boolean;
   categoriaId?: number;
   categoria?: CategoriaResumo;
+  // Etapa 6.6 (aviso de estoque) — usado só como sinal de UX (ver
+  // lib/estoque.ts): limitar o stepper de quantidade e mostrar avisos
+  // discretos de disponibilidade. O backend segue sendo a autoridade real.
+  quantidade: number;
 };
 
 export type CategoriaPublica = {

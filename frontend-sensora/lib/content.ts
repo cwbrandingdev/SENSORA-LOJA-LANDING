@@ -101,7 +101,7 @@ export type Category = {
 export const CATEGORIES: Category[] = [
   {
     slug: "velas",
-    label: "Velas Aromáticas",
+    label: "Vselas Aromáticas",
     description:
       "Velas perfumadas que transformam qualquer ambiente em uma experiência sensorial completa.",
     imageSrc: "/images/categories/velas-aromaticas.jpg",

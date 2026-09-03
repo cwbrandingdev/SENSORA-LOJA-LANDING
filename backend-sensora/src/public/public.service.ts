@@ -58,6 +58,7 @@ export class PublicService {
       categoria: produto.categoria
         ? this.paraCategoriaResumo(produto.categoria)
         : undefined,
+      quantidade: produto.quantidade,
     };
   }
 

@@ -70,3 +70,45 @@ describe('PedidosController — solicitarReembolsoMeuPedido (Etapa 5B.4)', () =>
     expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
   });
 });
+
+// Tarefa "Ordenar pedidos do Admin do mais recente para o mais antigo" —
+// prova que GET /pedidos (listagem do Admin) pede a ordenação ao service,
+// e que GET /pedidos/meus (Minha Conta) continua chamando findAll sem
+// nenhuma opção — comportamento daquela rota preservado byte a byte.
+describe('PedidosController — findAll/findMeusPedidos (ordenação da listagem do Admin)', () => {
+  it('findAll (GET /pedidos): delega para PedidosService.findAll com { ordenarPorDataDesc: true }', async () => {
+    const pedidosRetornados = [{ id: 2 }, { id: 1 }];
+    const pedidosService = { findAll: jest.fn().mockResolvedValue(pedidosRetornados) };
+    const controller = new PedidosController(
+      pedidosService as unknown as PedidosService,
+    );
+    const admin: UsuarioAutenticado = {
+      id: 1,
+      email: 'admin@sensora.dev',
+      perfil: PerfilUsuario.ADMIN,
+    };
+
+    const resultado = await controller.findAll(admin);
+
+    expect(pedidosService.findAll).toHaveBeenCalledWith(admin, {
+      ordenarPorDataDesc: true,
+    });
+    expect(resultado).toBe(pedidosRetornados);
+  });
+
+  it('findMeusPedidos (GET /pedidos/meus): delega para PedidosService.findAll sem opções (ordem inalterada)', async () => {
+    const pedidosService = { findAll: jest.fn().mockResolvedValue([]) };
+    const controller = new PedidosController(
+      pedidosService as unknown as PedidosService,
+    );
+    const cliente: UsuarioAutenticado = {
+      id: 7,
+      email: 'cliente@sensora.dev',
+      perfil: PerfilUsuario.CLIENTE,
+    };
+
+    await controller.findMeusPedidos(cliente);
+
+    expect(pedidosService.findAll).toHaveBeenCalledWith(cliente);
+  });
+});

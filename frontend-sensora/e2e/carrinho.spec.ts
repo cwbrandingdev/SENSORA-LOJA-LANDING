@@ -216,6 +216,93 @@ test.describe("Carrinho — remoção", () => {
   });
 });
 
+// Etapa 6.6 (aviso de estoque) — o carrinho é 100% CartContext/localStorage
+// (ver comentário no topo do arquivo), então `estoqueConhecido` é seedado
+// direto no item, do mesmo jeito que os outros campos — sem precisar de
+// mock de API pública (que aqui nem seria possível: a página de produto que
+// gera esse snapshot é Server Component, fora do alcance de page.route; ver
+// e2e/estoque-disponibilidade.spec.ts para a regra pura que decide as
+// mensagens abaixo).
+test.describe("Carrinho — limite de estoque no stepper", () => {
+  test("estoque conhecido 5, quantidade 2: aumentar até o limite desabilita o \"+\"", async ({
+    page,
+  }) => {
+    await seedCart(page, [{ ...ITEM_VELA, quantidade: 2, estoqueConhecido: 5 }]);
+    await page.goto(CARRINHO_URL);
+
+    const linha = page.locator("ul.divide-y > li").filter({ hasText: "Vela Aromática Lavanda" });
+    const aumentar = linha.getByRole("button", { name: "Aumentar quantidade" });
+
+    await aumentar.click();
+    await aumentar.click();
+    await aumentar.click();
+    await expect(linha.getByText("5", { exact: true })).toBeVisible();
+    await expect(aumentar).toBeDisabled();
+  });
+
+  test("estoque conhecido 0: \"+\" nasce desabilitado e o problema é sinalizado", async ({
+    page,
+  }) => {
+    await seedCart(page, [{ ...ITEM_VELA, quantidade: 1, estoqueConhecido: 0 }]);
+    await page.goto(CARRINHO_URL);
+
+    const linha = page.locator("ul.divide-y > li").filter({ hasText: "Vela Aromática Lavanda" });
+    await expect(linha.getByRole("button", { name: "Aumentar quantidade" })).toBeDisabled();
+    // Com 1 unidade no carrinho e 0 em estoque, é o aviso de "problema" (não
+    // mais o de "poucas unidades") que aparece — ver CartItemRow.
+    await expect(linha).toContainText("Estoque disponível: 0");
+  });
+
+  test("sem estoqueConhecido salvo (carrinho anterior a esta mudança): \"+\" continua sem teto", async ({
+    page,
+  }) => {
+    await seedCart(page, [ITEM_VELA]);
+    await page.goto(CARRINHO_URL);
+
+    const linha = page.locator("ul.divide-y > li").filter({ hasText: "Vela Aromática Lavanda" });
+    const aumentar = linha.getByRole("button", { name: "Aumentar quantidade" });
+
+    await aumentar.click();
+    await expect(linha.getByText("3", { exact: true })).toBeVisible();
+    await expect(aumentar).toBeEnabled();
+  });
+});
+
+test.describe("Carrinho — quantidade acima do estoque conhecido", () => {
+  test("informa o problema claramente, sem remover nem ajustar a quantidade sozinho", async ({
+    page,
+  }) => {
+    await seedCart(page, [{ ...ITEM_VELA, quantidade: 4, estoqueConhecido: 2 }]);
+    await page.goto(CARRINHO_URL);
+
+    const linha = page.locator("ul.divide-y > li").filter({ hasText: "Vela Aromática Lavanda" });
+    await expect(linha).toContainText("Estoque disponível: 2");
+    // A quantidade guardada pelo cliente continua intacta.
+    await expect(linha.getByText("4", { exact: true })).toBeVisible();
+
+    const cartRaw = await page.evaluate((key) => window.localStorage.getItem(key), CART_STORAGE_KEY);
+    const itens = JSON.parse(cartRaw ?? "[]");
+    expect(itens).toEqual([{ ...ITEM_VELA, quantidade: 4, estoqueConhecido: 2 }]);
+  });
+
+  test("\"-\" continua funcionando normalmente mesmo com o problema sinalizado", async ({
+    page,
+  }) => {
+    await seedCart(page, [{ ...ITEM_VELA, quantidade: 4, estoqueConhecido: 2 }]);
+    await page.goto(CARRINHO_URL);
+
+    const linha = page.locator("ul.divide-y > li").filter({ hasText: "Vela Aromática Lavanda" });
+    await linha.getByRole("button", { name: "Diminuir quantidade" }).click();
+
+    await expect(linha.getByText("3", { exact: true })).toBeVisible();
+  });
+
+  // O CTA em si (chegar a /loja/checkout com sessão válida) já é coberto por
+  // "Carrinho — CTA para checkout"; a validação real de estoque no momento
+  // do checkout é responsabilidade do backend (fora do escopo desta etapa —
+  // ver Checkout — Task 16 em e2e/checkout.spec.ts, "estoque insuficiente").
+});
+
 test.describe("Carrinho — CTA para checkout", () => {
   test("sem sessão: leva para /login preservando o retorno ao checkout", async ({ page }) => {
     await seedCart(page, [ITEM_VELA]);
