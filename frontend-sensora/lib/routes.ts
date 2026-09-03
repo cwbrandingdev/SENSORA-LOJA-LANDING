@@ -15,6 +15,9 @@ export const ROUTES = {
   CLIENTES: "/admin/clientes",
   PEDIDOS: "/admin/pedidos",
   USUARIOS: "/admin/usuarios",
+  // Central de Integrações (Admin) — ADMIN-only (ver Sidebar.tsx e
+  // app/admin/integracoes/page.tsx), mesmo padrão de USUARIOS acima.
+  INTEGRACOES: "/admin/integracoes",
   LOJA: "/loja",
   LOJA_PRODUTOS: "/loja/produtos",
   LOJA_CARRINHO: "/loja/carrinho",

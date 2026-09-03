@@ -7,25 +7,15 @@
 // Achado da auditoria: como Server Component, este dashboard era a única
 // página do admin cujo conteúdo (ainda que só texto estático) chegava no
 // payload de uma requisição não autenticada.
-import MelhorEnvioIntegracaoCard from "@/components/admin/MelhorEnvioIntegracaoCard";
-
+// Central de Integrações (Admin) — o card do Melhor Envio (e as demais
+// integrações) migrou para /admin/integracoes (ADMIN-only). Este Dashboard
+// volta a ser só a página de boas-vindas do shell do Admin.
 export default function AdminDashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
         <h2 className="text-xl font-semibold text-brand-navy">Dashboard Sensora</h2>
         <p className="text-sm text-slate-600">Acesso permitido.</p>
-      </div>
-
-      {/* Etapa 6.5 (Frete) — única integração existente até aqui; a área
-          administrativa não tem uma página dedicada de "Integrações" ainda,
-          então o card fica no Dashboard (página inicial já existente do
-          admin, sem link/rota novos). */}
-      <div className="flex flex-col gap-4">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Integrações
-        </h3>
-        <MelhorEnvioIntegracaoCard />
       </div>
     </div>
   );

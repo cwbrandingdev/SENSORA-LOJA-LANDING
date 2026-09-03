@@ -145,6 +145,22 @@ export class AsaasService {
     this.baseUrl = baseUrl?.replace(/\/+$/, '');
   }
 
+  // Central de Integrações (Admin) — usado só por AsaasController.status()
+  // para expor um booleano seguro (nunca a API key) sobre a configuração do
+  // gateway. Cópia deliberada da mesma condição já usada em `request()`
+  // abaixo (não a chama nem é chamada por ela) — a lógica de
+  // checkout/pagamento/reembolso em `request()` fica intocada, conforme
+  // exigido pela tarefa.
+  isConfigured(): boolean {
+    return Boolean(this.apiKey && this.baseUrl);
+  }
+
+  // `baseUrl` não é secreto (é só o host da API, ex. sandbox vs. produção) —
+  // seguro de expor na tela de status, ao contrário de `apiKey`.
+  get baseUrlConfigurado(): string | undefined {
+    return this.baseUrl;
+  }
+
   async criarCheckout(payload: CriarCheckoutPayload): Promise<AsaasCheckout> {
     return this.request('POST', '/checkouts', payload);
   }

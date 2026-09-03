@@ -1,16 +1,23 @@
 import { test, expect, type Page } from "@playwright/test";
 
-// Etapa 6.5 (Painel administrativo) — suíte E2E do card de integração
-// "Melhor Envio" no Dashboard do admin (/admin). Mesmo padrão de mocks do
-// resto do projeto (ver e2e/checkout.spec.ts): backend real indisponível
-// neste ambiente de teste, toda chamada de API é interceptada via
-// page.route com respostas controladas. Não testa o handshake OAuth em si
-// (isso já foi validado manualmente contra o Sandbox real, ver relatório da
-// etapa) — só o comportamento da UI: status exibido, botão de conectar,
-// header de autenticação enviado, e o redirecionamento para a URL que o
-// backend devolve.
+// Etapa 6.5 (Painel administrativo) + Central de Integrações (Admin) —
+// suíte E2E do card de integração "Melhor Envio", movido do Dashboard
+// (/admin) para /admin/integracoes (ADMIN-only) nesta última tarefa. Mesmo
+// padrão de mocks do resto do projeto (ver e2e/checkout.spec.ts): backend
+// real indisponível neste ambiente de teste, toda chamada de API é
+// interceptada via page.route com respostas controladas. Não testa o
+// handshake OAuth em si (isso já foi validado manualmente contra o Sandbox
+// real, ver relatório da etapa) — só o comportamento da UI: status exibido,
+// botão de conectar, header de autenticação enviado, e o redirecionamento
+// para a URL que o backend devolve.
+//
+// A página agora também renderiza os cards de Asaas/Resend/ImageKit (ver
+// e2e/admin-integracoes.spec.ts para a suíte deles e para os testes de
+// guarda ADMIN-only/sidebar) — mockStatusDemaisIntegracoes abaixo evita que
+// eles fiquem batendo em rede real (não mockada) enquanto estes testes
+// verificam só o card do Melhor Envio.
 
-const ADMIN_URL = "/admin";
+const INTEGRACOES_URL = "/admin/integracoes";
 const TOKEN_KEY = "sensora_token";
 
 function base64Url(payload: Record<string, unknown>): string {
@@ -39,6 +46,18 @@ async function seedSession(page: Page, perfil: "ADMIN" | "VENDEDOR" | "CLIENTE")
     },
     [TOKEN_KEY, fakeToken(perfil)] as const,
   );
+}
+
+async function mockStatusDemaisIntegracoes(page: Page) {
+  await page.route("**/admin/asaas/status", async (route) => {
+    await route.fulfill({ json: { configured: true, baseUrl: "https://api.asaas.com/v3" } });
+  });
+  await page.route("**/admin/mail/status", async (route) => {
+    await route.fulfill({ json: { configured: true } });
+  });
+  await page.route("**/imagekit/status", async (route) => {
+    await route.fulfill({ json: { configured: true } });
+  });
 }
 
 async function mockStatus(page: Page, conectado: boolean, opts?: { status?: number }) {
@@ -92,15 +111,16 @@ async function mockPaginaAutorizacao(page: Page, url: string) {
   });
 }
 
-test.describe("Admin — integração Melhor Envio (Etapa 6.5)", () => {
+test.describe("Admin — integração Melhor Envio (Etapa 6.5 + Central de Integrações)", () => {
   test("A: status desconectado mostra 'Não conectado' e o botão Conectar Melhor Envio", async ({
     page,
   }) => {
     await seedSession(page, "ADMIN");
+    await mockStatusDemaisIntegracoes(page);
     await mockStatus(page, false);
     await mockConectar(page);
 
-    await page.goto(ADMIN_URL);
+    await page.goto(INTEGRACOES_URL);
 
     await expect(page.getByText("Não conectado", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Conectar Melhor Envio" })).toBeVisible();
@@ -111,6 +131,7 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5)", () => {
     page,
   }) => {
     await seedSession(page, "ADMIN");
+    await mockStatusDemaisIntegracoes(page);
     await mockStatus(page, false);
     // Pequeno atraso proposital (mesmo padrão de checkout.spec.ts): dá tempo
     // de observar o botão desabilitado/"Conectando..." antes da navegação.
@@ -125,7 +146,7 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5)", () => {
     await mockPaginaAutorizacao(page, URL_AUTORIZACAO);
     const chamadasConectar = capturarChamadasConectar(page);
 
-    await page.goto(ADMIN_URL);
+    await page.goto(INTEGRACOES_URL);
     // O rótulo do botão muda para "Conectando..." assim que clicado (mesmo
     // padrão de checkout.spec.ts) — um locator preso só ao nome original
     // deixaria de casar com o elemento na verificação seguinte.
@@ -144,10 +165,17 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5)", () => {
     expect(chamadasConectar[0].authorization).toMatch(/^Bearer .+/);
   });
 
+  // Antes desta tarefa, este cenário era testado com VENDEDOR (o card vivia
+  // no Dashboard, acessível a todo STAFF). A página /admin/integracoes
+  // agora é ADMIN-only (ver e2e/admin-integracoes.spec.ts), então o mesmo
+  // comportamento do card (status conectado + "Verificar conexão") passa a
+  // ser verificado com ADMIN — o endpoint em si
+  // (GET /admin/melhor-envio/status) continua STAFF_ROLES, intocado.
   test("E: status conectado mostra 'Conectado' e o botão Verificar conexão, que só reconsulta /status", async ({
     page,
   }) => {
-    await seedSession(page, "VENDEDOR");
+    await seedSession(page, "ADMIN");
+    await mockStatusDemaisIntegracoes(page);
 
     let chamadasStatus = 0;
     await page.route("**/admin/melhor-envio/status", async (route) => {
@@ -159,7 +187,7 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5)", () => {
       await route.continue();
     });
 
-    await page.goto(ADMIN_URL);
+    await page.goto(INTEGRACOES_URL);
 
     await expect(page.getByText("Conectado", { exact: true })).toBeVisible();
     const botaoVerificar = page.getByRole("button", { name: "Verificar conexão" });
@@ -174,7 +202,7 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5)", () => {
     await expect(page.getByText("Conectado", { exact: true })).toBeVisible();
   });
 
-  test("F: usuário CLIENTE não acessa /admin (e portanto nunca vê a integração)", async ({
+  test("F: usuário CLIENTE não acessa /admin/integracoes (e portanto nunca vê a integração)", async ({
     page,
   }) => {
     await seedSession(page, "CLIENTE");
@@ -183,7 +211,7 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5)", () => {
       if (request.url().includes("/admin/melhor-envio/")) chamadasStatus.push(request.url());
     });
 
-    await page.goto(ADMIN_URL);
+    await page.goto(INTEGRACOES_URL);
 
     await expect(page).toHaveURL("/loja");
     await expect(page.getByText("Melhor Envio")).toHaveCount(0);
@@ -194,9 +222,10 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5)", () => {
     page,
   }) => {
     await seedSession(page, "ADMIN");
+    await mockStatusDemaisIntegracoes(page);
     await mockStatus(page, false, { status: 500 });
 
-    await page.goto(ADMIN_URL);
+    await page.goto(INTEGRACOES_URL);
 
     await expect(page.getByText("Não foi possível verificar a conexão.")).toBeVisible();
     const retry = page.getByRole("button", { name: "Tentar novamente" });

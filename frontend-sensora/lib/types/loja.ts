@@ -250,6 +250,20 @@ export type MelhorEnvioConectarResponse = {
   url: string;
 };
 
+// Central de Integrações (Admin) — espelham GET /admin/asaas/status,
+// GET /admin/mail/status e GET /imagekit/status (backend). `configured` é
+// só um booleano derivado (nunca a credencial em si); `baseUrl` do Asaas
+// não é secreto (é só o host da API, ex. sandbox vs. produção) — nenhuma
+// dessas respostas carrega API key/token/secret.
+export type AsaasStatusResponse = {
+  configured: boolean;
+  baseUrl?: string;
+};
+
+export type IntegracaoStatusResponse = {
+  configured: boolean;
+};
+
 // Espelha CheckoutSessionResponse (backend/src/checkout/entities/checkout-session.entity.ts).
 // `url` é a página hospedada de pagamento (Asaas Checkout a partir da Task
 // 21) — a Task 11 é quem redireciona para ela; esta task só a obtém e guarda.

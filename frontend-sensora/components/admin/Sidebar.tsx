@@ -24,9 +24,19 @@ export default function Sidebar() {
   const { logout, perfil } = useAuth();
   const pathname = usePathname();
 
+  // Central de Integrações — ADMIN-only, mesmo padrão de "Usuários" acima
+  // (concatenado só quando perfil === ADMIN). Proteção real continua sendo
+  // o backend (ADMIN_ONLY_ROLES nos endpoints de status, ver
+  // asaas.controller.ts/mail.controller.ts/imagekit.controller.ts) + o
+  // guard de página em app/admin/integracoes/page.tsx — isto aqui é só a
+  // camada visual, não esconder o item bastaria para bloquear VENDEDOR.
   const links =
     perfil === PerfilUsuario.ADMIN
-      ? [...baseLinks, { href: ROUTES.USUARIOS, label: "Usuários" }]
+      ? [
+          ...baseLinks,
+          { href: ROUTES.USUARIOS, label: "Usuários" },
+          { href: ROUTES.INTEGRACOES, label: "Integrações" },
+        ]
       : baseLinks;
 
   return (
