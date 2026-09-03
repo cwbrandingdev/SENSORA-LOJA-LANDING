@@ -133,7 +133,7 @@ export function getCategoryHref(slug: CategorySlug): string {
 // ---------------------------------------------------------------------------
 // Coleções — cada uma pertence a uma categoria via categorySlug. Uma nova
 // coleção (nesta ou em outra categoria) é só um novo item neste array: ela
-// aparece sozinha em /colecoes e na página da sua categoria.
+// saparece sozinha em /colecoes e na página da sua categoria.
 // ---------------------------------------------------------------------------
 
 const VELAS_4_ESTACOES: Collection = {
