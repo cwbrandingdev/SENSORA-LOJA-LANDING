@@ -644,6 +644,32 @@ const AUTH_SWITCH_CSS = `
   font-weight: 400;
 }
 
+/* Achado do bug do quadrado azul: o autofill nativo do Chrome pinta o
+   <input> com um "-webkit-box-shadow: 0 0 0 1000px <azul claro> inset"
+   próprio do navegador, que nenhuma propriedade de background/CSS normal
+   consegue sobrescrever — só um box-shadow inset mais específico. Como
+   ".authswitch-input-field" é um grid de duas colunas (15% ícone / 85%
+   input) com fundo #f4f2ec, o autofill acaba pintando só a coluna do
+   input, criando o retângulo azul de duas cores visto no bug. Força o
+   inset a usar a MESMA cor de fundo do pill (dois valores, um por estado,
+   já que o wrapper muda de cor em :focus-within) — a transição gigante em
+   background-color é o truque padrão para o Chrome não "piscar" o azul
+   nativo antes de aplicar o override. */
+.authswitch-input-field input:-webkit-autofill,
+.authswitch-input-field input:-webkit-autofill:hover,
+.authswitch-input-field input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--brand-navy);
+  -webkit-box-shadow: 0 0 0px 1000px #f4f2ec inset;
+  box-shadow: 0 0 0px 1000px #f4f2ec inset;
+  transition: background-color 5000s ease-in-out 0s;
+}
+.authswitch-input-field input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--brand-navy);
+  -webkit-box-shadow: 0 0 0px 1000px #ece9e0 inset;
+  box-shadow: 0 0 0px 1000px #ece9e0 inset;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
 .authswitch-toggle-visibility {
   position: absolute;
   right: 0.6rem;

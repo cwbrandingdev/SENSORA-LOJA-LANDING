@@ -26,12 +26,30 @@ import {
   solicitarReembolsoMeuPedido,
 } from "@/services/pedidos";
 import { ROUTES } from "@/lib/routes";
-import { StatusPedido, type PedidoComItensDetalhado } from "@/lib/types/loja";
+import { StatusPedido, type Pedido, type PedidoComItensDetalhado } from "@/lib/types/loja";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
+
+// Etapa 6.5 (Frete) — o pedido só "tem endereço" para exibição quando os
+// campos essenciais do snapshot vieram preenchidos. Nunca renderiza um
+// endereço pela metade: pedidos legados (anteriores à Etapa 6.5) têm todos
+// esses campos ausentes (nunca parcialmente preenchidos), então esta
+// checagem já cobre os dois casos reais sem precisar de um caso "parcial"
+// artificial. `enderecoComplemento` fica de fora de propósito — é opcional
+// mesmo num endereço completo (ver Endereco.complemento).
+function possuiEnderecoCompleto(pedido: Pedido): boolean {
+  return Boolean(
+    pedido.enderecoCep &&
+      pedido.enderecoRua &&
+      pedido.enderecoNumero &&
+      pedido.enderecoBairro &&
+      pedido.enderecoCidade &&
+      pedido.enderecoEstado,
+  );
+}
 
 export default function MeuPedidoDetalhePage() {
   const { id } = useParams<{ id: string }>();
@@ -284,13 +302,31 @@ export default function MeuPedidoDetalhePage() {
             <h2 className="font-serif text-xl font-normal text-brand-navy">
               Endereço de entrega
             </h2>
-            {/* Achado da auditoria da Etapa 2: o schema de Pedido não
-                persiste qual endereço foi usado no checkout (decisão já
-                registrada na Task 15) — mostrar isso claramente em vez de
-                inventar um dado que o sistema não tem. */}
-            <p className="mt-3 text-sm text-slate-500">
-              Endereço de entrega não disponível para este pedido.
-            </p>
+            {/* Etapa 6.5 (Frete) — snapshot do endereço usado NESTE pedido
+                (Pedido.enderecoCep/Rua/Numero/..., preenchido pelo checkout
+                a partir da Etapa 6.5), nunca o cadastro atual do cliente —
+                um pedido antigo continua mostrando o mesmo endereço para
+                onde foi enviado, mesmo que o cliente edite/exclua o
+                endereço na conta depois. Pedidos anteriores à Etapa 6.5
+                nunca têm esses campos preenchidos — o fallback abaixo
+                preserva exatamente a mensagem que já existia para eles. */}
+            {possuiEnderecoCompleto(dados.pedido) ? (
+              <address className="mt-3 text-sm leading-relaxed text-slate-600 not-italic">
+                <p>
+                  {dados.pedido.enderecoRua}, {dados.pedido.enderecoNumero}
+                </p>
+                {dados.pedido.enderecoComplemento && <p>{dados.pedido.enderecoComplemento}</p>}
+                <p>{dados.pedido.enderecoBairro}</p>
+                <p>
+                  {dados.pedido.enderecoCidade} / {dados.pedido.enderecoEstado}
+                </p>
+                <p>CEP {dados.pedido.enderecoCep}</p>
+              </address>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500">
+                Endereço de entrega não disponível para este pedido.
+              </p>
+            )}
           </div>
         </RevealOnScroll>
       )}
