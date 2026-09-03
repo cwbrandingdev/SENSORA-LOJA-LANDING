@@ -88,7 +88,13 @@ export default function MeusPedidosPage() {
                         Pedido {pedido.numero}
                       </p>
                       <p className="text-sm text-slate-500">
-                        {new Date(pedido.data).toLocaleDateString("pt-BR")}
+                        {/* Achado da investigação do Editar pedido PENDENTE
+                            (Etapa 6.6, Lote 1/2) — `pedido.data` é meia-noite
+                            UTC; sem `timeZone: "UTC"`, toLocaleDateString
+                            converte para o fuso local do navegador e pode
+                            exibir o dia anterior. Mesma correção aplicada em
+                            components/tables/PedidoTable.tsx (Admin). */}
+                        {new Date(pedido.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
                       </p>
                     </div>
                     <div className="flex items-center gap-4">

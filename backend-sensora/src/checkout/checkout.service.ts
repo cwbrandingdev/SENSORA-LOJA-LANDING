@@ -109,6 +109,14 @@ export class CheckoutService {
     // banco a cada chamada (nunca um claim do JWT/valor vindo do frontend) —
     // usuariosService.findOne já busca fresco do Prisma, mesmo raciocínio de
     // JwtStrategy.validate() nunca confiar só no payload do token.
+    //
+    // Etapa "Dados do Cliente / Cadastro" (achado da auditoria) — este mesmo
+    // `usuario` é reaproveitado abaixo como fonte de Pedido.clienteNome: o
+    // frontend não envia mais nome nenhum (CreateCheckoutSessionDto não tem
+    // mais o campo `clienteNome`), então não há mais como o pedido nascer
+    // com um nome "chutado" a partir do e-mail. Nenhuma chamada extra a
+    // /usuarios/me é feita aqui — o registro já foi buscado por causa da
+    // checagem de e-mail verificado logo acima.
     const usuario = await this.usuariosService.findOne(usuarioId);
     if (!usuario.emailVerificado) {
       throw new ForbiddenException(
@@ -212,7 +220,10 @@ export class CheckoutService {
         status: StatusPedido.PENDENTE,
         total,
         clienteEmail: dto.clienteEmail,
-        clienteNome: dto.clienteNome,
+        // Etapa "Dados do Cliente / Cadastro" — nunca mais derivado do
+        // e-mail (ver comentário acima, na busca de `usuario`): sempre o
+        // nome real cadastrado, nunca algo enviado pelo frontend.
+        clienteNome: usuario.nome,
         usuarioId,
         // Etapa 6.5 (Frete), Parte 1 — snapshot do endereço usado NESTA
         // compra, copiado de `endereco` (nunca lido de volta de Endereco

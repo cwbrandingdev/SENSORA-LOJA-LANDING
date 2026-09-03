@@ -222,10 +222,18 @@ export default function MeuPedidoDetalhePage() {
                 Pedido {dados.pedido.numero}
               </p>
               <h1 className="mt-2 font-serif text-3xl font-normal tracking-tight text-brand-navy sm:text-4xl">
+                {/* Achado da investigação do Editar pedido PENDENTE (Etapa
+                    6.6, Lote 1/2) — `pedido.data` é meia-noite UTC; sem
+                    `timeZone: "UTC"`, toLocaleDateString converte para o
+                    fuso local do navegador e pode exibir o dia anterior.
+                    Mesma correção aplicada em
+                    components/tables/PedidoTable.tsx (Admin) e em
+                    /conta/pedidos (lista). */}
                 {new Date(dados.pedido.data).toLocaleDateString("pt-BR", {
                   day: "2-digit",
                   month: "long",
                   year: "numeric",
+                  timeZone: "UTC",
                 })}
               </h1>
             </div>

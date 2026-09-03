@@ -24,8 +24,13 @@ import { CheckoutService } from './checkout.service';
 // createSession (o Nest resolve o construtor inteiro, não só os métodos
 // exercitados pelo teste). Stub vazio ({}) é suficiente para elas; só as
 // suítes que chamam createSession precisam de um `findOne` de verdade.
+//
+// `nome` (Etapa "Dados do Cliente / Cadastro") — createSession agora usa
+// exatamente este campo como Pedido.clienteNome (ver teste "usa
+// Usuario.nome..." abaixo); mantido aqui, no mock compartilhado, para que
+// toda suíte que chega até a criação do pedido exercite o mesmo caminho.
 const usuariosServiceVerificado = {
-  findOne: jest.fn(() => ({ emailVerificado: true })),
+  findOne: jest.fn(() => ({ emailVerificado: true, nome: 'Cliente Sensora' })),
 };
 
 // Etapa 6.5 (Frete) — endereço/opção de frete "de verdade" reaproveitados
@@ -954,7 +959,6 @@ describe('CheckoutService — createSession: produto inativo (Task 16)', () => {
         {
           itens: [{ produtoId: 5, quantidade: 1 }],
           clienteEmail: 'cliente@sensora.dev',
-          clienteNome: 'Cliente',
           enderecoId: 1,
           freteServicoId: 1,
         },
@@ -1024,7 +1028,6 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
       {
         itens: [{ produtoId: 5, quantidade: 2 }],
         clienteEmail: 'cliente@sensora.dev',
-        clienteNome: 'Cliente',
         enderecoId: 1,
         freteServicoId: OPCAO_FRETE_FAKE.id,
       },
@@ -1038,6 +1041,9 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           total: 103.3,
+          // Etapa "Dados do Cliente / Cadastro" — Pedido.clienteNome agora
+          // vem de Usuario.nome (mock acima), nunca mais derivado do e-mail.
+          clienteNome: 'Cliente Sensora',
           enderecoCep: ENDERECO_FAKE.cep,
           enderecoRua: ENDERECO_FAKE.rua,
           enderecoNumero: ENDERECO_FAKE.numero,
@@ -1077,6 +1083,83 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
       sessionId: 'chk_abc',
       url: 'https://sandbox.asaas.com/checkoutSession/show/chk_abc',
     });
+  });
+
+  // Etapa "Dados do Cliente / Cadastro" (achado da auditoria) — prova
+  // diretamente a correção: Pedido.clienteNome usa Usuario.nome (buscado
+  // via UsuariosService.findOne, já necessário para a checagem de e-mail
+  // confirmado), nunca mais a parte local do e-mail
+  // ("thiago.freitas@sensora.dev".split("@")[0] === "thiago.freitas") —
+  // esse era o comportamento antigo que o CreateCheckoutSessionDto.clienteNome
+  // (removido) alimentava.
+  it('usa Usuario.nome como Pedido.clienteNome — nunca mais derivado da parte local do e-mail', async () => {
+    const pedidoCreate = jest.fn(() => ({ id: 99, numero: 'PED-2' }));
+    const pedidoUpdate = jest.fn();
+    const enderecosService = {
+      findOneForUsuario: jest.fn(() => ENDERECO_FAKE),
+    };
+    const produtosService = {
+      findOne: jest.fn(() => ({
+        id: 5,
+        nome: 'Vela de Lavanda',
+        ativo: true,
+        quantidade: 10,
+        preco: 39.9,
+      })),
+    };
+    const findOne = jest.fn(() => ({
+      emailVerificado: true,
+      nome: 'Thiago Freitas',
+    }));
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({
+                CHECKOUT_GATEWAY: 'asaas',
+                FRONTEND_URL: 'http://localhost:3001',
+              })[key as 'CHECKOUT_GATEWAY' | 'FRONTEND_URL'],
+          },
+        },
+        {
+          provide: PrismaService,
+          useValue: { pedido: { create: pedidoCreate, update: pedidoUpdate } },
+        },
+        { provide: ProdutosService, useValue: produtosService },
+        { provide: EnderecosService, useValue: enderecosService },
+        { provide: AsaasService, useValue: { criarCheckout: jest.fn(() => ({ id: 'chk_x', link: 'x', status: 'ACTIVE' })) } },
+        { provide: UsuariosService, useValue: { findOne } },
+        { provide: MelhorEnvioService, useValue: melhorEnvioServiceComOpcoes() },
+      ],
+    }).compile();
+    const service = module.get<CheckoutService>(CheckoutService);
+
+    await service.createSession(
+      {
+        itens: [{ produtoId: 5, quantidade: 1 }],
+        // "thiago.freitas@sensora.dev".split("@")[0] === "thiago.freitas" —
+        // se o bug antigo ainda existisse, seria isto que apareceria em
+        // clienteNome. O e-mail é deliberadamente diferente do nome real,
+        // para que a asserção abaixo não passe "por acidente".
+        clienteEmail: 'thiago.freitas@sensora.dev',
+        enderecoId: 1,
+        freteServicoId: OPCAO_FRETE_FAKE.id,
+      },
+      1,
+    );
+
+    expect(pedidoCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          clienteNome: 'Thiago Freitas',
+          clienteEmail: 'thiago.freitas@sensora.dev',
+        }),
+      }),
+    );
   });
 
   // Etapa 6.5 (Frete), teste D — cliente manda um `freteServicoId` que não
@@ -1124,7 +1207,6 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         {
           itens: [{ produtoId: 5, quantidade: 1 }],
           clienteEmail: 'cliente@sensora.dev',
-          clienteNome: 'Cliente',
           enderecoId: 1,
           freteServicoId: 999, // não existe em OPCAO_FRETE_FAKE
         },
@@ -1179,7 +1261,6 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         {
           itens: [{ produtoId: 5, quantidade: 1 }],
           clienteEmail: 'cliente@sensora.dev',
-          clienteNome: 'Cliente',
           enderecoId: 1,
           freteServicoId: 1,
         },
@@ -1229,7 +1310,6 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
         {
           itens: [{ produtoId: 5, quantidade: 1 }],
           clienteEmail: 'cliente@sensora.dev',
-          clienteNome: 'Cliente',
           enderecoId: 1,
           freteServicoId: 1,
         },
@@ -1265,7 +1345,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
       link: 'https://sandbox.asaas.com/checkoutSession/show/chk_verificado',
       status: 'ACTIVE',
     }));
-    const findOne = jest.fn(() => ({ emailVerificado: true }));
+    const findOne = jest.fn(() => ({ emailVerificado: true, nome: 'Cliente Verificado' }));
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -1297,7 +1377,6 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
       {
         itens: [{ produtoId: 5, quantidade: 1 }],
         clienteEmail: 'cliente@sensora.dev',
-        clienteNome: 'Cliente',
         enderecoId: 1,
         freteServicoId: OPCAO_FRETE_FAKE.id,
       },

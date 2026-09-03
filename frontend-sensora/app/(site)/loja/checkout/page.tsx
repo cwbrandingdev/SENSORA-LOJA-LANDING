@@ -234,13 +234,13 @@ export default function CheckoutPage() {
       return;
     }
 
-    // O JWT (Task 3/17 do backend) só carrega sub/email/perfil — não há
-    // `nome` nele nem nenhum endpoint self-service que um CLIENTE possa
-    // chamar para buscar o próprio nome (GET /usuarios/:id é ADMIN-only,
-    // GET /clientes é STAFF-only). Decisão registrada com o usuário: até
-    // isso ser resolvido no backend (ex.: incluir `nome` no JWT ou expor
-    // /auth/me), deriva um nome provisório da parte local do e-mail —
-    // limitação conhecida, não um bug desta task.
+    // O JWT (Task 3/17 do backend) só carrega sub/email/perfil — `clienteEmail`
+    // vem de decodeToken() por isso. `clienteNome` NÃO é mais enviado daqui
+    // (Etapa "Dados do Cliente / Cadastro", achado da auditoria): o backend
+    // usa Usuario.nome diretamente (CheckoutService.createSession já busca o
+    // usuário para checar e-mail confirmado) — antes deste ponto o nome do
+    // pedido era "chutado" a partir da parte local do e-mail, o que deixou
+    // de acontecer.
     const payload = decodeToken(getToken());
     if (!payload?.email) {
       router.replace(loginComRedirect(ROUTES.LOJA_CHECKOUT));
@@ -257,7 +257,6 @@ export default function CheckoutPage() {
           quantidade: item.quantidade,
         })),
         clienteEmail: payload.email,
-        clienteNome: payload.email.split("@")[0],
         enderecoId: enderecoSelecionadoId,
         freteServicoId: freteSelecionadoId,
       });

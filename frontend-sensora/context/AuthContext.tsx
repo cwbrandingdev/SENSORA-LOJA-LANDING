@@ -17,6 +17,12 @@ type AuthContextValue = {
   loading: boolean;
   perfil: PerfilUsuario | null;
   userId: number | null;
+  // Etapa 6.6 (Dashboard Admin) — já vinha decodificado do token em
+  // sincronizarComToken(), só não era exposto a quem consome o contexto.
+  // Usado pelo Header do Admin para identificar o usuário logado sem
+  // precisar de uma chamada nova a GET /usuarios/me (o JWT não carrega
+  // `nome`, só `email`/`perfil`/`sub`).
+  email: string | null;
   login: () => void;
   logout: () => void;
 };
@@ -29,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [perfil, setPerfil] = useState<PerfilUsuario | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
   const expiryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function limparTimerExpiracao() {
@@ -44,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(false);
     setPerfil(null);
     setUserId(null);
+    setEmail(null);
     router.push(ROUTES.LOGIN);
   }
 
@@ -63,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(Boolean(token));
     setPerfil(payload?.perfil ?? null);
     setUserId(payload?.sub ?? null);
+    setEmail(payload?.email ?? null);
 
     // Agenda o logout automático para o instante exato do `exp` — cobre o
     // caso do usuário parado numa tela sem disparar nenhuma chamada de API
@@ -89,7 +98,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, loading, perfil, userId, login, logout }}>
+    <AuthContext.Provider
+      value={{ isAuthenticated, loading, perfil, userId, email, login, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

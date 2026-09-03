@@ -7,17 +7,22 @@ import { PRODUCT_CATEGORIES } from "@/lib/content";
 // Hierarquia editorial do grid: o primeiro item (com foto real) ganha
 // destaque em 2x2; os demais se distribuem em torno dele, sem sobrar
 // espaço vazio na malha de 4 colunas x 2 linhas do desktop.
-const CATEGORY_LAYOUT: Record<number, { wrapper: string; title: string; sizes: string }> = {
+const CATEGORY_LAYOUT: Record<
+  number,
+  { wrapper: string; title: string; sizes: string }
+> = {
   0: {
     wrapper: "lg:col-span-2 lg:row-span-2 lg:aspect-auto lg:h-full",
     title: "text-2xl sm:text-3xl",
     // Célula dupla (2 colunas + 1 gap) a partir do lg; grid-cols-2 abaixo disso.
-    sizes: "(max-width: 639px) calc(100vw - 48px), (max-width: 1023px) calc(50vw - 36px), (max-width: 1280px) calc(50vw - 52px), 588px",
+    sizes:
+      "(max-width: 639px) calc(100vw - 48px), (max-width: 1023px) calc(50vw - 36px), (max-width: 1280px) calc(50vw - 52px), 588px",
   },
   1: {
     wrapper: "lg:col-span-2 lg:aspect-[16/9]",
     title: "text-xl",
-    sizes: "(max-width: 639px) calc(100vw - 48px), (max-width: 1023px) calc(50vw - 36px), (max-width: 1280px) calc(50vw - 52px), 588px",
+    sizes:
+      "(max-width: 639px) calc(100vw - 48px), (max-width: 1023px) calc(50vw - 36px), (max-width: 1280px) calc(50vw - 52px), 588px",
   },
 };
 
@@ -41,7 +46,9 @@ export default function ProductCategories() {
             id="produtos-heading"
             className="mt-4 font-serif text-3xl font-normal text-brand-navy sm:text-4xl"
           >
-            <TextReveal>Uma experiência sensorial para cada ambiente</TextReveal>
+            <TextReveal>
+              Uma experiência sensorial para cada ambiente
+            </TextReveal>
           </h2>
         </RevealOnScroll>
 

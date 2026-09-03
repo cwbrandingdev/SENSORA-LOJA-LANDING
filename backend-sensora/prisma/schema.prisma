@@ -35,6 +35,19 @@ model Usuario {
   // a possibilidade de um token de um fluxo ser aceito no outro.
   emailVerificationHash   String?        @unique
   emailVerificationExpiry DateTime?
+  // Etapa — Dados do Cliente / Cadastro. Ambos opcionais (nunca exigidos no
+  // cadastro público, só preenchíveis depois em Minha Conta — ver
+  // AtualizarMeusDadosDto). Sempre normalizados antes de persistir (só
+  // dígitos, sem pontuação/máscara — ver CpfUtil/TelefoneUtil em
+  // usuarios.service.ts), nunca o valor formatado que o usuário digitou.
+  // `cpf` é @unique: é identificador de pessoa física, uma duplicidade
+  // silenciosa atrapalharia qualquer reconciliação futura (fiscal,
+  // antifraude). `telefone` deliberadamente SEM @unique — é dado de
+  // contato, comumente compartilhado entre pessoas (família/empresa),
+  // um unique aqui geraria fricção sem ganho de segurança real (ver
+  // auditoria "Dados do Cliente / Cadastro").
+  cpf                     String?        @unique
+  telefone                String?
   refreshTokens           RefreshToken[]
   pedidos                 Pedido[]
   enderecos               Endereco[]

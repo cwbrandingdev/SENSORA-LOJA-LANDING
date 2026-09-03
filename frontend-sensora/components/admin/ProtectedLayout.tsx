@@ -7,7 +7,7 @@
 // ADMIN/VENDEDOR (STAFF_ROLES) passam; CLIENTE vai para a loja. O backend
 // (RolesGuard) continua sendo a autoridade real; isto é defesa em
 // profundidade na camada visual.
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { ROUTES } from "@/lib/routes";
@@ -19,6 +19,10 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const { isAuthenticated, loading, perfil } = useAuth();
   const autorizado = isAuthenticated && perfil !== null && STAFF_ROLES.includes(perfil);
+  // Etapa 6.6 (Dashboard Admin) — único ponto de verdade sobre a gaveta
+  // mobile da Sidebar: Header dispara a abertura (botão hambúrguer),
+  // Sidebar decide quando fechar (overlay, Escape, troca de rota).
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -44,10 +48,10 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen flex-1 flex-col">
-      <Header />
+      <Header onMenuClick={() => setMobileMenuOpen(true)} />
       <div className="flex flex-1">
-        <Sidebar />
-        <main className="flex-1 bg-background p-6">{children}</main>
+        <Sidebar open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
+        <main className="min-w-0 flex-1 bg-background p-4 sm:p-6">{children}</main>
       </div>
     </div>
   );

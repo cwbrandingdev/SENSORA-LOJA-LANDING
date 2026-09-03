@@ -1,11 +1,17 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import type { Usuario as UsuarioPrisma } from '../../generated/prisma/client';
+import {
+  Prisma,
+  type Usuario as UsuarioPrisma,
+} from '../../generated/prisma/client';
+import { cpfValido, normalizarCpf } from '../common/utils/cpf.util';
+import { normalizarTelefone, telefoneValido } from '../common/utils/telefone.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AtualizarMeusDadosDto } from './dto/atualizar-meus-dados.dto';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
@@ -71,17 +77,44 @@ export class UsuariosService {
       createUsuarioDto.senha,
       SALT_ROUNDS,
     );
-    const usuario = await this.prisma.usuario.create({
-      data: {
-        ...createUsuarioDto,
-        senha: senhaCriptografada,
-        ativo: createUsuarioDto.ativo ?? true,
-        ...(opcoes?.emailVerificado !== undefined && {
-          emailVerificado: opcoes.emailVerificado,
-        }),
-      },
-    });
-    return this.paraPublico(usuario);
+    const { cpf, telefone, ...rest } = createUsuarioDto;
+
+    const data: Prisma.UsuarioCreateInput = {
+      ...rest,
+      senha: senhaCriptografada,
+      ativo: createUsuarioDto.ativo ?? true,
+      ...(opcoes?.emailVerificado !== undefined && {
+        emailVerificado: opcoes.emailVerificado,
+      }),
+    };
+
+    // Etapa "Dados do Cliente / Cadastro" (fechamento administrativo) —
+    // criação ainda não tem id próprio, então a checagem de duplicidade em
+    // normalizarEValidarCpfParaUsuario recebe `null`: qualquer CPF já
+    // cadastrado por OUTRO usuário vira conflito (nunca há "o próprio
+    // usuário mantendo o CPF que já tinha" numa criação).
+    if (cpf !== undefined) {
+      data.cpf = await this.normalizarEValidarCpfParaUsuario(null, cpf);
+    }
+    if (telefone !== undefined) {
+      data.telefone = this.normalizarEValidarTelefone(telefone);
+    }
+
+    try {
+      const usuario = await this.prisma.usuario.create({ data });
+      return this.paraPublico(usuario);
+    } catch (erro) {
+      // Mesma proteção contra corrida de atualizarMeusDados: o findUnique
+      // dentro de normalizarEValidarCpfParaUsuario não é atômico com este
+      // create.
+      if (
+        erro instanceof Prisma.PrismaClientKnownRequestError &&
+        erro.code === 'P2002'
+      ) {
+        throw new ConflictException('Este CPF já está em uso por outra conta.');
+      }
+      throw erro;
+    }
   }
 
   async update(
@@ -89,46 +122,146 @@ export class UsuariosService {
     updateUsuarioDto: UpdateUsuarioDto,
   ): Promise<UsuarioPublico> {
     await this.localizar(id);
-    const { senha, ...rest } = updateUsuarioDto;
+    const { senha, cpf, telefone, ...rest } = updateUsuarioDto;
 
-    const usuario = await this.prisma.usuario.update({
-      where: { id },
-      data: {
-        ...rest,
-        ...(senha !== undefined && {
-          senha: await bcrypt.hash(senha, SALT_ROUNDS),
-        }),
-      },
-    });
+    const data: Prisma.UsuarioUpdateInput = { ...rest };
 
-    // Achado da auditoria (revogação de sessão após troca de senha): uma
-    // troca administrativa de senha só é uma medida de segurança de verdade
-    // se também encerrar sessões já emitidas com a senha antiga — sem isso,
-    // um refresh token já roubado continuaria valendo normalmente.
     if (senha !== undefined) {
-      await this.revogarTodosRefreshTokensAtivos(id);
+      data.senha = await bcrypt.hash(senha, SALT_ROUNDS);
+    }
+    if (cpf !== undefined) {
+      data.cpf = await this.normalizarEValidarCpfParaUsuario(id, cpf);
+    }
+    if (telefone !== undefined) {
+      data.telefone = this.normalizarEValidarTelefone(telefone);
     }
 
-    return this.paraPublico(usuario);
+    try {
+      const usuario = await this.prisma.usuario.update({ where: { id }, data });
+
+      // Achado da auditoria (revogação de sessão após troca de senha): uma
+      // troca administrativa de senha só é uma medida de segurança de
+      // verdade se também encerrar sessões já emitidas com a senha antiga —
+      // sem isso, um refresh token já roubado continuaria valendo
+      // normalmente.
+      if (senha !== undefined) {
+        await this.revogarTodosRefreshTokensAtivos(id);
+      }
+
+      return this.paraPublico(usuario);
+    } catch (erro) {
+      if (
+        erro instanceof Prisma.PrismaClientKnownRequestError &&
+        erro.code === 'P2002'
+      ) {
+        throw new ConflictException('Este CPF já está em uso por outra conta.');
+      }
+      throw erro;
+    }
   }
 
-  // Etapa 3 (Minha Conta / Dados Pessoais) — autoatendimento: reaproveita
-  // update() sem duplicar a lógica (localizar/mapear para público), só
-  // acrescenta a checagem de duplicidade de e-mail que update() nunca teve
-  // (PUT /usuarios/:id administrativo tinha essa mesma lacuna — sem este
-  // pre-check, uma colisão de e-mail estourava um erro do Prisma não
-  // tratado, virando 500 genérico em vez de um 409 claro). Mesmo padrão já
-  // usado em AuthService.register(). `existente.id !== id`: o próprio
-  // usuário mantendo o e-mail que já tinha não é duplicidade.
+  // Etapa 3 (Minha Conta / Dados Pessoais) + Etapa "Dados do Cliente /
+  // Cadastro" (cpf/telefone) — autoatendimento. Não reaproveita update()
+  // aqui porque AtualizarMeusDadosDto é uma whitelist deliberadamente mais
+  // restrita (nunca perfil/ativo/senha — ver comentário no próprio DTO), não
+  // porque update() careça de suporte a cpf/telefone: desde o fechamento
+  // administrativo desta etapa, create()/update() também validam/normalizam/
+  // checam duplicidade de CPF através dos mesmos helpers privados abaixo
+  // (normalizarEValidarCpfParaUsuario/normalizarEValidarTelefone). Mesma
+  // checagem de duplicidade de e-mail de sempre (`existente.id !== id`: o
+  // próprio usuário mantendo o e-mail que já tinha não é duplicidade) — o
+  // mesmo raciocínio é aplicado ao CPF logo abaixo, em
+  // normalizarEValidarCpfParaUsuario.
   async atualizarMeusDados(
     id: number,
     dto: AtualizarMeusDadosDto,
   ): Promise<UsuarioPublico> {
+    await this.localizar(id);
+
     const existente = await this.buscarPorEmail(dto.email);
     if (existente && existente.id !== id) {
       throw new ConflictException('Este e-mail já está em uso por outra conta.');
     }
-    return this.update(id, dto);
+
+    const data: Prisma.UsuarioUpdateInput = {
+      nome: dto.nome,
+      email: dto.email,
+    };
+
+    if (dto.cpf !== undefined) {
+      data.cpf = await this.normalizarEValidarCpfParaUsuario(id, dto.cpf);
+    }
+
+    if (dto.telefone !== undefined) {
+      data.telefone = this.normalizarEValidarTelefone(dto.telefone);
+    }
+
+    try {
+      const usuario = await this.prisma.usuario.update({ where: { id }, data });
+      return this.paraPublico(usuario);
+    } catch (erro) {
+      // Proteção adicional contra corrida (item 6 da etapa): a checagem de
+      // duplicidade acima (findUnique) não é atômica com este update — duas
+      // requisições simultâneas definindo o MESMO CPF novo podem ambas
+      // passar por ela antes de qualquer uma escrever. O @unique do
+      // Postgres é quem resolve de verdade (só uma das duas escritas
+      // sucede); aqui só traduzimos o P2002 resultante numa mensagem de
+      // negócio clara em vez de deixar vazar como 500 genérico.
+      if (
+        erro instanceof Prisma.PrismaClientKnownRequestError &&
+        erro.code === 'P2002'
+      ) {
+        throw new ConflictException('Este CPF já está em uso por outra conta.');
+      }
+      throw erro;
+    }
+  }
+
+  // CPF vazio ("") limpa o campo (volta a null) — é como o formulário de
+  // Minha Conta remove um CPF já cadastrado. Validação de verdade (dígitos
+  // verificadores) via CpfUtil; duplicidade checada explicitamente aqui
+  // (além do @unique do schema, que só entra em ação na escrita — ver P2002
+  // acima) para devolver um 409 com mensagem clara em vez do erro cru do
+  // Prisma no caminho feliz (sem corrida). `usuarioId: null` identifica uma
+  // criação (create() — ainda não existe id próprio): qualquer usuário
+  // encontrado com este CPF é necessariamente outra conta, já que
+  // `usuarioComEsteCpf.id` (number) nunca é `=== null`.
+  private async normalizarEValidarCpfParaUsuario(
+    usuarioId: number | null,
+    cpfInformado: string,
+  ): Promise<string | null> {
+    if (cpfInformado.trim() === '') {
+      return null;
+    }
+
+    if (!cpfValido(cpfInformado)) {
+      throw new BadRequestException('CPF inválido.');
+    }
+
+    const cpfNormalizado = normalizarCpf(cpfInformado);
+
+    const usuarioComEsteCpf = await this.prisma.usuario.findUnique({
+      where: { cpf: cpfNormalizado },
+    });
+    if (usuarioComEsteCpf && usuarioComEsteCpf.id !== usuarioId) {
+      throw new ConflictException('Este CPF já está em uso por outra conta.');
+    }
+
+    return cpfNormalizado;
+  }
+
+  // Telefone vazio ("") limpa o campo. Sem checagem de duplicidade (nunca é
+  // @unique — ver schema.prisma).
+  private normalizarEValidarTelefone(telefoneInformado: string): string | null {
+    if (telefoneInformado.trim() === '') {
+      return null;
+    }
+
+    if (!telefoneValido(telefoneInformado)) {
+      throw new BadRequestException('Telefone inválido.');
+    }
+
+    return normalizarTelefone(telefoneInformado);
   }
 
   // Etapa 3 (Minha Conta / Segurança) — troca de senha autoatendida. Exige a
@@ -344,6 +477,8 @@ export class UsuariosService {
       perfil: usuario.perfil as PerfilUsuario,
       ativo: usuario.ativo,
       emailVerificado: usuario.emailVerificado,
+      cpf: usuario.cpf,
+      telefone: usuario.telefone,
     };
   }
 }

@@ -9,6 +9,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import FormButton from "@/components/ui/FormButton";
+import { cpfValido, formatarCpf } from "@/lib/cpf";
+import { formatarTelefone, telefoneValido } from "@/lib/telefone";
 import { PerfilUsuario, type Usuario } from "@/lib/types/loja";
 
 const inputClass =
@@ -20,6 +22,12 @@ type UserFormValues = {
   nome: string;
   email: string;
   senha: string;
+  // Etapa "Dados do Cliente / Cadastro" (fechamento administrativo) —
+  // opcionais, mesmo contrato do form de Minha Conta: string vazia é um
+  // valor válido (limpa o campo já salvo), só valida de verdade quando algo
+  // foi digitado.
+  cpf: string;
+  telefone: string;
   perfil: PerfilUsuario;
   ativo: boolean;
 };
@@ -29,6 +37,8 @@ function toDefaultValues(usuario?: Usuario): UserFormValues {
     nome: usuario?.nome ?? "",
     email: usuario?.email ?? "",
     senha: "",
+    cpf: usuario?.cpf ?? "",
+    telefone: usuario?.telefone ?? "",
     perfil: usuario?.perfil ?? PerfilUsuario.CLIENTE,
     ativo: usuario?.ativo ?? true,
   };
@@ -55,6 +65,16 @@ export default function UserForm({ initialData, onSubmit, onCancel }: UserFormPr
           .string()
           .min(1, "Senha é obrigatória")
           .min(6, "A senha deve ter no mínimo 6 caracteres"),
+    cpf: z
+      .string()
+      .refine((valor) => valor.trim() === "" || cpfValido(valor), {
+        message: "CPF inválido",
+      }),
+    telefone: z
+      .string()
+      .refine((valor) => valor.trim() === "" || telefoneValido(valor), {
+        message: "Telefone inválido",
+      }),
     perfil: z.nativeEnum(PerfilUsuario),
     ativo: z.boolean(),
   });
@@ -97,6 +117,46 @@ export default function UserForm({ initialData, onSubmit, onCancel }: UserFormPr
           {...register("email")}
         />
         {errors.email && <p className={errorClass}>{errors.email.message}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="cpf" className={labelClass}>
+          CPF
+        </label>
+        <input
+          id="cpf"
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="000.000.000-00"
+          className={inputClass}
+          {...register("cpf", {
+            onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
+              event.target.value = formatarCpf(event.target.value);
+            },
+          })}
+        />
+        {errors.cpf && <p className={errorClass}>{errors.cpf.message}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="telefone" className={labelClass}>
+          Telefone
+        </label>
+        <input
+          id="telefone"
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="(00) 00000-0000"
+          className={inputClass}
+          {...register("telefone", {
+            onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
+              event.target.value = formatarTelefone(event.target.value);
+            },
+          })}
+        />
+        {errors.telefone && <p className={errorClass}>{errors.telefone.message}</p>}
       </div>
 
       <div className="flex flex-col gap-1">

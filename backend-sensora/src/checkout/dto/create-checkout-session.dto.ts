@@ -4,7 +4,6 @@ import {
   IsInt,
   IsNotEmpty,
   IsPositive,
-  IsString,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -30,10 +29,13 @@ export class CreateCheckoutSessionDto {
   @IsNotEmpty()
   clienteEmail: string;
 
-  @IsString()
-  @IsNotEmpty()
-  clienteNome: string;
-
+  // Etapa "Dados do Cliente / Cadastro" (achado da auditoria) — `clienteNome`
+  // foi removido deste DTO de propósito: o nome do pedido nunca mais vem do
+  // frontend (antes, a Loja mandava a parte local do e-mail como "nome
+  // provisório" — ver histórico do arquivo). CheckoutService.createSession
+  // agora usa Usuario.nome (já buscado ali mesmo, para a checagem de
+  // e-mail confirmado), o mesmo princípio já aplicado a preço/estoque/frete:
+  // nunca confiar em dado do cliente quando o backend já tem a fonte real.
   @IsInt()
   @IsPositive()
   enderecoId: number;

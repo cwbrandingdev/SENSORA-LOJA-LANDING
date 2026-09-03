@@ -213,10 +213,14 @@ export type CheckoutItemPayload = {
 // services/frete.ts), nunca preço/prazo: o backend recotiza e valida esta
 // opção antes de aceitar o pedido (mesmo raciocínio de nunca confiar em
 // preço/estoque de produto vindo do frontend).
+// Etapa "Dados do Cliente / Cadastro" (achado da auditoria) — `clienteNome`
+// removido deste payload de propósito: o backend agora usa Usuario.nome
+// (buscado no próprio CheckoutService.createSession), nunca mais um nome
+// enviado pelo frontend — mesmo raciocínio de nunca confiar em preço/
+// estoque/frete vindos do cliente, aplicado aqui pela primeira vez ao nome.
 export type CriarSessaoCheckoutPayload = {
   itens: CheckoutItemPayload[];
   clienteEmail: string;
-  clienteNome: string;
   enderecoId: number;
   freteServicoId: number;
 };
@@ -360,6 +364,11 @@ export type Usuario = {
   // estado real no banco a cada tentativa, nunca confia neste valor vindo
   // daqui). Ver backend/src/usuarios/entities/usuario.entity.ts.
   emailVerificado: boolean;
+  // Etapa "Dados do Cliente / Cadastro" — ambos opcionais/nuláveis, sempre
+  // normalizados (só dígitos, sem máscara) quando presentes. `null` = nunca
+  // preenchido.
+  cpf: string | null;
+  telefone: string | null;
 };
 
 // Etapa 6.4 (Confirmação de e-mail) — espelha VerifyEmailDto/
@@ -372,13 +381,18 @@ export type ResendVerificationPayload = {
   email: string;
 };
 
-// Etapa 3 (Minha Conta / Dados Pessoais) — espelha AtualizarMeusDadosDto
-// (backend/src/usuarios/dto/atualizar-meus-dados.dto.ts). Whitelist restrita
-// de propósito: só nome/email, nunca perfil/ativo/senha/id — ver GET/PUT
-// /usuarios/me em services/conta.ts.
+// Etapa 3 (Minha Conta / Dados Pessoais) + Etapa "Dados do Cliente /
+// Cadastro" (cpf/telefone) — espelha AtualizarMeusDadosDto (backend/src/
+// usuarios/dto/atualizar-meus-dados.dto.ts). Whitelist restrita de
+// propósito: nunca perfil/ativo/senha/id — ver GET/PUT /usuarios/me em
+// services/conta.ts. cpf/telefone opcionais: omitir o campo não altera o
+// valor já salvo; string vazia ("") limpa o campo (ver
+// UsuariosService.atualizarMeusDados, backend).
 export type AtualizarMeusDadosPayload = {
   nome: string;
   email: string;
+  cpf?: string;
+  telefone?: string;
 };
 
 // Etapa 3 (Minha Conta / Segurança) — espelha AlterarMinhaSenhaDto
@@ -392,12 +406,17 @@ export type MessageResponse = {
   message: string;
 };
 
+// Etapa "Dados do Cliente / Cadastro" (fechamento administrativo) — cpf/
+// telefone opcionais, mesmo contrato de AtualizarMeusDadosPayload: omitir o
+// campo não altera o valor já salvo (edição); string vazia limpa o campo.
 export type CreateUsuarioPayload = {
   nome: string;
   email: string;
   senha: string;
   perfil: PerfilUsuario;
   ativo?: boolean;
+  cpf?: string;
+  telefone?: string;
 };
 
 export type UpdateUsuarioPayload = Partial<CreateUsuarioPayload>;

@@ -40,6 +40,26 @@ async function seedSession(page: Page, perfil: "ADMIN" | "VENDEDOR" | "CLIENTE")
   );
 }
 
+// Etapa 6.6 (Dashboard Admin, Lote 2) — /admin passou a chamar GET
+// /pedidos, /produtos e /categorias (ver app/admin/page.tsx). Sem mockar
+// essas três rotas, os testes abaixo que navegam para DASHBOARD_URL cairiam
+// no backend real (token fake → 401), disparando o redirect automático do
+// interceptor de services/api.ts NO MEIO do teste — não tem relação com o
+// que esta suíte testa (guarda ADMIN-only de Integrações), por isso só
+// neutralizamos com listas vazias, sem validar o conteúdo dos cards aqui
+// (isso é coberto em e2e/admin-dashboard-dados.spec.ts).
+async function mockDashboardApisVazias(page: Page) {
+  for (const rota of ["pedidos", "produtos", "categorias"]) {
+    await page.route(`**/${rota}`, async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({ json: [] });
+        return;
+      }
+      await route.continue();
+    });
+  }
+}
+
 async function mockTodosOsStatus(
   page: Page,
   opts?: {
@@ -79,6 +99,7 @@ test.describe("Admin — Central de Integrações: acesso ADMIN-only", () => {
   test("VENDEDOR é redirecionado para o Dashboard ao tentar acessar /admin/integracoes diretamente", async ({
     page,
   }) => {
+    await mockDashboardApisVazias(page);
     await seedSession(page, "VENDEDOR");
     const chamadasDeStatus: string[] = [];
     page.on("request", (request) => {
@@ -113,6 +134,7 @@ test.describe("Admin — Central de Integrações: acesso ADMIN-only", () => {
   });
 
   test("VENDEDOR não vê o item 'Integrações' na sidebar; ADMIN vê", async ({ page }) => {
+    await mockDashboardApisVazias(page);
     await seedSession(page, "VENDEDOR");
     await page.goto(DASHBOARD_URL);
     await expect(page.getByRole("link", { name: "Integrações" })).toHaveCount(0);
@@ -230,6 +252,7 @@ test.describe("Admin — Central de Integrações: os 4 cards", () => {
 
 test.describe("Admin — Central de Integrações: Dashboard", () => {
   test("Dashboard não exibe mais o card/seção do Melhor Envio", async ({ page }) => {
+    await mockDashboardApisVazias(page);
     await seedSession(page, "ADMIN");
     await page.goto(DASHBOARD_URL);
 

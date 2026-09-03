@@ -612,7 +612,10 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
         { produtoId: 202, quantidade: 1 },
       ],
       clienteEmail: "cliente@sensora.dev",
-      clienteNome: "cliente",
+      // Etapa "Dados do Cliente / Cadastro" (achado da auditoria) —
+      // `clienteNome` não é mais enviado pelo frontend: o backend usa
+      // Usuario.nome diretamente (nunca mais "chutado" a partir da parte
+      // local do e-mail).
       enderecoId: ENDERECO_PADRAO.id,
       // Etapa 6.5 (Frete) — única opção mockada (OPCAO_FRETE_PADRAO), já
       // auto-selecionada pela página (mesmo padrão de UX do endereço).

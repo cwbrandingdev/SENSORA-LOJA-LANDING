@@ -19,6 +19,8 @@ type UsuarioFormSubmit = {
   nome: string;
   email: string;
   senha: string;
+  cpf: string;
+  telefone: string;
   perfil: PerfilUsuario;
   ativo: boolean;
 };

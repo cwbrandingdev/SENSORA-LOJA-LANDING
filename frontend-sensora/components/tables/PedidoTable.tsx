@@ -42,7 +42,14 @@ export default function PedidoTable({ pedidos, onEdit, onRemove }: PedidoTablePr
             <tr key={pedido.id} className="border-t border-slate-200 hover:bg-slate-50">
               <td className="px-4 py-2">{pedido.numero}</td>
               <td className="px-4 py-2">
-                {new Date(pedido.data).toLocaleDateString("pt-BR")}
+                {/* Achado da investigação (Editar pedido PENDENTE, Etapa
+                    6.6) — `pedido.data` é meia-noite UTC; sem `timeZone:
+                    "UTC"` aqui, toLocaleDateString converte para o fuso
+                    local (ex.: America/Sao_Paulo, UTC-3) e exibe o dia
+                    anterior, divergindo do valor real salvo (e do que o
+                    próprio formulário de edição mostra, que lê a string ISO
+                    diretamente sem passar por Date). */}
+                {new Date(pedido.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
               </td>
               <td className="px-4 py-2">{pedido.status}</td>
               <td className="px-4 py-2">{pedido.total}</td>
