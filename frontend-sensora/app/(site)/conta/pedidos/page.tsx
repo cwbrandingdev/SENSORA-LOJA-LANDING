@@ -18,7 +18,7 @@ import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import { listarMeusPedidos } from "@/services/pedidos";
 import { ROUTES } from "@/lib/routes";
-import type { Pedido } from "@/lib/types/loja";
+import { StatusEnvio, StatusPedido, type Pedido } from "@/lib/types/loja";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -96,6 +96,17 @@ export default function MeusPedidosPage() {
                             components/tables/PedidoTable.tsx (Admin). */}
                         {new Date(pedido.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
                       </p>
+                      {/* Etapa 6.6 (Status de Envio) — eixo logístico,
+                          mostrado só para pedidos PAGO (para os demais
+                          status, "aguardando envio" não faz sentido e o
+                          badge de status financeiro já é suficiente). */}
+                      {pedido.status === StatusPedido.PAGO && (
+                        <p className="mt-1 text-xs font-medium text-slate-500">
+                          {pedido.statusEnvio === StatusEnvio.ENVIADO
+                            ? "🚚 Enviado"
+                            : "📦 Aguardando envio"}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-4">
                       <StatusPedidoBadge status={pedido.status} />

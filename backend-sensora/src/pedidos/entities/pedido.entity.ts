@@ -1,3 +1,4 @@
+import { StatusEnvio } from '../enums/status-envio.enum';
 import { StatusPedido } from '../enums/status-pedido.enum';
 
 export class Pedido {
@@ -21,4 +22,10 @@ export class Pedido {
   freteTransportadora?: string;
   freteServico?: string;
   fretePrazoDias?: number;
+
+  // Etapa 6.6 (Status de Envio) — eixo logístico, independente de `status`
+  // (financeiro/Asaas). `statusEnvio` sempre presente (default NAO_ENVIADO
+  // no schema); `enviadoEm` só é preenchido quando `statusEnvio === ENVIADO`.
+  statusEnvio: StatusEnvio;
+  enviadoEm?: Date;
 }

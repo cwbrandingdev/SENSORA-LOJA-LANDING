@@ -1,21 +1,23 @@
 "use client";
 
+// Etapa 8.1 (complemento — eliminação da venda manual) — esta página não
+// permite mais adicionar itens a um pedido. "Adicionar item" foi removido
+// de propósito: a Sensora não tem venda manual, então não existe mais forma
+// de montar uma venda item a item pela área administrativa (os itens de um
+// pedido nascem exclusivamente do Checkout). O que resta aqui é só
+// gerenciamento de itens já existentes (corrigir quantidade/produto,
+// remover) — nunca criar um item novo do zero.
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { isAxiosError } from "axios";
 import ItemPedidoTable from "@/components/tables/ItemPedidoTable";
 import ItemPedidoForm, { type ItemPedidoFormValues } from "@/components/forms/ItemPedidoForm";
-import FormButton from "@/components/ui/FormButton";
 import EmptyState from "@/components/ui/EmptyState";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import { buscarPedidoComItens, atualizarPedido } from "@/services/pedidos";
-import {
-  criarItemPedido,
-  atualizarItemPedido,
-  removerItemPedido,
-} from "@/services/itensPedido";
+import { atualizarItemPedido, removerItemPedido } from "@/services/itensPedido";
 import { listarProdutos } from "@/services/produtos";
 import { ROUTES } from "@/lib/routes";
 import type { Pedido, ItemPedido, Produto } from "@/lib/types/loja";
@@ -81,18 +83,13 @@ export default function PedidoDetalhePage() {
   }, [pedidoId]);
 
   async function handleSubmit(data: ItemPedidoFormValues) {
-    const editando = Boolean(editingItem);
+    if (!editingItem) return;
+
     try {
-      if (editingItem) {
-        await atualizarItemPedido(editingItem.id, data);
-      } else {
-        await criarItemPedido({ ...data, pedidoId });
-      }
+      await atualizarItemPedido(editingItem.id, data);
       setShowForm(false);
       setEditingItem(undefined);
-      toast.success(
-        editando ? "Item do pedido atualizado com sucesso." : "Item adicionado ao pedido com sucesso.",
-      );
+      toast.success("Item do pedido atualizado com sucesso.");
       await carregarPedido();
     } catch (err) {
       // getErrorMessage preserva mensagens específicas do backend (estoque
@@ -124,11 +121,6 @@ export default function PedidoDetalhePage() {
     }
   }
 
-  function handleNovoItem() {
-    setEditingItem(undefined);
-    setShowForm(true);
-  }
-
   function handleCancel() {
     setShowForm(false);
     setEditingItem(undefined);
@@ -155,21 +147,16 @@ export default function PedidoDetalhePage() {
         <p className="text-sm text-slate-500">Carregando pedido...</p>
       ) : (
         <>
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-brand-navy">
-                Pedido {pedido.numero}
-              </h2>
-              <p className="text-sm text-slate-600">
-                Status: {pedido.status} · Total: {pedido.total}
-              </p>
-            </div>
-            <FormButton variant="primary" onClick={handleNovoItem}>
-              Adicionar item
-            </FormButton>
+          <div>
+            <h2 className="text-xl font-semibold text-brand-navy">
+              Pedido {pedido.numero}
+            </h2>
+            <p className="text-sm text-slate-600">
+              Status: {pedido.status} · Total: {pedido.total}
+            </p>
           </div>
 
-          {showForm && (
+          {showForm && editingItem && (
             <ItemPedidoForm
               produtos={produtos}
               initialData={editingItem}

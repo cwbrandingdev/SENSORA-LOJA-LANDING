@@ -7,7 +7,6 @@ import {
   HttpStatus,
   Param,
   ParseIntPipe,
-  Post,
   Put,
   UseGuards,
 } from '@nestjs/common';
@@ -17,7 +16,6 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { STAFF_ROLES } from '../common/constants/roles.constants';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { CreateItemPedidoDto } from './dto/create-item-pedido.dto';
 import { UpdateItemPedidoDto } from './dto/update-item-pedido.dto';
 import { ItemPedido } from './entities/item-pedido.entity';
 import { ItensPedidoService } from './itens-pedido.service';
@@ -41,15 +39,14 @@ export class ItensPedidoController {
     return this.itensPedidoService.findOne(id, user);
   }
 
-  @Post()
-  @HttpCode(HttpStatus.CREATED)
-  create(
-    @Body() createItemPedidoDto: CreateItemPedidoDto,
-    @CurrentUser() user: UsuarioAutenticado,
-  ): Promise<ItemPedido> {
-    return this.itensPedidoService.create(createItemPedidoDto, user);
-  }
-
+  // Etapa 8.1 (complemento — eliminação da venda manual) — POST
+  // /itens-pedido foi removido de propósito: não existe mais montagem
+  // administrativa de venda item a item. Os itens de um Pedido nascem
+  // exclusivamente dentro de CheckoutService.createSession (gravados via
+  // Prisma junto com o próprio Pedido, nunca por aqui). O que resta neste
+  // controller é só gerenciamento de itens já existentes de um pedido
+  // ainda PENDENTE (corrigir quantidade/produto, remover) — nunca criar um
+  // item novo do zero.
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,

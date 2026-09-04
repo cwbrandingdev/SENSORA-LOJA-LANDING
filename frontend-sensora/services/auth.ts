@@ -5,10 +5,12 @@
 import api from "./api";
 import type {
   AuthResponse,
+  ForgotPasswordPayload,
   LoginPayload,
   MessageResponse,
   RegisterPayload,
   ResendVerificationPayload,
+  ResetPasswordPayload,
   Usuario,
   VerifyEmailPayload,
 } from "@/lib/types/loja";
@@ -34,5 +36,23 @@ export async function resendVerification(
   data: ResendVerificationPayload,
 ): Promise<MessageResponse> {
   const response = await api.post<MessageResponse>("/auth/resend-verification", data);
+  return response.data;
+}
+
+// Etapa 8.0 (Finalização do e-mail/Resend) — espelham POST
+// /auth/forgot-password e POST /auth/reset-password
+// (backend/src/auth/auth.controller.ts). Resposta sempre genérica
+// (AuthService anti-enumeração) — nunca revela se o e-mail existe.
+export async function forgotPassword(
+  data: ForgotPasswordPayload,
+): Promise<MessageResponse> {
+  const response = await api.post<MessageResponse>("/auth/forgot-password", data);
+  return response.data;
+}
+
+export async function resetPassword(
+  data: ResetPasswordPayload,
+): Promise<MessageResponse> {
+  const response = await api.post<MessageResponse>("/auth/reset-password", data);
   return response.data;
 }

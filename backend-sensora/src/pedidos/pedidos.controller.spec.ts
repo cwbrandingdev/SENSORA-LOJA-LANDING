@@ -2,6 +2,8 @@ import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
+import { STAFF_ROLES } from '../common/constants/roles.constants';
+import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
 import { PedidosController } from './pedidos.controller';
@@ -110,5 +112,39 @@ describe('PedidosController — findAll/findMeusPedidos (ordenação da listagem
     await controller.findMeusPedidos(cliente);
 
     expect(pedidosService.findAll).toHaveBeenCalledWith(cliente);
+  });
+});
+
+// Etapa 8.2 (HIGH-02 — exclusão de pedidos) — item G da etapa: prova que a
+// correção não alterou autorização nenhuma. DELETE /pedidos/:id continua
+// sob os mesmos guards de classe (JwtAuthGuard + RolesGuard) e a mesma
+// whitelist de roles (@Roles(...STAFF_ROLES), herdada da classe — nenhum
+// @Roles próprio no método, nem antes nem depois desta correção), e o
+// controller continua só delegando id + @CurrentUser() para o service, sem
+// nenhuma lógica de status/permissão movida para cá.
+describe('PedidosController — remove (Etapa 8.2, autorização preservada)', () => {
+  it('delega para PedidosService.remove com o id da URL e o usuário do @CurrentUser', async () => {
+    const pedidosService = { remove: jest.fn().mockResolvedValue(undefined) };
+    const controller = new PedidosController(
+      pedidosService as unknown as PedidosService,
+    );
+    const admin: UsuarioAutenticado = {
+      id: 1,
+      email: 'admin@sensora.dev',
+      perfil: PerfilUsuario.ADMIN,
+    };
+
+    await controller.remove(1, admin);
+
+    expect(pedidosService.remove).toHaveBeenCalledWith(1, admin);
+  });
+
+  it('a rota está sob os mesmos guards de classe (JwtAuthGuard + RolesGuard), restrita a STAFF_ROLES — sem ampliar nem restringir', () => {
+    const guards = Reflect.getMetadata('__guards__', PedidosController) as unknown[];
+    expect(guards).toContain(JwtAuthGuard);
+    expect(guards).toContain(RolesGuard);
+
+    const roles = Reflect.getMetadata(ROLES_KEY, PedidosController) as unknown[];
+    expect(roles).toEqual(STAFF_ROLES);
   });
 });

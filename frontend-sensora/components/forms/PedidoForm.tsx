@@ -1,21 +1,25 @@
 "use client";
 
-// Portado de frontend/components/forms/PedidoForm.js — mesmo comportamento.
-// Única adaptação: o z.enum(["PENDENTE","PAGO","CANCELADO"]) literal virou
-// z.nativeEnum(StatusPedido), reaproveitando o enum que já existe em
-// lib/types/loja.ts em vez de duplicar os três valores — mesmas opções
-// aceitas, mesmo runtime.
+// Portado de frontend/components/forms/PedidoForm.js — mesmo comportamento,
+// exceto pelo campo `status` (Etapa 8.1, fechamento do HIGH-01 — "Admin
+// order CRUD can fabricate PAGO"): não existe venda manual no sistema, então
+// este formulário nunca deixa o admin escolher o estado financeiro de um
+// pedido. Todo pedido criado nasce PENDENTE (decidido pelo servidor); a
+// única forma legítima de um pedido virar PAGO é o fluxo real de pagamento
+// (Checkout/Asaas + webhook CHECKOUT_PAID) — nunca este CRUD. O backend
+// (CreatePedidoDto/UpdatePedidoDto) reforça isso independentemente desta UI:
+// enviar `status` aqui seria rejeitado pelo ValidationPipe
+// (forbidNonWhitelisted).
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import FormButton from "@/components/ui/FormButton";
-import { StatusPedido, type Pedido } from "@/lib/types/loja";
+import type { Pedido } from "@/lib/types/loja";
 
 const pedidoSchema = z.object({
   numero: z.string().min(1, "Número é obrigatório"),
   data: z.string().min(1, "Data é obrigatória"),
-  status: z.nativeEnum(StatusPedido),
 });
 
 export type PedidoFormValues = z.infer<typeof pedidoSchema>;
@@ -24,7 +28,6 @@ function toDefaultValues(pedido?: Pedido): PedidoFormValues {
   return {
     numero: pedido?.numero ?? "",
     data: pedido?.data ? pedido.data.slice(0, 10) : "",
-    status: pedido?.status ?? StatusPedido.PENDENTE,
   };
 }
 
@@ -78,18 +81,6 @@ export default function PedidoForm({ initialData, onSubmit, onCancel }: PedidoFo
         </label>
         <input id="data" type="date" className={inputClass} {...register("data")} />
         {errors.data && <p className={errorClass}>{errors.data.message}</p>}
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label htmlFor="status" className={labelClass}>
-          Status
-        </label>
-        <select id="status" className={inputClass} {...register("status")}>
-          <option value="PENDENTE">Pendente</option>
-          <option value="PAGO">Pago</option>
-          <option value="CANCELADO">Cancelado</option>
-        </select>
-        {errors.status && <p className={errorClass}>{errors.status.message}</p>}
       </div>
 
       <div className="flex gap-2">

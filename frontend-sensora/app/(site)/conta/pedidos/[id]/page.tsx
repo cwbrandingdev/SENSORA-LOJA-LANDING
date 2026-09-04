@@ -272,7 +272,11 @@ export default function MeuPedidoDetalhePage() {
               Acompanhamento
             </h2>
             <div className="mt-4">
-              <AcompanhamentoPedido status={dados.pedido.status} />
+              <AcompanhamentoPedido
+                status={dados.pedido.status}
+                statusEnvio={dados.pedido.statusEnvio}
+                enviadoEm={dados.pedido.enviadoEm}
+              />
             </div>
           </div>
 

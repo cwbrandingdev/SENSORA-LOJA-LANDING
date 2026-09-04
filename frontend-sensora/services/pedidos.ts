@@ -1,7 +1,6 @@
 // Portado de frontend/services/pedidos.js — mesmos endpoints e métodos.
 import api from "./api";
 import type {
-  CreatePedidoPayload,
   Pedido,
   PedidoComItens,
   PedidoComItensDetalhado,
@@ -59,10 +58,10 @@ export async function buscarPedidoComItens(id: number): Promise<PedidoComItens> 
   return response.data;
 }
 
-export async function criarPedido(data: CreatePedidoPayload): Promise<Pedido> {
-  const response = await api.post<Pedido>("/pedidos", data);
-  return response.data;
-}
+// Etapa 8.1 (complemento — eliminação da venda manual) — criarPedido() foi
+// removido de propósito: POST /pedidos não existe mais no backend
+// (PedidosController não tem handler `create`). Toda venda nasce
+// exclusivamente do fluxo Carrinho -> Checkout (ver services/checkout.ts).
 
 export async function atualizarPedido(id: number, data: UpdatePedidoPayload): Promise<Pedido> {
   const response = await api.put<Pedido>(`/pedidos/${id}`, data);
@@ -71,4 +70,15 @@ export async function atualizarPedido(id: number, data: UpdatePedidoPayload): Pr
 
 export async function removerPedido(id: number): Promise<void> {
   await api.delete(`/pedidos/${id}`);
+}
+
+// Etapa 6.6 (Status de Envio) — POST /pedidos/:id/marcar-enviado, mesmo
+// padrão de cancelarMeuPedido/solicitarReembolsoMeuPedido acima: operação
+// específica, sem body (a única transição possível é NAO_ENVIADO ->
+// ENVIADO; a regra "só a partir de PAGO", a idempotência e o claim atômico
+// contra corrida são inteiramente resolvidos no backend, ver
+// PedidosService.marcarComoEnviado).
+export async function marcarPedidoComoEnviado(id: number): Promise<Pedido> {
+  const response = await api.post<Pedido>(`/pedidos/${id}/marcar-enviado`);
+  return response.data;
 }

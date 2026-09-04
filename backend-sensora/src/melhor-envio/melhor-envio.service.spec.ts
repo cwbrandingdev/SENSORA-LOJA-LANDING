@@ -1,7 +1,9 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { InternalServerErrorException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { MelhorEnvioTokenCryptoService } from './melhor-envio-token-crypto.service';
 import {
   MelhorEnvioErroHttpError,
   MelhorEnvioIndisponivelError,
@@ -16,6 +18,15 @@ import {
 // navegador do dono da conta Melhor Envio) não é testável aqui — só a parte
 // que roda no backend (geração/validação de `state`, troca do `code` por
 // token) é.
+//
+// Etapa 8.4 (achado HIGH — tokens em texto puro) — MelhorEnvioTokenCryptoService
+// NUNCA é mockado aqui: é a instância REAL (com uma chave de teste válida),
+// para que os testes de persistência/leitura exercitem a criptografia de
+// verdade, não uma simulação dela. `prisma.melhorEnvioToken` continua
+// mockado (sem banco real) — quem lê/escreve um "MelhorEnvioToken" fake
+// nos testes é sempre quem monta o mock de findUnique/upsert.
+
+const CHAVE_CRIPTOGRAFIA_TESTE = randomBytes(32).toString('base64');
 
 const CONFIG_VALORES: Record<string, string> = {
   MELHOR_ENVIO_ENV: 'sandbox',
@@ -24,11 +35,16 @@ const CONFIG_VALORES: Record<string, string> = {
   MELHOR_ENVIO_REDIRECT_URI: 'http://localhost:3000/admin/melhor-envio/callback',
   MELHOR_ENVIO_USER_AGENT: 'Sensora (contato@sensora.dev)',
   MELHOR_ENVIO_CEP_ORIGEM: '80000-000',
+  MELHOR_ENVIO_TOKEN_ENCRYPTION_KEY: CHAVE_CRIPTOGRAFIA_TESTE,
 };
 
 async function criarService(
   configValores: Record<string, string> = CONFIG_VALORES,
-): Promise<{ service: MelhorEnvioService; prisma: { melhorEnvioToken: Record<string, jest.Mock> } }> {
+): Promise<{
+  service: MelhorEnvioService;
+  prisma: { melhorEnvioToken: Record<string, jest.Mock> };
+  tokenCrypto: MelhorEnvioTokenCryptoService;
+}> {
   const prisma = {
     melhorEnvioToken: {
       findUnique: jest.fn(),
@@ -39,6 +55,7 @@ async function criarService(
   const module: TestingModule = await Test.createTestingModule({
     providers: [
       MelhorEnvioService,
+      MelhorEnvioTokenCryptoService,
       {
         provide: ConfigService,
         useValue: { get: (key: string) => configValores[key] },
@@ -47,7 +64,11 @@ async function criarService(
     ],
   }).compile();
 
-  return { service: module.get(MelhorEnvioService), prisma };
+  return {
+    service: module.get(MelhorEnvioService),
+    prisma,
+    tokenCrypto: module.get(MelhorEnvioTokenCryptoService),
+  };
 }
 
 function mockFetchOnce(status: number, body: unknown, ok = status >= 200 && status < 300) {
@@ -100,8 +121,13 @@ describe('MelhorEnvioService — OAuth2', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('trocarCodigoPorToken com state correto troca o code por token e persiste no banco', async () => {
-    const { service, prisma } = await criarService();
+  // Caso G/H (Etapa 8.4) — o valor persistido nunca é o token OAuth em
+  // texto puro: é o ciphertext AES-256-GCM (formato "v1:..."), e
+  // descriptografá-lo de volta (leitura pelo serviço de criptografia, não
+  // um atalho manual) devolve exatamente o token original que a API do
+  // Melhor Envio enviou.
+  it('trocarCodigoPorToken com state correto troca o code por token e persiste CRIPTOGRAFADO no banco (nunca em texto puro)', async () => {
+    const { service, prisma, tokenCrypto } = await criarService();
     const url = new URL(service.gerarUrlAutorizacao());
     const state = url.searchParams.get('state')!;
 
@@ -114,19 +140,47 @@ describe('MelhorEnvioService — OAuth2', () => {
 
     await service.trocarCodigoPorToken('codigo-valido', state);
 
-    expect(prisma.melhorEnvioToken.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 1 },
-        create: expect.objectContaining({
-          accessToken: 'access-123',
-          refreshToken: 'refresh-123',
-        }),
-        update: expect.objectContaining({
-          accessToken: 'access-123',
-          refreshToken: 'refresh-123',
-        }),
-      }),
-    );
+    expect(prisma.melhorEnvioToken.upsert).toHaveBeenCalledTimes(1);
+    const chamada = prisma.melhorEnvioToken.upsert.mock.calls[0][0] as {
+      where: unknown;
+      create: { accessToken: string; refreshToken: string };
+      update: { accessToken: string; refreshToken: string };
+    };
+
+    expect(chamada.where).toEqual({ id: 1 });
+    // Nunca o valor em texto puro — nem em create nem em update.
+    expect(chamada.create.accessToken).not.toBe('access-123');
+    expect(chamada.create.refreshToken).not.toBe('refresh-123');
+    expect(chamada.update.accessToken).not.toBe('access-123');
+    expect(chamada.update.refreshToken).not.toBe('refresh-123');
+    // Formato reconhecível do ciphertext (ver MelhorEnvioTokenCryptoService).
+    expect(chamada.create.accessToken).toMatch(/^v1:/);
+    expect(chamada.create.refreshToken).toMatch(/^v1:/);
+    // Descriptografar de volta (Caso H) devolve exatamente o original.
+    expect(tokenCrypto.decrypt(chamada.create.accessToken)).toBe('access-123');
+    expect(tokenCrypto.decrypt(chamada.create.refreshToken)).toBe('refresh-123');
+  });
+
+  // Fail-safe (Etapa 8.4) — sem a chave de criptografia configurada, a
+  // troca de code por token precisa FALHAR explicitamente ao tentar
+  // persistir, nunca gravar o token em texto puro como alternativa.
+  it('sem MELHOR_ENVIO_TOKEN_ENCRYPTION_KEY configurada: trocarCodigoPorToken falha ao persistir, nunca grava token em texto puro', async () => {
+    const configSemChave = { ...CONFIG_VALORES };
+    delete configSemChave.MELHOR_ENVIO_TOKEN_ENCRYPTION_KEY;
+    const { service, prisma } = await criarService(configSemChave);
+    const url = new URL(service.gerarUrlAutorizacao());
+    const state = url.searchParams.get('state')!;
+
+    global.fetch = mockFetchOnce(200, {
+      access_token: 'access-x',
+      refresh_token: 'refresh-x',
+      expires_in: 3600,
+    }) as unknown as typeof fetch;
+
+    await expect(
+      service.trocarCodigoPorToken('codigo-valido', state),
+    ).rejects.toThrow(InternalServerErrorException);
+    expect(prisma.melhorEnvioToken.upsert).not.toHaveBeenCalled();
   });
 
   it('mesmo state não pode ser reutilizado (uso único)', async () => {
@@ -187,10 +241,10 @@ describe('MelhorEnvioService — cotar (Etapa 6.5, Parte 3)', () => {
   });
 
   it('token válido (não expirado): usa direto, sem chamar /oauth/token de novo', async () => {
-    const { service, prisma } = await criarService();
+    const { service, prisma, tokenCrypto } = await criarService();
     prisma.melhorEnvioToken.findUnique.mockResolvedValue({
-      accessToken: 'access-valido',
-      refreshToken: 'refresh-valido',
+      accessToken: tokenCrypto.encrypt('access-valido'),
+      refreshToken: tokenCrypto.encrypt('refresh-valido'),
       expiresAt: new Date(Date.now() + 60 * 60_000),
     });
 
@@ -226,10 +280,10 @@ describe('MelhorEnvioService — cotar (Etapa 6.5, Parte 3)', () => {
   });
 
   it('token expirado: renova via refresh_token ANTES de cotar, e persiste o novo token', async () => {
-    const { service, prisma } = await criarService();
+    const { service, prisma, tokenCrypto } = await criarService();
     prisma.melhorEnvioToken.findUnique.mockResolvedValue({
-      accessToken: 'access-velho',
-      refreshToken: 'refresh-velho',
+      accessToken: tokenCrypto.encrypt('access-velho'),
+      refreshToken: tokenCrypto.encrypt('refresh-velho'),
       expiresAt: new Date(Date.now() - 60_000), // já expirado
     });
     prisma.melhorEnvioToken.upsert.mockResolvedValueOnce({});
@@ -259,12 +313,32 @@ describe('MelhorEnvioService — cotar (Etapa 6.5, Parte 3)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0][0]).toContain('/oauth/token');
     expect(fetchMock.mock.calls[1][0]).toContain('/shipment/calculate');
-    expect(prisma.melhorEnvioToken.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        update: expect.objectContaining({ accessToken: 'access-novo' }),
-      }),
+
+    // Caso I (Etapa 8.4) — a chamada de refresh usa o refresh_token
+    // DESCRIPTOGRAFADO ('refresh-velho'), nunca o ciphertext bruto lido do
+    // banco.
+    const corpoRefresh = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    ) as Record<string, string>;
+    expect(corpoRefresh.refresh_token).toBe('refresh-velho');
+
+    // Caso I (Etapa 8.4) — o novo par de tokens devolvido pelo refresh
+    // também é persistido CRIPTOGRAFADO, nunca em texto puro.
+    expect(prisma.melhorEnvioToken.upsert).toHaveBeenCalledTimes(1);
+    const chamadaUpsert = prisma.melhorEnvioToken.upsert.mock.calls[0][0] as {
+      update: { accessToken: string; refreshToken: string };
+    };
+    expect(chamadaUpsert.update.accessToken).not.toBe('access-novo');
+    expect(chamadaUpsert.update.accessToken).toMatch(/^v1:/);
+    expect(tokenCrypto.decrypt(chamadaUpsert.update.accessToken)).toBe(
+      'access-novo',
     );
-    // A segunda chamada (cotação) já usa o token renovado, não o antigo.
+    expect(tokenCrypto.decrypt(chamadaUpsert.update.refreshToken)).toBe(
+      'refresh-novo',
+    );
+
+    // A segunda chamada (cotação) já usa o token renovado (em texto puro,
+    // como a API do Melhor Envio espera), não o antigo nem o ciphertext.
     const headersCotacao = (fetchMock.mock.calls[1][1] as RequestInit).headers as Record<
       string,
       string
@@ -273,10 +347,10 @@ describe('MelhorEnvioService — cotar (Etapa 6.5, Parte 3)', () => {
   });
 
   it('Melhor Envio recusa a cotação (4xx/5xx): propaga MelhorEnvioErroHttpError', async () => {
-    const { service, prisma } = await criarService();
+    const { service, prisma, tokenCrypto } = await criarService();
     prisma.melhorEnvioToken.findUnique.mockResolvedValue({
-      accessToken: 'access-valido',
-      refreshToken: 'refresh-valido',
+      accessToken: tokenCrypto.encrypt('access-valido'),
+      refreshToken: tokenCrypto.encrypt('refresh-valido'),
       expiresAt: new Date(Date.now() + 60 * 60_000),
     });
     global.fetch = jest.fn().mockResolvedValueOnce({
@@ -292,10 +366,10 @@ describe('MelhorEnvioService — cotar (Etapa 6.5, Parte 3)', () => {
   });
 
   it('falha de rede/timeout: propaga MelhorEnvioIndisponivelError (distinto de recusa HTTP)', async () => {
-    const { service, prisma } = await criarService();
+    const { service, prisma, tokenCrypto } = await criarService();
     prisma.melhorEnvioToken.findUnique.mockResolvedValue({
-      accessToken: 'access-valido',
-      refreshToken: 'refresh-valido',
+      accessToken: tokenCrypto.encrypt('access-valido'),
+      refreshToken: tokenCrypto.encrypt('refresh-valido'),
       expiresAt: new Date(Date.now() + 60 * 60_000),
     });
     global.fetch = jest.fn().mockRejectedValueOnce(new Error('ECONNRESET')) as unknown as typeof fetch;
@@ -306,10 +380,10 @@ describe('MelhorEnvioService — cotar (Etapa 6.5, Parte 3)', () => {
   });
 
   it('item de cotação com erro (rota indisponível para aquela transportadora) é filtrado, não quebra a lista', async () => {
-    const { service, prisma } = await criarService();
+    const { service, prisma, tokenCrypto } = await criarService();
     prisma.melhorEnvioToken.findUnique.mockResolvedValue({
-      accessToken: 'access-valido',
-      refreshToken: 'refresh-valido',
+      accessToken: tokenCrypto.encrypt('access-valido'),
+      refreshToken: tokenCrypto.encrypt('refresh-valido'),
       expiresAt: new Date(Date.now() + 60 * 60_000),
     });
     global.fetch = jest.fn().mockResolvedValueOnce({
@@ -348,10 +422,10 @@ describe('MelhorEnvioService — cotar (Etapa 6.5, Parte 3)', () => {
   // access_token usado para chamar a API nem qualquer outro campo cru da
   // resposta do Melhor Envio.
   it('I: a opção retornada nunca inclui o access_token nem qualquer campo além de id/transportadora/servico/preco/prazoDias', async () => {
-    const { service, prisma } = await criarService();
+    const { service, prisma, tokenCrypto } = await criarService();
     prisma.melhorEnvioToken.findUnique.mockResolvedValue({
-      accessToken: 'segredo-nao-pode-vazar',
-      refreshToken: 'refresh-valido',
+      accessToken: tokenCrypto.encrypt('segredo-nao-pode-vazar'),
+      refreshToken: tokenCrypto.encrypt('refresh-valido'),
       expiresAt: new Date(Date.now() + 60 * 60_000),
     });
     global.fetch = jest.fn().mockResolvedValueOnce({

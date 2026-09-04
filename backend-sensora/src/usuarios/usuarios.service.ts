@@ -312,22 +312,31 @@ export class UsuariosService {
     await this.prisma.usuario.delete({ where: { id } });
   }
 
+  // Etapa 8.3 (achado HIGH da auditoria — resetToken em texto puro) — grava
+  // só o HASH (SHA-256, calculado em AuthService.hashToken()) do token de
+  // redefinição, nunca o token em texto puro — mesmo raciocínio de
+  // emitirTokenVerificacaoEmail/criarRefreshToken. `resetTokenHash` é o
+  // parâmetro (já hasheado por quem chama), não o token original.
   async salvarTokenReset(
     id: number,
-    resetToken: string,
+    resetTokenHash: string,
     resetTokenExpiry: Date,
   ): Promise<void> {
     await this.prisma.usuario.update({
       where: { id },
-      data: { resetToken, resetTokenExpiry },
+      data: { resetTokenHash, resetTokenExpiry },
     });
   }
 
+  // Recebe o HASH já calculado (AuthService.hashToken(tokenRecebido)),
+  // nunca o token em texto puro — a comparação sempre acontece hash-contra-
+  // hash, nunca plaintext-contra-hash (que nunca bateria) nem plaintext-
+  // contra-plaintext (o que reintroduziria o achado da auditoria).
   async buscarPorResetToken(
-    resetToken: string,
+    resetTokenHash: string,
   ): Promise<{ id: number; resetTokenExpiry: Date | null } | null> {
     return this.prisma.usuario.findFirst({
-      where: { resetToken },
+      where: { resetTokenHash },
       select: { id: true, resetTokenExpiry: true },
     });
   }
@@ -338,7 +347,11 @@ export class UsuariosService {
       where: { id },
       data: {
         senha: senhaCriptografada,
-        resetToken: null,
+        // Uso único: o hash é sempre limpo junto com a troca de senha —
+        // uma segunda tentativa com o mesmo token, depois deste ponto,
+        // deixa de encontrar qualquer usuário por buscarPorResetToken
+        // (mesmo raciocínio de confirmarEmailSeHashValido).
+        resetTokenHash: null,
         resetTokenExpiry: null,
       },
     });

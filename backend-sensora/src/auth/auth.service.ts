@@ -139,9 +139,15 @@ export class AuthService {
     const resetToken = randomBytes(32).toString('hex');
     const resetTokenExpiry = new Date(Date.now() + RESET_TOKEN_VALIDADE_MS);
 
+    // Etapa 8.3 (achado HIGH da auditoria — resetToken em texto puro) —
+    // persiste só o HASH (mesmo mecanismo já usado para o token de
+    // confirmação de e-mail, ver hashToken() abaixo). `resetToken` em
+    // texto puro nunca é persistido — só existe nesta função, para ser
+    // enviado por e-mail logo abaixo (enviarEmailResetSenha) e, no máximo,
+    // devolvido na resposta se EXPOSE_RESET_TOKEN estiver habilitado.
     await this.usuariosService.salvarTokenReset(
       usuario.id,
-      resetToken,
+      this.hashToken(resetToken),
       resetTokenExpiry,
     );
 
@@ -167,8 +173,12 @@ export class AuthService {
   async resetPassword(
     resetPasswordDto: ResetPasswordDto,
   ): Promise<ResetPasswordResponse> {
+    // Etapa 8.3 (achado HIGH da auditoria — resetToken em texto puro) —
+    // nunca compara o token recebido diretamente com o banco: calcula o
+    // hash do token recebido e localiza o usuário por esse hash (mesmo
+    // padrão de verifyEmail/hashToken()).
     const usuario = await this.usuariosService.buscarPorResetToken(
-      resetPasswordDto.token,
+      this.hashToken(resetPasswordDto.token),
     );
 
     if (!usuario) {
@@ -409,10 +419,14 @@ export class AuthService {
 
     await this.mailService.enviarEmail({
       to: usuario.email,
-      subject: 'Redefinição de senha',
+      subject: 'Redefinição de senha — Sensora',
       html:
         `<p>Olá, ${usuario.nome}.</p>` +
-        '<p>Recebemos uma solicitação para redefinir sua senha. Clique no link abaixo para continuar:</p>' +
+        // Etapa 8.0 (achado da auditoria): o template original nunca
+        // mencionava "Sensora" no corpo/assunto (diferente do e-mail de
+        // confirmação) — corrigido para identificar claramente o
+        // remetente, sem redesign visual.
+        '<p>Recebemos uma solicitação para redefinir a senha da sua conta na Sensora. Clique no link abaixo para continuar:</p>' +
         `<p><a href="${link}">${link}</a></p>` +
         `<p>Este link expira em ${RESET_TOKEN_VALIDADE_HORAS} hora(s).</p>` +
         '<p>Se você não solicitou isso, ignore este e-mail — sua senha continua a mesma.</p>',

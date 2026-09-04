@@ -18,7 +18,7 @@ export default function ItemPedidoTable({ itens, produtos, onEdit, onRemove }: I
         compact
         eyebrow="Itens do pedido"
         title="Nenhum item neste pedido"
-        message="Adicione um item para começar a montar o pedido."
+        message="Este pedido ainda não tem itens."
       />
     );
   }

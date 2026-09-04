@@ -1,10 +1,12 @@
 "use client";
 
-// Portado de frontend/components/forms/ItemPedidoForm.js — mesmo
-// comportamento. Único ajuste real: produto.preco é `string` na API interna
-// (Decimal do Prisma serializa como string — ver lib/types/loja.ts), então
-// o setValue de precoUnitario (campo numérico) converte explicitamente com
-// Number(...) em vez de depender de coerção implícita do JS.
+// Portado de frontend/components/forms/ItemPedidoForm.js, exceto pelo campo
+// `precoUnitario` (Etapa 8.1, fechamento do HIGH-01 — "Admin order CRUD can
+// fabricate PAGO"): o preço de um item nunca é escolhido pelo admin — o
+// backend (ItensPedidoService) sempre deriva o preço do Produto real no
+// momento da criação/edição, a mesma fonte de verdade que o Checkout usa.
+// Enviar `precoUnitario` seria rejeitado pelo ValidationPipe
+// (CreateItemPedidoDto não whitelist mais este campo).
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,9 +23,6 @@ const itemPedidoSchema = z.object({
     .number({ error: "Quantidade é obrigatória" })
     .int("Quantidade deve ser um número inteiro")
     .min(1, "Quantidade mínima é 1"),
-  precoUnitario: z.coerce
-    .number({ error: "Preço unitário é obrigatório" })
-    .min(0, "Preço unitário não pode ser negativo"),
 });
 
 type ItemPedidoFormInput = z.input<typeof itemPedidoSchema>;
@@ -33,7 +32,6 @@ function toDefaultValues(item?: ItemPedido): ItemPedidoFormInput {
   return {
     produtoId: item?.produtoId ?? ("" as unknown as number),
     quantidade: item?.quantidade ?? ("" as unknown as number),
-    precoUnitario: item?.precoUnitario ?? "",
   };
 }
 
@@ -59,7 +57,6 @@ export default function ItemPedidoForm({
     register,
     handleSubmit,
     reset,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm<ItemPedidoFormInput, unknown, ItemPedidoFormValues>({
     resolver: zodResolver(itemPedidoSchema),
@@ -70,14 +67,6 @@ export default function ItemPedidoForm({
     reset(toDefaultValues(initialData));
   }, [initialData, reset]);
 
-  function handleProdutoChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    const produtoId = Number(event.target.value);
-    const produto = produtos.find((p) => p.id === produtoId);
-    if (produto) {
-      setValue("precoUnitario", Number(produto.preco));
-    }
-  }
-
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
@@ -87,11 +76,7 @@ export default function ItemPedidoForm({
         <label htmlFor="produtoId" className={labelClass}>
           Produto
         </label>
-        <select
-          id="produtoId"
-          className={inputClass}
-          {...register("produtoId", { onChange: handleProdutoChange })}
-        >
+        <select id="produtoId" className={inputClass} {...register("produtoId")}>
           <option value="">Selecione um produto</option>
           {produtos.map((produto) => (
             <option key={produto.id} value={produto.id}>
@@ -116,22 +101,6 @@ export default function ItemPedidoForm({
         />
         {errors.quantidade && (
           <p className={errorClass}>{errors.quantidade.message}</p>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label htmlFor="precoUnitario" className={labelClass}>
-          Preço unitário
-        </label>
-        <input
-          id="precoUnitario"
-          type="number"
-          step="0.01"
-          className={inputClass}
-          {...register("precoUnitario")}
-        />
-        {errors.precoUnitario && (
-          <p className={errorClass}>{errors.precoUnitario.message}</p>
         )}
       </div>
 

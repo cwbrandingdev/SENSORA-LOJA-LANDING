@@ -17,7 +17,6 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { STAFF_ROLES, TODOS_OS_PERFIS } from '../common/constants/roles.constants';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { CreatePedidoDto } from './dto/create-pedido.dto';
 import { UpdatePedidoDto } from './dto/update-pedido.dto';
 import { PedidoComItens } from './entities/pedido-com-itens.entity';
 import { PedidoComItensDetalhado } from './entities/pedido-com-itens-detalhado.entity';
@@ -120,15 +119,30 @@ export class PedidosController {
     return this.pedidosService.buscarPedidoComItens(id, user);
   }
 
-  @Post()
-  @HttpCode(HttpStatus.CREATED)
-  create(
-    @Body() createPedidoDto: CreatePedidoDto,
+  // Etapa 6.6 (Status de Envio) — ação administrativa específica (nunca um
+  // PUT genérico, mesmo padrão de cancelar-meu-pedido/cancelar-pago acima),
+  // sem @Body(): a única transição possível é NAO_ENVIADO -> ENVIADO,
+  // resolvida inteiramente dentro de PedidosService.marcarComoEnviado
+  // (regra "só a partir de PAGO", idempotência, claim atômico contra
+  // corrida). Herda @Roles(...STAFF_ROLES) da classe — nenhum override
+  // necessário, CLIENTE nunca alcança esta rota.
+  @Post(':id/marcar-enviado')
+  @HttpCode(HttpStatus.OK)
+  marcarComoEnviado(
+    @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: UsuarioAutenticado,
   ): Promise<Pedido> {
-    return this.pedidosService.create(createPedidoDto, user);
+    return this.pedidosService.marcarComoEnviado(id, user);
   }
 
+  // Etapa 8.1 (complemento — eliminação da venda manual) — POST /pedidos foi
+  // removido de propósito: não existe mais criação administrativa de
+  // pedido, mesmo como PENDENTE. Toda venda nasce exclusivamente do fluxo
+  // Carrinho -> Checkout -> CheckoutService.createSession (que cria o
+  // Pedido diretamente via Prisma, nunca por aqui). O que resta neste
+  // controller é só gerenciamento de pedidos já existentes (editar
+  // numero/data/total, cancelar, reembolsar, marcar como enviado, listar,
+  // consultar) — nunca criação de venda.
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,

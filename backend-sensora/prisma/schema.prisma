@@ -15,7 +15,15 @@ model Usuario {
   senha                   String
   perfil                  PerfilUsuario
   ativo                   Boolean        @default(true)
-  resetToken              String?
+  // Etapa 8.3 (achado HIGH da auditoria — resetToken em texto puro) — grava
+  // o HASH SHA-256 do token de redefinição de senha, nunca o token original
+  // (mesmo mecanismo já usado por emailVerificationHash/RefreshToken.
+  // tokenHash — AuthService.hashToken()). Renomeado de `resetToken` para
+  // `resetTokenHash` de propósito: o nome antigo convidava a um futuro
+  // dev/reviewer a assumir (incorretamente) que o valor era o token em
+  // texto puro comparável diretamente. @unique pelo mesmo motivo de
+  // emailVerificationHash logo abaixo.
+  resetTokenHash          String?        @unique
   resetTokenExpiry        DateTime?
   // Etapa 6.4 (Confirmação de e-mail) — @default(true) é deliberado, não um
   // descuido: cobre de uma vez só duas exigências aprovadas (i) contas já
@@ -30,9 +38,9 @@ model Usuario {
   emailVerificadoEm       DateTime?
   // Hash SHA-256 do token de confirmação (nunca o token em texto puro —
   // mesmo raciocínio de RefreshToken.tokenHash). Campo próprio, nunca
-  // reaproveita resetToken/resetTokenExpiry: são fluxos diferentes (trocar
-  // senha vs. confirmar e-mail), e misturar os dois no mesmo campo abriria
-  // a possibilidade de um token de um fluxo ser aceito no outro.
+  // reaproveita resetTokenHash/resetTokenExpiry: são fluxos diferentes
+  // (trocar senha vs. confirmar e-mail), e misturar os dois no mesmo campo
+  // abriria a possibilidade de um token de um fluxo ser aceito no outro.
   emailVerificationHash   String?        @unique
   emailVerificationExpiry DateTime?
   // Etapa — Dados do Cliente / Cadastro. Ambos opcionais (nunca exigidos no
@@ -177,6 +185,16 @@ model Pedido {
   fretePrazoDias      Int?
   freteServicoId      Int?
 
+  // Etapa 6.6 (Status de Envio) — eixo logístico, independente de `status`
+  // (financeiro). @default(NAO_ENVIADO): pedidos existentes assumem esse
+  // valor automaticamente na migration, sem precisar de backfill manual.
+  // `enviadoEm` só é preenchido pela transição NAO_ENVIADO -> ENVIADO em
+  // PedidosService.marcarComoEnviado — nunca escrito em nenhum outro lugar
+  // (create/update genérico não aceitam este campo, ver CreatePedidoDto/
+  // UpdatePedidoDto), então não há como um pedido nascer "ENVIADO".
+  statusEnvio StatusEnvio @default(NAO_ENVIADO)
+  enviadoEm   DateTime?
+
   // Achado da auditoria: usuarioId já era usado pela aplicação (ver
   // PedidosService.podeAcessar) para restringir VENDEDOR aos próprios
   // pedidos, mas nunca teve uma FK real no banco. onDelete: SetNull mantém o
@@ -225,6 +243,17 @@ model ItemPedido {
 // Envio, obtida uma vez via fluxo de autorização (Parte 2 da etapa) e
 // renovada sozinha via refresh_token quando expira. Nunca exposta em
 // nenhuma resposta de API — só lida/escrita pelo próprio MelhorEnvioService.
+//
+// Etapa 8.4 (achado HIGH da auditoria — tokens em texto puro): accessToken/
+// refreshToken armazenam CIPHERTEXT (AES-256-GCM, formato
+// "v1:<iv>:<authTag>:<ciphertext>", tudo em base64), nunca o token OAuth em
+// texto puro — ver MelhorEnvioTokenCryptoService. Diferente de
+// resetTokenHash/emailVerificationHash (hash, uso único): aqui a
+// criptografia precisa ser REVERSÍVEL, porque o backend precisa apresentar
+// o token original de volta para a API do Melhor Envio a cada chamada.
+// Nenhuma alteração de tipo/coluna foi necessária (String já comportava o
+// ciphertext) — só o CONTEÚDO gravado mudou; ver scripts/migrate-melhor-envio-tokens.ts
+// para a migração controlada do valor já existente no banco.
 model MelhorEnvioToken {
   id           Int      @id @default(1)
   accessToken  String
@@ -249,4 +278,17 @@ enum StatusPedido {
   // REEMBOLSADO das próximas etapas (5B.3+).
   REEMBOLSO_SOLICITADO
   REEMBOLSADO
+}
+
+// Etapa 6.6 (Status de Envio) — deliberadamente um enum PRÓPRIO, nunca um
+// valor a mais dentro de StatusPedido: aquele é só o ciclo de vida
+// financeiro (cobrança/estorno), este é logístico, e a auditoria desta
+// etapa concluiu que misturar os dois conceitos no mesmo campo seria
+// incorreto (ex.: um pedido PAGO pode estar tanto NAO_ENVIADO quanto
+// ENVIADO — são eixos independentes). MVP cobre só NAO_ENVIADO -> ENVIADO;
+// ENTREGUE (e qualquer rastreamento real) fica fora de propósito, para uma
+// etapa futura — ver auditoria da Etapa 6.6.
+enum StatusEnvio {
+  NAO_ENVIADO
+  ENVIADO
 }

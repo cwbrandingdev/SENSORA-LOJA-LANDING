@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { MelhorEnvioTokenCryptoService } from './melhor-envio-token-crypto.service';
 
 export interface MelhorEnvioPacote {
   alturaCm: number;
@@ -75,6 +76,7 @@ export class MelhorEnvioService {
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly tokenCrypto: MelhorEnvioTokenCryptoService,
   ) {
     const ambiente =
       this.configService.get<string>('MELHOR_ENVIO_ENV') ?? 'sandbox';
@@ -174,19 +176,31 @@ export class MelhorEnvioService {
     return token !== null;
   }
 
+  // Etapa 8.4 (achado HIGH da auditoria — tokens em texto puro) — único
+  // ponto de escrita de MelhorEnvioToken (chamado tanto pela troca inicial
+  // de code->token em trocarCodigoPorToken quanto pela renovação via
+  // refresh_token em garantirAccessToken abaixo), então criptografar aqui
+  // cobre os dois caminhos de uma vez — nenhum caminho secundário grava
+  // token sem passar por encrypt().
   private async persistirToken(resposta: TokenResponse): Promise<void> {
     const expiresAt = new Date(Date.now() + resposta.expires_in * 1000);
+    const accessTokenCriptografado = this.tokenCrypto.encrypt(
+      resposta.access_token,
+    );
+    const refreshTokenCriptografado = this.tokenCrypto.encrypt(
+      resposta.refresh_token,
+    );
     await this.prisma.melhorEnvioToken.upsert({
       where: { id: 1 },
       create: {
         id: 1,
-        accessToken: resposta.access_token,
-        refreshToken: resposta.refresh_token,
+        accessToken: accessTokenCriptografado,
+        refreshToken: refreshTokenCriptografado,
         expiresAt,
       },
       update: {
-        accessToken: resposta.access_token,
-        refreshToken: resposta.refresh_token,
+        accessToken: accessTokenCriptografado,
+        refreshToken: refreshTokenCriptografado,
         expiresAt,
       },
     });
@@ -204,7 +218,7 @@ export class MelhorEnvioService {
     }
 
     if (token.expiresAt.getTime() - MARGEM_EXPIRACAO_MS > Date.now()) {
-      return token.accessToken;
+      return this.tokenCrypto.decrypt(token.accessToken);
     }
 
     // Renova ANTES de qualquer chamada de cotação, nunca reativamente após
@@ -214,7 +228,7 @@ export class MelhorEnvioService {
       grant_type: 'refresh_token',
       client_id: this.clientId!,
       client_secret: this.clientSecret!,
-      refresh_token: token.refreshToken,
+      refresh_token: this.tokenCrypto.decrypt(token.refreshToken),
     });
     await this.persistirToken(resposta);
     return resposta.access_token;

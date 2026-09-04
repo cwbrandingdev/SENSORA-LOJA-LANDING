@@ -37,6 +37,16 @@ export enum StatusPedido {
   REEMBOLSADO = "REEMBOLSADO",
 }
 
+// Etapa 6.6 (Status de Envio) — eixo logístico, deliberadamente separado de
+// StatusPedido (financeiro). Espelha backend/src/pedidos/enums/
+// status-envio.enum.ts. MVP cobre só NAO_ENVIADO -> ENVIADO; ver auditoria
+// da Etapa 6.6 para por que ENTREGUE/rastreamento real ficam fora deste
+// enum por enquanto.
+export enum StatusEnvio {
+  NAO_ENVIADO = "NAO_ENVIADO",
+  ENVIADO = "ENVIADO",
+}
+
 // Resposta de GET /imagekit/auth (backend, Etapa 2) — token/expire/signature
 // gerados sob demanda a cada chamada; nunca inclui a privateKey.
 export type ImagekitAuthParams = {
@@ -197,6 +207,17 @@ export type Pedido = {
   freteTransportadora?: string | null;
   freteServico?: string | null;
   fretePrazoDias?: number | null;
+  // Etapa 6.6 (Status de Envio) — `statusEnvio` sempre presente (default
+  // NAO_ENVIADO no backend, ver schema.prisma); `enviadoEm` só é preenchido
+  // depois de POST /pedidos/:id/marcar-enviado (services/pedidos.ts). Ao
+  // exibir `enviadoEm`, usar o fuso America/Sao_Paulo (não UTC): diferente
+  // de `data` acima (que representa um DIA de calendário, sempre meia-noite
+  // UTC — por isso forçar UTC na exibição é o que corrige o bug de fuso),
+  // `enviadoEm` é um instante real (`new Date()` no momento do clique) —
+  // forçar UTC aqui reintroduziria o mesmo bug de fuso na direção oposta
+  // para envios marcados à noite no horário de Brasília.
+  statusEnvio: StatusEnvio;
+  enviadoEm?: string | null;
 };
 
 // Payload de POST /checkout/session (Task 10) — espelha exatamente
@@ -291,10 +312,15 @@ export type CheckoutSessionStatus = {
   pedidoNumero?: string;
 };
 
+// Etapa 8.1 (HIGH-01 — fechamento da venda manual) — `status` foi removido
+// deste payload de propósito: não existe venda manual, o backend
+// (CreatePedidoDto) não whitelist mais este campo, então enviá-lo faria a
+// requisição ser rejeitada (ValidationPipe forbidNonWhitelisted). Todo
+// pedido criado pelo Admin nasce PENDENTE; a única forma legítima de virar
+// PAGO é o fluxo real de pagamento (Checkout/Asaas + webhook CHECKOUT_PAID).
 export type CreatePedidoPayload = {
   numero: string;
   data: string;
-  status?: StatusPedido;
   total: number;
 };
 
@@ -344,11 +370,14 @@ export type PedidoComItensDetalhado = {
   total: number;
 };
 
+// Etapa 8.1 (HIGH-01 — preço arbitrário de ItemPedido) — `precoUnitario`
+// removido deste payload de propósito: o backend (CreateItemPedidoDto) não
+// whitelist mais este campo; o preço é sempre derivado do Produto real
+// (ItensPedidoService), nunca aceito do cliente.
 export type CreateItemPedidoPayload = {
   pedidoId: number;
   produtoId: number;
   quantidade: number;
-  precoUnitario: number;
 };
 
 export type UpdateItemPedidoPayload = Partial<CreateItemPedidoPayload>;
@@ -379,6 +408,21 @@ export type VerifyEmailPayload = {
 
 export type ResendVerificationPayload = {
   email: string;
+};
+
+// Etapa 8.0 (Finalização do e-mail/Resend) — espelham ForgotPasswordDto/
+// ResetPasswordDto (backend/src/auth/dto). Antes desta etapa não existia
+// nenhum consumidor frontend para POST /auth/forgot-password e
+// POST /auth/reset-password, mesmo já existindo o link "Esqueci minha
+// senha" (ROUTES.FORGOT_PASSWORD) e o e-mail enviado pelo backend apontando
+// para ROUTES.RESET_PASSWORD — ambas as rotas não tinham página.
+export type ForgotPasswordPayload = {
+  email: string;
+};
+
+export type ResetPasswordPayload = {
+  token: string;
+  novaSenha: string;
 };
 
 // Etapa 3 (Minha Conta / Dados Pessoais) + Etapa "Dados do Cliente /

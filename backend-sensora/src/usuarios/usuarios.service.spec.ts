@@ -630,3 +630,79 @@ describe('UsuariosService — create/update administrativo: CPF/telefone', () =>
     expect(resultado.telefone).toBe('41999999999');
   });
 });
+
+// Etapa 8.3 (achado HIGH da auditoria — resetToken em texto puro) —
+// primeira suíte automatizada destes três métodos. Prova que a coluna
+// usada é `resetTokenHash` (não a antiga `resetToken`, removida do schema
+// nesta mesma etapa) e que redefinirSenha() preserva o uso único (hash e
+// expiração sempre limpos junto com a troca de senha, mesmo raciocínio de
+// confirmarEmailSeHashValido para emailVerificationHash).
+describe('UsuariosService — salvarTokenReset/buscarPorResetToken/redefinirSenha (Etapa 8.3)', () => {
+  let service: UsuariosService;
+  let prisma: { usuario: { update: jest.Mock; findFirst: jest.Mock } };
+
+  beforeEach(async () => {
+    prisma = {
+      usuario: {
+        update: jest.fn(({ data }: { data: Record<string, unknown> }) => ({
+          id: 1,
+          ...data,
+        })),
+        findFirst: jest.fn(() => null),
+      },
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        UsuariosService,
+        { provide: PrismaService, useValue: prisma },
+      ],
+    }).compile();
+
+    service = module.get(UsuariosService);
+  });
+
+  it('salvarTokenReset(): grava no campo resetTokenHash (nunca em resetToken)', async () => {
+    const expiry = new Date(Date.now() + 60 * 60 * 1000);
+
+    await service.salvarTokenReset(1, 'hash-fake-64-caracteres', expiry);
+
+    expect(prisma.usuario.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { resetTokenHash: 'hash-fake-64-caracteres', resetTokenExpiry: expiry },
+    });
+    const dataEnviada = prisma.usuario.update.mock.calls[0][0].data as Record<
+      string,
+      unknown
+    >;
+    expect(dataEnviada).not.toHaveProperty('resetToken');
+  });
+
+  it('buscarPorResetToken(): consulta pelo campo resetTokenHash (nunca resetToken)', async () => {
+    await service.buscarPorResetToken('hash-fake-64-caracteres');
+
+    expect(prisma.usuario.findFirst).toHaveBeenCalledWith({
+      where: { resetTokenHash: 'hash-fake-64-caracteres' },
+      select: { id: true, resetTokenExpiry: true },
+    });
+  });
+
+  // Caso E (Etapa 8.3) — uso único: após redefinir a senha, o hash e a
+  // expiração são sempre limpos na mesma escrita — uma segunda tentativa
+  // com o mesmo token deixa de encontrar qualquer usuário por
+  // buscarPorResetToken (a busca é por resetTokenHash === null nunca bate
+  // com nenhum hash calculado a partir de um token real).
+  it('redefinirSenha(): limpa resetTokenHash/resetTokenExpiry e nunca grava a senha em texto puro (uso único)', async () => {
+    await service.redefinirSenha(1, 'novaSenhaSegura123');
+
+    expect(prisma.usuario.update).toHaveBeenCalledTimes(1);
+    const dataEnviada = prisma.usuario.update.mock.calls[0][0].data as Record<
+      string,
+      unknown
+    >;
+    expect(dataEnviada.resetTokenHash).toBeNull();
+    expect(dataEnviada.resetTokenExpiry).toBeNull();
+    expect(dataEnviada.senha).not.toBe('novaSenhaSegura123');
+    expect(typeof dataEnviada.senha).toBe('string');
+  });
+});

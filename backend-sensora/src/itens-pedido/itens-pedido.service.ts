@@ -10,7 +10,6 @@ import { PedidosService } from '../pedidos/pedidos.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
-import { CreateItemPedidoDto } from './dto/create-item-pedido.dto';
 import { UpdateItemPedidoDto } from './dto/update-item-pedido.dto';
 import { ItemPedido } from './entities/item-pedido.entity';
 
@@ -46,49 +45,12 @@ export class ItensPedidoService {
     return this.paraItemPedido(await this.localizar(id, user));
   }
 
-  async create(
-    createItemPedidoDto: CreateItemPedidoDto,
-    user: UsuarioAutenticado,
-  ): Promise<ItemPedido> {
-    const { pedidoId, produtoId, quantidade, precoUnitario } =
-      createItemPedidoDto;
-
-    // Reaproveita a checagem de propriedade do pedido — se o VENDEDOR não
-    // for dono de `pedidoId`, findOne já lança NotFoundException aqui.
-    const pedido = await this.pedidosService.findOne(pedidoId, user);
-    // Achado da auditoria: não é possível adicionar item a um pedido já
-    // finalizado (PAGO/CANCELADO) — checado antes de qualquer verificação/
-    // baixa de estoque.
-    this.pedidosService.garantirMutavel(pedido);
-    await this.produtosService.findOne(produtoId);
-
-    // Achado da auditoria (race condition): o decremento é feito ANTES de
-    // criar o item, e é a própria chamada atômica (ver
-    // ProdutosService.removerEstoque) que decide se há estoque suficiente —
-    // lança BadRequestException e nada mais acontece se não houver. Isso
-    // evita criar um ItemPedido "órfão" sem estoque reservado, o que
-    // aconteceria se o item fosse criado antes do decremento.
-    await this.produtosService.removerEstoque(produtoId, quantidade);
-
-    // Etapa 5A.2 (achado da auditoria 5A.1) — marca o item como
-    // estoqueBaixado:true só depois do decremento acima ter dado certo
-    // (removerEstoque já lançou BadRequestException e nada abaixo executa
-    // se não houvesse estoque suficiente) — nunca criado com o estoque
-    // ainda "no ar". É este flag, não a origem do Pedido, que
-    // PedidosService.cancelar() usa para decidir se restaura estoque.
-    const item = await this.prisma.itemPedido.create({
-      data: {
-        pedidoId,
-        produtoId,
-        quantidade,
-        precoUnitario,
-        subtotal: quantidade * precoUnitario,
-        estoqueBaixado: true,
-      },
-    });
-
-    return this.paraItemPedido(item);
-  }
+  // Etapa 8.1 (complemento — eliminação da venda manual) — create() foi
+  // removido de propósito: não existe mais montagem administrativa de
+  // venda item a item. Os itens de um Pedido nascem exclusivamente dentro
+  // de CheckoutService.createSession (gravados via Prisma junto com o
+  // próprio Pedido, nunca por aqui). Este service agora só gerencia itens
+  // já existentes de um pedido ainda PENDENTE.
 
   async update(
     id: number,
@@ -118,6 +80,14 @@ export class ItensPedidoService {
     const novoProdutoId = updateItemPedidoDto.produtoId ?? produtoIdAntigo;
     const novaQuantidade = updateItemPedidoDto.quantidade ?? quantidadeAntiga;
 
+    // Achado da auditoria (HIGH-01): precoUnitario nunca vem do cliente
+    // (nem UpdateItemPedidoDto tem mais este campo). Se o produto do item
+    // não muda, o preço já confiável gravado em `item.precoUnitario`
+    // (definido a partir do Produto real na criação) é preservado; se o
+    // produto muda, o novo preço é sempre o preço ATUAL do novo Produto —
+    // nunca um valor arbitrário.
+    let precoUnitarioFinal = Number(item.precoUnitario);
+
     // Achado da auditoria (race condition): as checagens de estoque via
     // verificarEstoque() antes de cada ajuste foram removidas — a decisão
     // "tem estoque suficiente?" agora é feita atomicamente dentro do próprio
@@ -125,7 +95,8 @@ export class ItensPedidoService {
     // se não houver. A matemática de diferença entre quantidade antiga/nova
     // é a mesma de antes, só a forma de aplicar o decremento mudou.
     if (novoProdutoId !== produtoIdAntigo) {
-      await this.produtosService.findOne(novoProdutoId);
+      const novoProduto = await this.produtosService.findOne(novoProdutoId);
+      precoUnitarioFinal = novoProduto.preco;
 
       await this.produtosService.adicionarEstoque(
         produtoIdAntigo,
@@ -145,13 +116,11 @@ export class ItensPedidoService {
       }
     }
 
-    const precoUnitarioFinal =
-      updateItemPedidoDto.precoUnitario ?? Number(item.precoUnitario);
-
     const atualizado = await this.prisma.itemPedido.update({
       where: { id },
       data: {
         ...updateItemPedidoDto,
+        precoUnitario: precoUnitarioFinal,
         subtotal: novaQuantidade * precoUnitarioFinal,
       },
     });

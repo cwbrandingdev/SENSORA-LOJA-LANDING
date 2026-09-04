@@ -38,6 +38,10 @@ describe('AuthService', () => {
     buscarPorHashVerificacaoEmail: jest.Mock;
     confirmarEmailSeHashValido: jest.Mock;
     criarRefreshToken: jest.Mock;
+    salvarTokenReset: jest.Mock;
+    buscarPorResetToken: jest.Mock;
+    redefinirSenha: jest.Mock;
+    revogarTodosRefreshTokensAtivos: jest.Mock;
   };
   let mailService: { enviarEmail: jest.Mock };
   let jwtService: { sign: jest.Mock };
@@ -51,6 +55,10 @@ describe('AuthService', () => {
       buscarPorHashVerificacaoEmail: jest.fn(),
       confirmarEmailSeHashValido: jest.fn(),
       criarRefreshToken: jest.fn(),
+      salvarTokenReset: jest.fn(),
+      buscarPorResetToken: jest.fn(),
+      redefinirSenha: jest.fn(),
+      revogarTodosRefreshTokensAtivos: jest.fn(),
     };
     mailService = { enviarEmail: jest.fn() };
     jwtService = { sign: jest.fn(() => 'access-token-fake') };
@@ -416,6 +424,174 @@ describe('AuthService', () => {
 
       expect(resultado.access_token).toBe('access-token-fake');
       expect(usuariosService.criarRefreshToken).toHaveBeenCalled();
+    });
+  });
+
+  // Etapa 8.0 (Finalização do e-mail/Resend) — primeira suíte automatizada
+  // de forgotPassword()/resetPassword(): a suíte original (Etapa 6.4,
+  // comentário no topo deste arquivo) deliberadamente não cobria este
+  // fluxo por não fazer parte daquele escopo. Não altera nenhuma regra de
+  // negócio existente — só prova o comportamento que já estava implementado
+  // (anti-enumeração, expiração, EXPOSE_RESET_TOKEN opt-in). Etapa 8.3
+  // (achado HIGH da auditoria — resetToken em texto puro): o teste B abaixo
+  // foi atualizado para provar o novo comportamento seguro (hash SHA-256,
+  // mesmo mecanismo já usado por emitirTokenVerificacaoEmail) — documentava
+  // o texto puro antes desta correção.
+  describe('forgotPassword — Etapa 8.0', () => {
+    it('A: e-mail inexistente devolve a mesma mensagem genérica, sem persistir token nem enviar e-mail (anti-enumeração)', async () => {
+      usuariosService.buscarPorEmail.mockResolvedValueOnce(null);
+
+      const resultado = await service.forgotPassword({
+        email: 'nao-existe@sensora.dev',
+      });
+
+      expect(resultado.message).toMatch(/receberá instruções/);
+      expect(usuariosService.salvarTokenReset).not.toHaveBeenCalled();
+      expect(mailService.enviarEmail).not.toHaveBeenCalled();
+    });
+
+    // Caso A (Etapa 8.3, fechamento do achado HIGH) — o valor persistido
+    // NUNCA é o token em texto puro: é o hash SHA-256 dele, mesmo mecanismo
+    // já usado por emitirTokenVerificacaoEmail.
+    it('B: e-mail existente persiste só o HASH do token (nunca o token em texto puro) e envia o e-mail de redefinição', async () => {
+      usuariosService.buscarPorEmail.mockResolvedValueOnce({
+        id: 1,
+        nome: 'Cliente',
+        email: 'cliente@sensora.dev',
+      });
+
+      await service.forgotPassword({ email: 'cliente@sensora.dev' });
+
+      expect(usuariosService.salvarTokenReset).toHaveBeenCalledTimes(1);
+      const [, hashPersistido] =
+        usuariosService.salvarTokenReset.mock.calls[0];
+      const linkEnviado = (mailService.enviarEmail.mock.calls[0][0] as {
+        html: string;
+      }).html;
+      const tokenNoLink = /token=([0-9a-f]+)/.exec(linkEnviado)?.[1];
+
+      expect(tokenNoLink).toBeDefined();
+      // O valor persistido nunca é igual ao token em texto puro enviado no
+      // e-mail — é o hash SHA-256 dele (formato: 64 caracteres hex).
+      expect(hashPersistido).not.toBe(tokenNoLink);
+      expect(hashPersistido).toBe(sha256(tokenNoLink as string));
+      expect(hashPersistido).toHaveLength(64);
+      expect(mailService.enviarEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'cliente@sensora.dev',
+          subject: 'Redefinição de senha — Sensora',
+        }),
+      );
+    });
+
+    it('C: EXPOSE_RESET_TOKEN="true" inclui o token na resposta (fail-safe opt-in, nunca por padrão)', async () => {
+      configValues.EXPOSE_RESET_TOKEN = 'true';
+      usuariosService.buscarPorEmail.mockResolvedValueOnce({
+        id: 1,
+        nome: 'Cliente',
+        email: 'cliente@sensora.dev',
+      });
+
+      const resultado = await service.forgotPassword({
+        email: 'cliente@sensora.dev',
+      });
+
+      expect(resultado).toHaveProperty('token');
+      expect(typeof (resultado as { token?: string }).token).toBe('string');
+    });
+
+    it('D: sem EXPOSE_RESET_TOKEN configurado, a resposta nunca inclui o token (padrão seguro)', async () => {
+      usuariosService.buscarPorEmail.mockResolvedValueOnce({
+        id: 1,
+        nome: 'Cliente',
+        email: 'cliente@sensora.dev',
+      });
+
+      const resultado = await service.forgotPassword({
+        email: 'cliente@sensora.dev',
+      });
+
+      expect(resultado).not.toHaveProperty('token');
+    });
+
+    it('E: FRONTEND_URL ausente não impede a persistência do token, só pula o envio do e-mail', async () => {
+      delete configValues.FRONTEND_URL;
+      usuariosService.buscarPorEmail.mockResolvedValueOnce({
+        id: 1,
+        nome: 'Cliente',
+        email: 'cliente@sensora.dev',
+      });
+
+      await service.forgotPassword({ email: 'cliente@sensora.dev' });
+
+      expect(usuariosService.salvarTokenReset).toHaveBeenCalledTimes(1);
+      expect(mailService.enviarEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetPassword — Etapa 8.0 / 8.3 (hash, nunca plaintext)', () => {
+    it('F: token válido e não expirado redefine a senha e revoga todos os refresh tokens ativos', async () => {
+      usuariosService.buscarPorResetToken.mockResolvedValueOnce({
+        id: 1,
+        resetTokenExpiry: new Date(Date.now() + 60 * 60 * 1000),
+      });
+
+      const resultado = await service.resetPassword({
+        token: 'token-valido',
+        novaSenha: 'novaSenhaSegura123',
+      });
+
+      expect(usuariosService.redefinirSenha).toHaveBeenCalledWith(
+        1,
+        'novaSenhaSegura123',
+      );
+      expect(usuariosService.revogarTodosRefreshTokensAtivos).toHaveBeenCalledWith(1);
+      expect(resultado.message).toBe('Senha redefinida com sucesso.');
+    });
+
+    // Caso B (Etapa 8.3) — nunca compara o token plaintext diretamente com
+    // o banco: o argumento passado para buscarPorResetToken é sempre o hash
+    // SHA-256 do token recebido, nunca o token em si.
+    it('resetPassword() localiza o usuário pelo HASH do token recebido, nunca pelo token em texto puro', async () => {
+      usuariosService.buscarPorResetToken.mockResolvedValueOnce({
+        id: 1,
+        resetTokenExpiry: new Date(Date.now() + 60 * 60 * 1000),
+      });
+
+      await service.resetPassword({
+        token: 'token-recebido-em-texto-puro',
+        novaSenha: 'novaSenhaSegura123',
+      });
+
+      expect(usuariosService.buscarPorResetToken).toHaveBeenCalledWith(
+        sha256('token-recebido-em-texto-puro'),
+      );
+      expect(usuariosService.buscarPorResetToken).not.toHaveBeenCalledWith(
+        'token-recebido-em-texto-puro',
+      );
+    });
+
+    it('G: token inexistente é rejeitado, sem alterar senha nem revogar sessões', async () => {
+      usuariosService.buscarPorResetToken.mockResolvedValueOnce(null);
+
+      await expect(
+        service.resetPassword({ token: 'token-que-nao-existe', novaSenha: 'novaSenhaSegura123' }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(usuariosService.redefinirSenha).not.toHaveBeenCalled();
+      expect(usuariosService.revogarTodosRefreshTokensAtivos).not.toHaveBeenCalled();
+    });
+
+    it('H: token expirado é rejeitado, sem alterar senha nem revogar sessões', async () => {
+      usuariosService.buscarPorResetToken.mockResolvedValueOnce({
+        id: 1,
+        resetTokenExpiry: new Date(Date.now() - 1000),
+      });
+
+      await expect(
+        service.resetPassword({ token: 'token-expirado', novaSenha: 'novaSenhaSegura123' }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(usuariosService.redefinirSenha).not.toHaveBeenCalled();
+      expect(usuariosService.revogarTodosRefreshTokensAtivos).not.toHaveBeenCalled();
     });
   });
 });

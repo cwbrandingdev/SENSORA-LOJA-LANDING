@@ -14,11 +14,11 @@ import { ItensPedidoService } from '../itens-pedido/itens-pedido.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
-import { CreatePedidoDto } from './dto/create-pedido.dto';
 import { UpdatePedidoDto } from './dto/update-pedido.dto';
 import { PedidoComItens } from './entities/pedido-com-itens.entity';
 import { PedidoComItensDetalhado } from './entities/pedido-com-itens-detalhado.entity';
 import { Pedido } from './entities/pedido.entity';
+import { StatusEnvio } from './enums/status-envio.enum';
 import { StatusPedido } from './enums/status-pedido.enum';
 
 @Injectable()
@@ -86,26 +86,12 @@ export class PedidosService {
     return this.paraPedido(pedido);
   }
 
-  async create(
-    createPedidoDto: CreatePedidoDto,
-    user: UsuarioAutenticado,
-  ): Promise<Pedido> {
-    const pedido = await this.prisma.pedido.create({
-      data: {
-        numero: createPedidoDto.numero,
-        data: new Date(createPedidoDto.data),
-        status: createPedidoDto.status ?? StatusPedido.PENDENTE,
-        total: createPedidoDto.total,
-        // Sempre o usuário autenticado, nunca aceito do corpo da
-        // requisição — CreatePedidoDto não tem campo `usuarioId` (o
-        // ValidationPipe global com forbidNonWhitelisted rejeitaria/
-        // removeria qualquer tentativa de enviá-lo), então não há como um
-        // VENDEDOR assumir um pedido em nome de outro usuário na criação.
-        usuarioId: user.id,
-      },
-    });
-    return this.paraPedido(pedido);
-  }
+  // Etapa 8.1 (complemento — eliminação da venda manual) — create() foi
+  // removido de propósito: não existe mais criação administrativa de
+  // Pedido, nem como PENDENTE. A única origem de um Pedido novo é
+  // CheckoutService.createSession, que grava direto via Prisma (nunca
+  // chama este service) — ver checkout.service.ts. Este service agora só
+  // gerencia pedidos já existentes.
 
   async update(
     id: number,
@@ -114,21 +100,67 @@ export class PedidosService {
   ): Promise<Pedido> {
     const pedidoAtual = await this.findOne(id, user);
     this.garantirMutavel(pedidoAtual);
-    const { data, ...rest } = updatePedidoDto;
+    const { numero, data, total } = updatePedidoDto;
 
+    // Achado da auditoria (HIGH-01): whitelist explícita dos campos
+    // mutáveis, nunca um spread genérico do DTO — mesmo que `status` volte
+    // a existir em UpdatePedidoDto por algum motivo no futuro, ele NUNCA
+    // chegaria ao Prisma por aqui sem uma linha nova e visível abaixo. A
+    // única origem legítima de `status: PAGO` continua sendo
+    // CheckoutService.confirmarPagamento() (webhook CHECKOUT_PAID).
     const pedido = await this.prisma.pedido.update({
       where: { id },
       data: {
-        ...rest,
+        ...(numero !== undefined && { numero }),
         ...(data !== undefined && { data: new Date(data) }),
+        ...(total !== undefined && { total }),
       },
     });
     return this.paraPedido(pedido);
   }
 
+  // Etapa 8.2 (HIGH-02 — hard-delete de pedido financeiramente relevante) —
+  // só PENDENTE pode ser excluído; PAGO/CANCELADO/REEMBOLSO_SOLICITADO/
+  // REEMBOLSADO são sempre rejeitados com 409, para nunca apagar histórico
+  // financeiro. Mesmo padrão de claim atômico já usado em cancelar()/
+  // solicitarReembolso()/marcarComoEnviado(): `deleteMany` condicionado a
+  // `status: PENDENTE` no WHERE é o que garante atomicidade contra a
+  // corrida "status muda entre a leitura e a exclusão" (ex.: webhook
+  // CHECKOUT_PAID confirmando o pagamento entre o findOne() abaixo e a
+  // exclusão) — o Postgres só apaga a linha se o status ainda for PENDENTE
+  // no exato instante da escrita; `count === 0` nunca é assumido como "já
+  // não existe" (isso já foi descartado pelo findOne() acima), sempre como
+  // "não é mais PENDENTE".
+  //
+  // ItemPedido é excluído em cascata pelo próprio Postgres (`onDelete:
+  // Cascade` em ItemPedido.pedido, ver schema.prisma) — nenhuma lógica de
+  // estoque nova é necessária aqui: um pedido ainda PENDENTE nunca tem item
+  // com estoqueBaixado:true (só CheckoutService.confirmarPagamento()
+  // decrementa estoque, e ele SEMPRE transiciona o status para PAGO na
+  // mesma transação — ver checkout.service.ts), então excluir os itens de
+  // um pedido PENDENTE nunca deixa estoque "preso" nem exige restauração.
   async remove(id: number, user: UsuarioAutenticado): Promise<void> {
-    await this.findOne(id, user);
-    await this.prisma.pedido.delete({ where: { id } });
+    const pedidoAtual = await this.findOne(id, user);
+
+    const ownerFilter =
+      user.perfil === PerfilUsuario.ADMIN ? {} : { usuarioId: user.id };
+
+    const resultado = await this.prisma.pedido.deleteMany({
+      where: { id, ...ownerFilter, status: StatusPedido.PENDENTE },
+    });
+
+    if (resultado.count === 0) {
+      // Reconsulta o status real em vez de confiar no que foi lido um
+      // instante atrás (mesmo raciocínio de cancelar()): numa corrida
+      // genuína, `pedidoAtual.status` já estaria desatualizado.
+      const atual = await this.prisma.pedido.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      throw new ConflictException(
+        `Pedido com status ${atual?.status ?? pedidoAtual.status} não pode ser excluído.`,
+      );
+    }
   }
 
   // Etapa 5A (Cancelamento de Pedido) — única transição permitida por este
@@ -364,6 +396,68 @@ export class PedidosService {
     }
   }
 
+  // Etapa 6.6 (Status de Envio) — MVP, ação administrativa manual
+  // (STAFF_ROLES, ver PedidosController). Eixo logístico (`statusEnvio`)
+  // INDEPENDENTE do financeiro (`status`) — nunca reaproveita
+  // garantirMutavel() nem qualquer lógica de cancelar()/solicitarReembolso(),
+  // de propósito: marcar como enviado não é uma edição genérica de pedido
+  // (não mexe em numero/data/total) nem uma transição financeira, é uma
+  // operação própria com sua própria regra (só a partir de PAGO). Mesmo
+  // padrão de claim atômico já usado em cancelar()/solicitarReembolso():
+  // updateMany condicionado ao estado atual (`status: PAGO, statusEnvio:
+  // NAO_ENVIADO`) garante que, em duas requisições concorrentes, só uma
+  // escreve `enviadoEm` — a perdedora nunca sobrescreve o momento real do
+  // envio (item 7 da etapa), só devolve o pedido já atualizado pela
+  // primeira (idempotência, item 5).
+  async marcarComoEnviado(id: number, user: UsuarioAutenticado): Promise<Pedido> {
+    const pedidoAtual = await this.findOne(id, user);
+
+    // Idempotência de negócio: reenvio (double-click, retry) sobre um
+    // pedido já enviado nunca tenta a transição de novo — só devolve o
+    // estado atual, sem tocar em enviadoEm. Mesmo raciocínio do early-return
+    // de solicitarReembolso para REEMBOLSO_SOLICITADO/REEMBOLSADO.
+    if (pedidoAtual.statusEnvio === StatusEnvio.ENVIADO) {
+      return pedidoAtual;
+    }
+
+    if (pedidoAtual.status !== StatusPedido.PAGO) {
+      throw new ConflictException(
+        `Pedido com status ${pedidoAtual.status} não pode ser marcado como enviado.`,
+      );
+    }
+
+    const ownerFilter =
+      user.perfil === PerfilUsuario.ADMIN ? {} : { usuarioId: user.id };
+
+    const claim = await this.prisma.pedido.updateMany({
+      where: {
+        id,
+        ...ownerFilter,
+        status: StatusPedido.PAGO,
+        statusEnvio: StatusEnvio.NAO_ENVIADO,
+      },
+      data: { statusEnvio: StatusEnvio.ENVIADO, enviadoEm: new Date() },
+    });
+
+    if (claim.count === 0) {
+      // Perdeu a corrida (ou o estado mudou por outro motivo entre o
+      // findOne() acima e aqui) — reconsulta o estado real em vez de confiar
+      // no que foi lido um instante atrás. Se outra requisição venceu a
+      // corrida e já marcou como ENVIADO, devolve o resultado dela
+      // (idempotente, sem sobrescrever enviadoEm); qualquer outro caso
+      // (status deixou de ser PAGO nesse meio tempo) é erro de negócio real.
+      const atual = await this.findOne(id, user);
+      if (atual.statusEnvio === StatusEnvio.ENVIADO) {
+        return atual;
+      }
+      throw new ConflictException(
+        `Pedido com status ${atual.status} não pode ser marcado como enviado.`,
+      );
+    }
+
+    return this.findOne(id, user);
+  }
+
   // Resolve o Payment ID a usar para o reembolso: usa o já persistido em
   // Pedido.asaasPaymentId quando existir (nunca resolve de novo pelo
   // Checkout nesse caso), senão tenta resolver via asaasCheckoutId e
@@ -481,6 +575,8 @@ export class PedidosService {
       freteTransportadora: pedido.freteTransportadora ?? undefined,
       freteServico: pedido.freteServico ?? undefined,
       fretePrazoDias: pedido.fretePrazoDias ?? undefined,
+      statusEnvio: pedido.statusEnvio as StatusEnvio,
+      enviadoEm: pedido.enviadoEm ?? undefined,
     };
   }
 }
