@@ -1,9 +1,12 @@
 "use client";
 
 // Etapa 6.5 (Painel administrativo) — card de integração dentro do
-// Dashboard do admin (STAFF_ROLES já protege toda a árvore /admin/*, ver
-// ProtectedLayout — nenhuma checagem de perfil extra é necessária aqui).
-// Este componente só orquestra os dois endpoints existentes
+// Dashboard do admin (STAFF_ROLES já protege toda a árvore /workspace-x/*
+// — Etapa 8.12, antes /admin/* — ver ProtectedLayout — nenhuma checagem de
+// perfil extra é necessária aqui).
+// Este componente só orquestra os dois endpoints existentes do backend,
+// que permanecem em /admin/... (Etapa 8.12 só renomeou a rota do
+// frontend, nunca os endpoints HTTP — ver lib/routes.ts):
 // (GET /admin/melhor-envio/status, GET /admin/melhor-envio/conectar) — a
 // conexão em si (OAuth, troca de código por token, persistência) é
 // inteiramente responsabilidade do backend, já validada.

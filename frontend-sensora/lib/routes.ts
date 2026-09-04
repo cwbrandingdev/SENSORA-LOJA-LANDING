@@ -1,6 +1,19 @@
-// Portado de frontend/lib/routes.js. Rotas movidas para /admin/* nesta
-// etapa de fusão (ver auditoria de fusão) — o admin agora vive dentro do
+// Portado de frontend/lib/routes.js. Rotas movidas para /admin/* na etapa
+// de fusão (ver auditoria de fusão) — o admin passou a viver dentro do
 // projeto único da Landing em vez de um segundo frontend separado.
+//
+// Etapa 8.12 (ocultação da rota administrativa) — /admin virou /workspace-x
+// só como camada de obscuridade (reduzir a exposição óbvia da URL no
+// frontend); a autorização real continua sendo inteiramente do backend
+// (JwtAuthGuard + RolesGuard, nunca alterados por esta renomeação — ver
+// ProtectedLayout.tsx). Os endpoints HTTP do backend (GET /admin/asaas/
+// status, /admin/mail/status, /admin/melhor-envio/*, etc.) NÃO mudaram e
+// não têm relação com esta constante — só a URL que o navegador mostra.
+// Se ADMIN_ROUTE for alterada de novo no futuro, atualizar também:
+// e2e/admin-*.spec.ts (navegam direto para essas URLs via page.goto) e
+// qualquer link/redirect que não passe por ROUTES.*.
+const ADMIN_ROUTE = "/workspace-x";
+
 export const ROUTES = {
   LOGIN: "/login",
   REGISTER: "/register",
@@ -9,15 +22,15 @@ export const ROUTES = {
   // Etapa 6.4 (Confirmação de e-mail) — destino do link enviado por e-mail
   // após o cadastro (ver AuthService.enviarEmailVerificacao, backend).
   CONFIRM_EMAIL: "/confirmar-email",
-  DASHBOARD: "/admin",
-  PRODUTOS: "/admin/produtos",
-  CATEGORIAS: "/admin/categorias",
-  CLIENTES: "/admin/clientes",
-  PEDIDOS: "/admin/pedidos",
-  USUARIOS: "/admin/usuarios",
+  DASHBOARD: ADMIN_ROUTE,
+  PRODUTOS: `${ADMIN_ROUTE}/produtos`,
+  CATEGORIAS: `${ADMIN_ROUTE}/categorias`,
+  CLIENTES: `${ADMIN_ROUTE}/clientes`,
+  PEDIDOS: `${ADMIN_ROUTE}/pedidos`,
+  USUARIOS: `${ADMIN_ROUTE}/usuarios`,
   // Central de Integrações (Admin) — ADMIN-only (ver Sidebar.tsx e
-  // app/admin/integracoes/page.tsx), mesmo padrão de USUARIOS acima.
-  INTEGRACOES: "/admin/integracoes",
+  // app/workspace-x/integracoes/page.tsx), mesmo padrão de USUARIOS acima.
+  INTEGRACOES: `${ADMIN_ROUTE}/integracoes`,
   LOJA: "/loja",
   LOJA_PRODUTOS: "/loja/produtos",
   LOJA_CARRINHO: "/loja/carrinho",

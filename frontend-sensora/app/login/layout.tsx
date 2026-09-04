@@ -3,8 +3,9 @@ import { Inter } from "next/font/google";
 import "../globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 
-// Root layout independente (fora do grupo (site) — ver app/admin/layout.tsx
-// para o mesmo raciocínio sobre múltiplos root layouts no App Router).
+// Root layout independente (fora do grupo (site) — ver
+// app/workspace-x/layout.tsx para o mesmo raciocínio sobre múltiplos root
+// layouts no App Router).
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],

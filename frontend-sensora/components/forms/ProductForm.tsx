@@ -24,7 +24,7 @@ const productSchema = z.object({
     .min(0, "Quantidade não pode ser negativa"),
   // Valor cru do <select> (string do id, ou "" para "Sem categoria") — a
   // conversão para number|undefined do CreateProdutoPayload acontece em
-  // app/admin/produtos/page.tsx, não aqui (o form não conhece o payload).
+  // app/workspace-x/produtos/page.tsx, não aqui (o form não conhece o payload).
   categoriaId: z.string().optional(),
   imagemUrl: z
     .string()

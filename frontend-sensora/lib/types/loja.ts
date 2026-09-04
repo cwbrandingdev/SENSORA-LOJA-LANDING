@@ -19,7 +19,8 @@ export enum PerfilUsuario {
 }
 
 // Espelha backend/src/common/constants/roles.constants.ts (STAFF_ROLES) —
-// quem pode entrar no shell do Admin (/admin/*) no frontend. É só defesa em
+// quem pode entrar no shell do Admin (/workspace-x/*, Etapa 8.12 — antes
+// /admin/*) no frontend. É só defesa em
 // profundidade: quem decide de verdade continua sendo o RolesGuard do
 // backend, esta lista nunca deve ser tratada como fonte de autorização real.
 export const STAFF_ROLES: PerfilUsuario[] = [PerfilUsuario.ADMIN, PerfilUsuario.VENDEDOR];

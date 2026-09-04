@@ -116,13 +116,32 @@ export class ItensPedidoService {
       }
     }
 
-    const atualizado = await this.prisma.itemPedido.update({
-      where: { id },
-      data: {
-        ...updateItemPedidoDto,
-        precoUnitario: precoUnitarioFinal,
-        subtotal: novaQuantidade * precoUnitarioFinal,
-      },
+    // Etapa 8.8 (integridade financeira) — `pedidoId` pode mudar aqui
+    // (mover o item para outro pedido, ambos já validados como mutáveis
+    // acima), então até dois Pedido.total precisam ficar consistentes com
+    // os itens que cada um passa a ter. A escrita do item e o(s)
+    // recálculo(s) de total acontecem na MESMA transação: sem isso, duas
+    // edições concorrentes no mesmo pedido poderiam intercalar leitura/
+    // escrita do total e perder um dos recálculos (lost update).
+    const pedidoOrigemId = item.pedidoId;
+    const pedidoDestinoId = updateItemPedidoDto.pedidoId ?? pedidoOrigemId;
+
+    const atualizado = await this.prisma.$transaction(async (tx) => {
+      const itemAtualizado = await tx.itemPedido.update({
+        where: { id },
+        data: {
+          ...updateItemPedidoDto,
+          precoUnitario: precoUnitarioFinal,
+          subtotal: novaQuantidade * precoUnitarioFinal,
+        },
+      });
+
+      await this.pedidosService.recalcularTotal(pedidoDestinoId, tx);
+      if (pedidoDestinoId !== pedidoOrigemId) {
+        await this.pedidosService.recalcularTotal(pedidoOrigemId, tx);
+      }
+
+      return itemAtualizado;
     });
 
     return this.paraItemPedido(atualizado);
@@ -140,7 +159,13 @@ export class ItensPedidoService {
       item.produtoId,
       item.quantidade,
     );
-    await this.prisma.itemPedido.delete({ where: { id } });
+
+    // Etapa 8.8 (integridade financeira) — exclusão do item e recálculo de
+    // Pedido.total na mesma transação (mesmo raciocínio de update() acima).
+    await this.prisma.$transaction(async (tx) => {
+      await tx.itemPedido.delete({ where: { id } });
+      await this.pedidosService.recalcularTotal(item.pedidoId, tx);
+    });
   }
 
   // Único ponto que resolve um ItemPedido por id — reforça a checagem de

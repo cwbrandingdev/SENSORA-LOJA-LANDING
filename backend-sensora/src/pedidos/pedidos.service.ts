@@ -7,6 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import type { Pedido as PedidoPrisma } from '../../generated/prisma/client';
+import { Prisma } from '../../generated/prisma/client';
 import { AsaasErroHttpError, AsaasService } from '../asaas/asaas.service';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { ItemPedido } from '../itens-pedido/entities/item-pedido.entity';
@@ -100,7 +101,7 @@ export class PedidosService {
   ): Promise<Pedido> {
     const pedidoAtual = await this.findOne(id, user);
     this.garantirMutavel(pedidoAtual);
-    const { numero, data, total } = updatePedidoDto;
+    const { numero, data } = updatePedidoDto;
 
     // Achado da auditoria (HIGH-01): whitelist explícita dos campos
     // mutáveis, nunca um spread genérico do DTO — mesmo que `status` volte
@@ -108,15 +109,64 @@ export class PedidosService {
     // chegaria ao Prisma por aqui sem uma linha nova e visível abaixo. A
     // única origem legítima de `status: PAGO` continua sendo
     // CheckoutService.confirmarPagamento() (webhook CHECKOUT_PAID).
-    const pedido = await this.prisma.pedido.update({
+    //
+    // Etapa 8.8 (achado da auditoria — integridade financeira de
+    // Pedido.total): `total` deixou de ser lido/repassado aqui, mesmo que o
+    // cliente o envie — permanece em UpdatePedidoDto só por compatibilidade
+    // de payload com chamadas existentes (nunca usado a partir de agora,
+    // ver PUT /admin/pedidos/[id] no frontend, que reenvia esse campo).
+    // O valor persistido é sempre derivado dos ItemPedido reais + frete
+    // (recalcularTotal), mesmo raciocínio já aplicado a
+    // ItemPedido.precoUnitario na Etapa 8.1: cliente nunca é autoridade
+    // sobre um valor financeiro que o backend consegue determinar sozinho.
+    await this.prisma.pedido.update({
       where: { id },
       data: {
         ...(numero !== undefined && { numero }),
         ...(data !== undefined && { data: new Date(data) }),
-        ...(total !== undefined && { total }),
       },
     });
-    return this.paraPedido(pedido);
+    return this.recalcularTotal(id);
+  }
+
+  // Etapa 8.8 (integridade financeira de Pedido.total) — única rotina que
+  // escreve Pedido.total: sempre derivado da soma de ItemPedido.subtotal
+  // (já um preço histórico confiável, nunca recalculado a partir do preço
+  // ATUAL do Produto — ver ItensPedidoService) + freteValor (nunca
+  // recotado aqui, é o mesmo valor validado contra o Melhor Envio na
+  // criação do pedido, ver CheckoutService.createSession) — nunca aceito
+  // como número solto vindo de fora. Mesmo padrão de client opcional já
+  // usado em ProdutosService.removerEstoque/adicionarEstoque: default
+  // `this.prisma`, mas aceita um `tx` de uma transação já aberta por quem
+  // chama (ver ItensPedidoService.update()/remove(), que precisam que a
+  // escrita do item e o recálculo do total aconteçam atomicamente).
+  // Reaplica garantirMutavel() aqui também (não só nos callers) como defesa
+  // em profundidade: nenhum uso futuro deste método pode, por engano,
+  // destravar o total de um pedido PAGO/REEMBOLSO_SOLICITADO/REEMBOLSADO.
+  async recalcularTotal(
+    pedidoId: number,
+    client: Prisma.TransactionClient = this.prisma,
+  ): Promise<Pedido> {
+    const pedidoAtual = await client.pedido.findUniqueOrThrow({
+      where: { id: pedidoId },
+    });
+    this.garantirMutavel({ status: pedidoAtual.status as StatusPedido });
+
+    const itens = await client.itemPedido.findMany({
+      where: { pedidoId },
+    });
+    const subtotalItens = itens.reduce(
+      (soma, item) => soma + Number(item.subtotal),
+      0,
+    );
+    const frete =
+      pedidoAtual.freteValor !== null ? Number(pedidoAtual.freteValor) : 0;
+
+    const atualizado = await client.pedido.update({
+      where: { id: pedidoId },
+      data: { total: subtotalItens + frete },
+    });
+    return this.paraPedido(atualizado);
   }
 
   // Etapa 8.2 (HIGH-02 — hard-delete de pedido financeiramente relevante) —

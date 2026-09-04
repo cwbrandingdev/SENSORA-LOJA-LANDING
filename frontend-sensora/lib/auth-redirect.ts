@@ -1,7 +1,8 @@
 // Controle de acesso ao fluxo de checkout — reaproveita as mesmas
 // primitivas que o AuthContext já usa por baixo (getToken/isTokenExpired),
-// sem passar pelo Context em si: AuthProvider só está montado em /admin e
-// /login hoje, e seu efeito de auto-logout (sincronizarComToken) redireciona
+// sem passar pelo Context em si: AuthProvider só está montado em
+// /workspace-x (Etapa 8.12, antes /admin) e /login hoje, e seu efeito de
+// auto-logout (sincronizarComToken) redireciona
 // imediatamente para /login sem preservar destino — correto para o Admin,
 // mas expulsaria visitantes anônimos com token expirado de qualquer página
 // pública da Loja se fosse montado lá. Aqui só lemos o token, sem nenhum

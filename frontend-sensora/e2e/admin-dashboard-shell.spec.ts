@@ -7,7 +7,7 @@ import { test, expect, type Page } from "@playwright/test";
 // do resto do projeto.
 //
 // Lote 2 — o Dashboard passou a chamar GET /pedidos além de /produtos e
-// /categorias (ver app/admin/page.tsx), então `mockListasVazias` abaixo
+// /categorias (ver app/workspace-x/page.tsx), então `mockListasVazias` abaixo
 // precisou passar a mockar /pedidos também: sem isso, essas chamadas cairiam
 // no backend real (token fake, 401) e o interceptor de services/api.ts
 // derrubaria a sessão no meio do teste — quebrando os testes de Header/
@@ -18,8 +18,8 @@ import { test, expect, type Page } from "@playwright/test";
 // que a seção "Visão geral" e os 4 títulos existem.
 
 const TOKEN_KEY = "sensora_token";
-const DASHBOARD_URL = "/admin";
-const PRODUTOS_URL = "/admin/produtos";
+const DASHBOARD_URL = "/workspace-x";
+const PRODUTOS_URL = "/workspace-x/produtos";
 const API_URL = "http://localhost:3000";
 
 function base64Url(payload: Record<string, unknown>): string {
@@ -193,5 +193,40 @@ test.describe("Dashboard Admin — cards de Visão geral (estrutura)", () => {
     await expect(page.getByText("Pedidos", { exact: true })).toHaveCount(2); // card + link da sidebar
     await expect(page.getByText("Produtos", { exact: true })).toHaveCount(2);
     await expect(page.getByText("Categorias", { exact: true })).toHaveCount(2);
+  });
+});
+
+// Etapa 8.12 (ocultação da rota administrativa /admin → /workspace-x) —
+// prova que a rota antiga não serve mais nenhuma página administrativa: o
+// diretório app/admin/** foi movido (não duplicado) para
+// app/workspace-x/**, então o Next.js não tem mais nenhum handler
+// registrado para "/admin" nem para nenhuma subrota dela — deve cair na
+// página padrão de not-found (404), com ADMIN autenticado ou não (a
+// ausência de rota é resolvida antes de qualquer guard rodar).
+test.describe("Dashboard Admin — rota antiga /admin não existe mais", () => {
+  test("/admin não serve mais o painel administrativo (404), mesmo para ADMIN autenticado", async ({
+    page,
+  }) => {
+    await seedSession(page, "ADMIN");
+
+    const response = await page.goto("/admin");
+
+    expect(response?.status()).toBe(404);
+    await expect(page.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Navegação administrativa" })).toHaveCount(
+      0,
+    );
+  });
+
+  test("subrotas antigas (/admin/produtos, /admin/pedidos) também não existem mais", async ({
+    page,
+  }) => {
+    await seedSession(page, "ADMIN");
+
+    const respostaProdutos = await page.goto("/admin/produtos");
+    expect(respostaProdutos?.status()).toBe(404);
+
+    const respostaPedidos = await page.goto("/admin/pedidos");
+    expect(respostaPedidos?.status()).toBe(404);
   });
 });

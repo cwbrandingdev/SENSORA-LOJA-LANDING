@@ -366,13 +366,17 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
 // de PAGO continua sendo CheckoutService.confirmarPagamento() (webhook
 // CHECKOUT_PAID) — fora do escopo deste describe (coberto em
 // checkout.service.spec.ts).
-describe('PedidosService — create/update (Etapa 8.1, fechamento do HIGH-01 + eliminação da venda manual)', () => {
+describe('PedidosService — create/update (Etapa 8.1, fechamento do HIGH-01 + eliminação da venda manual; Etapa 8.8, integridade de total)', () => {
   let service: PedidosService;
   let prisma: {
     pedido: {
       create: jest.Mock;
       update: jest.Mock;
       findUnique: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
+    };
+    itemPedido: {
+      findMany: jest.Mock;
     };
   };
 
@@ -386,6 +390,14 @@ describe('PedidosService — create/update (Etapa 8.1, fechamento do HIGH-01 + e
     email: 'vendedor@sensora.dev',
     perfil: PerfilUsuario.VENDEDOR,
   };
+
+  // Etapa 8.8 — itens "reais" do pedido usados por recalcularTotal():
+  // subtotal 2×20 + 1×15 = 55, frete 10 => total esperado 65 sempre que o
+  // total for derivado (nunca o valor solto que um teste tente injetar).
+  const itensDoPedido = [
+    { id: 1, pedidoId: 1, produtoId: 10, quantidade: 2, precoUnitario: 20, subtotal: 40 },
+    { id: 2, pedidoId: 1, produtoId: 11, quantidade: 1, precoUnitario: 15, subtotal: 15 },
+  ];
 
   beforeEach(async () => {
     prisma = {
@@ -402,6 +414,7 @@ describe('PedidosService — create/update (Etapa 8.1, fechamento do HIGH-01 + e
           statusEnvio: StatusEnvio.NAO_ENVIADO,
           numero: 'PED-1',
           data: new Date('2026-09-01'),
+          freteValor: 10,
           total: 100,
           ...data,
         })),
@@ -412,8 +425,24 @@ describe('PedidosService — create/update (Etapa 8.1, fechamento do HIGH-01 + e
           statusEnvio: StatusEnvio.NAO_ENVIADO,
           numero: 'PED-1',
           data: new Date('2026-09-01'),
+          freteValor: 10,
           total: 100,
         })),
+        // Etapa 8.8 — usado por recalcularTotal() para ler status/freteValor
+        // frescos antes de recalcular. Mesmo "banco" em memória do
+        // findUnique acima (freteValor: 10), status sempre PENDENTE neste
+        // describe (garantirMutavel nunca bloqueia estes testes).
+        findUniqueOrThrow: jest.fn(() => ({
+          id: 1,
+          status: StatusPedido.PENDENTE,
+          freteValor: 10,
+        })),
+      },
+      // Etapa 8.8 — usado por recalcularTotal() para somar os itens reais
+      // do pedido (2×20 + 1×15 = 55) em vez de confiar em qualquer `total`
+      // que o chamador de update() tente injetar.
+      itemPedido: {
+        findMany: jest.fn(() => itensDoPedido),
       },
     };
 
@@ -460,28 +489,84 @@ describe('PedidosService — create/update (Etapa 8.1, fechamento do HIGH-01 + e
     const resultado = await service.update(1, dtoComBypass, VENDEDOR);
 
     expect(resultado.status).toBe(StatusPedido.PENDENTE);
-    expect(prisma.pedido.update).toHaveBeenCalledWith({
+    // Etapa 8.8: update() agora faz duas escritas — a primeira só
+    // numero/data (nunca status), a segunda é o recálculo de total dentro
+    // de recalcularTotal() (ver teste dedicado abaixo). Esta asserção olha
+    // só a PRIMEIRA chamada, que é a que poderia (mas não pode) vazar status.
+    expect(prisma.pedido.update.mock.calls[0][0]).toEqual({
       where: { id: 1 },
       data: { numero: 'PED-1-revisado' },
     });
-    expect(
-      (prisma.pedido.update.mock.calls[0][0] as { data: Record<string, unknown> })
-        .data,
-    ).not.toHaveProperty('status');
+    expect(prisma.pedido.update.mock.calls[0][0].data).not.toHaveProperty(
+      'status',
+    );
   });
 
-  it('update() continua editando numero/data/total normalmente (nenhuma regressão do CRUD legítimo)', async () => {
+  // Etapa 8.8 (achado da auditoria — integridade financeira de
+  // Pedido.total): update() nunca mais repassa um `total` vindo do
+  // cliente, mesmo que o payload o inclua (aqui simulando exatamente o
+  // payload real que o frontend admin envia hoje, ver app/admin/pedidos/
+  // [id]/page.tsx — PUT { total: <soma sem frete> }). O valor persistido é
+  // sempre o derivado de recalcularTotal(): soma dos ItemPedido reais (40 +
+  // 15 = 55) + freteValor (10) = 65 — nunca os 250 (nem qualquer outro
+  // valor) enviados no corpo da requisição.
+  it('update() nunca usa o `total` do payload — o valor persistido é sempre derivado dos itens + frete', async () => {
     const resultado = await service.update(
       1,
       { numero: 'PED-1-b', data: '2026-09-05', total: 250 },
       ADMIN,
     );
 
-    expect(prisma.pedido.update).toHaveBeenCalledWith({
+    expect(prisma.pedido.update.mock.calls[0][0]).toEqual({
       where: { id: 1 },
-      data: { numero: 'PED-1-b', data: new Date('2026-09-05'), total: 250 },
+      data: { numero: 'PED-1-b', data: new Date('2026-09-05') },
     });
-    expect(resultado.total).toBe(250);
+    expect(prisma.pedido.update.mock.calls[0][0].data).not.toHaveProperty(
+      'total',
+    );
+    expect(prisma.itemPedido.findMany).toHaveBeenCalledWith({
+      where: { pedidoId: 1 },
+    });
+    expect(resultado.total).toBe(65);
+  });
+
+  // Caso 1 do enunciado — cálculo normal a partir de itens reais (sem
+  // depender de update() para disparar o recálculo).
+  it('recalcularTotal(): soma quantidade × precoUnitario de cada item + frete', async () => {
+    const resultado = await service.recalcularTotal(1);
+
+    expect(resultado.total).toBe(65); // (2×20 + 1×15) + 10 de frete
+  });
+
+  // Caso 6 do enunciado — a composição comercial atual (subtotal + frete)
+  // é preservada: sem frete cadastrado (freteValor null), o total é só a
+  // soma dos itens.
+  it('recalcularTotal(): sem freteValor (null), o total é só a soma dos itens', async () => {
+    prisma.pedido.findUniqueOrThrow.mockReturnValueOnce({
+      id: 1,
+      status: StatusPedido.PENDENTE,
+      freteValor: null,
+    });
+
+    const resultado = await service.recalcularTotal(1);
+
+    expect(resultado.total).toBe(55); // 40 + 15, sem frete
+  });
+
+  // Caso 7 do enunciado (teste de segurança) — mesmo chamado diretamente,
+  // recalcularTotal() nunca "destrava" um pedido já finalizado: a mesma
+  // regra de garantirMutavel() se aplica aqui, não só em update().
+  it('recalcularTotal(): pedido PAGO/REEMBOLSADO/etc. nunca tem o total recalculado silenciosamente', async () => {
+    prisma.pedido.findUniqueOrThrow.mockReturnValueOnce({
+      id: 1,
+      status: StatusPedido.PAGO,
+      freteValor: 10,
+    });
+
+    await expect(service.recalcularTotal(1)).rejects.toThrow(
+      ConflictException,
+    );
+    expect(prisma.pedido.update).not.toHaveBeenCalled();
   });
 });
 

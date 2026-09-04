@@ -3,7 +3,8 @@
 // Portado de frontend/components/layout/Sidebar.js — mesmo comportamento,
 // com o mesmo ajuste de destaque de navegação já corrigido na Loja original
 // (Dashboard só fica ativo em match exato, senão ficaria destacado em toda
-// subrota de /admin). Usa FormButton (não Button) no logout porque precisa
+// subrota de /workspace-x — Etapa 8.12, antes /admin). Usa FormButton (não
+// Button) no logout porque precisa
 // de onClick — Button.tsx da Landing é só wrapper de next/link.
 //
 // Etapa 6.6 (Dashboard Admin) — achado da auditoria: o Admin não tinha
@@ -63,7 +64,7 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
   // (concatenado só quando perfil === ADMIN). Proteção real continua sendo
   // o backend (ADMIN_ONLY_ROLES nos endpoints de status, ver
   // asaas.controller.ts/mail.controller.ts/imagekit.controller.ts) + o
-  // guard de página em app/admin/integracoes/page.tsx — isto aqui é só a
+  // guard de página em app/workspace-x/integracoes/page.tsx — isto aqui é só a
   // camada visual, não esconder o item bastaria para bloquear VENDEDOR.
   const links =
     perfil === PerfilUsuario.ADMIN

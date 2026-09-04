@@ -3,6 +3,15 @@
 /node_modules
 /build
 
+# Etapa 8.10 (hardening LOW — achado da auditoria): "nest build" já emite
+# tudo em /dist (outDir do tsconfig.json), nunca dentro de src/. Arquivos
+# .js/.js.map soltos em src/, ao lado do .ts correspondente, só existiam por
+# terem sido versionados por engano no passado (removidos nesta etapa) e já
+# causaram um bug real (Jest resolvendo o .js obsoleto em vez do .ts atual,
+# ver checkout.service.spec.ts) — nunca devem voltar a ser commitados.
+src/**/*.js
+src/**/*.js.map
+
 # Logs
 logs
 *.log

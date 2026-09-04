@@ -6,7 +6,6 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import type { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsuarioPublico } from '../usuarios/entities/usuario.entity';
@@ -27,6 +26,7 @@ import { ResendVerificationResponse } from './entities/resend-verification-respo
 import { ResetPasswordResponse } from './entities/reset-password-response.entity';
 import { VerifyEmailResponse } from './entities/verify-email-response.entity';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { CloudflareAwareThrottlerGuard } from './guards/render-throttler.guard';
 
 // Etapa 10 / Task 4 (achado A2): ThrottlerGuard só neste controller — as
 // rotas abaixo são exatamente todas as rotas de auth existentes (Task 27
@@ -34,8 +34,13 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 // classe cobre todas sem precisar decorar uma por uma (e cobre
 // automaticamente qualquer rota de auth futura, sem risco de esquecer
 // alguma). Nenhum outro controller do sistema é afetado.
+//
+// Etapa 8.11 (complemento): CloudflareAwareThrottlerGuard no lugar do
+// ThrottlerGuard puro — mesma configuração/limites (ThrottlerModule em
+// auth.module.ts, inalterado), só troca QUAL IP é usado como tracker por
+// trás do Render (ver render-throttler.guard.ts).
 @Controller('auth')
-@UseGuards(ThrottlerGuard)
+@UseGuards(CloudflareAwareThrottlerGuard)
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

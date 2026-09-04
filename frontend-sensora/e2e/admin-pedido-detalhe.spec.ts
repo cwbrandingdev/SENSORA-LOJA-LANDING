@@ -1,7 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 
 // Etapa 8.1 (complemento — eliminação da venda manual) — suíte E2E de
-// /admin/pedidos/[id] dedicada a provar que "Adicionar item" foi removido
+// /workspace-x/pedidos/[id] (Etapa 8.12, antes /admin/pedidos/[id]) dedicada
+// a provar que "Adicionar item" foi removido
 // (não existe mais forma de montar uma venda item a item pela área
 // administrativa) e que o gerenciamento legítimo de itens JÁ existentes
 // (editar quantidade/produto, remover) continua funcionando normalmente.
@@ -140,7 +141,7 @@ test.describe("Admin / Pedido detalhe — eliminação da venda manual", () => {
     await seedSession(page);
     mockPedidoDetalhe(page);
 
-    await page.goto(`/admin/pedidos/${PEDIDO.id}`);
+    await page.goto(`/workspace-x/pedidos/${PEDIDO.id}`);
 
     await expect(page.getByRole("heading", { name: `Pedido ${PEDIDO.numero}` })).toBeVisible();
     await expect(page.getByRole("button", { name: "Adicionar item" })).toHaveCount(0);
@@ -152,7 +153,7 @@ test.describe("Admin / Pedido detalhe — eliminação da venda manual", () => {
     await seedSession(page);
     mockPedidoDetalhe(page);
 
-    await page.goto(`/admin/pedidos/${PEDIDO.id}`);
+    await page.goto(`/workspace-x/pedidos/${PEDIDO.id}`);
     await page.getByRole("button", { name: "Editar" }).click();
 
     await expect(page.locator("#precoUnitario")).toHaveCount(0);
@@ -164,7 +165,7 @@ test.describe("Admin / Pedido detalhe — eliminação da venda manual", () => {
     await seedSession(page);
     const { chamadasPutItem } = mockPedidoDetalhe(page);
 
-    await page.goto(`/admin/pedidos/${PEDIDO.id}`);
+    await page.goto(`/workspace-x/pedidos/${PEDIDO.id}`);
     await page.getByRole("button", { name: "Editar" }).click();
     await page.locator("#quantidade").fill("3");
     await page.getByRole("button", { name: "Salvar item" }).click();
@@ -179,7 +180,7 @@ test.describe("Admin / Pedido detalhe — eliminação da venda manual", () => {
     await seedSession(page);
     const { chamadasDeleteItem } = mockPedidoDetalhe(page);
 
-    await page.goto(`/admin/pedidos/${PEDIDO.id}`);
+    await page.goto(`/workspace-x/pedidos/${PEDIDO.id}`);
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "Remover" }).click();
 

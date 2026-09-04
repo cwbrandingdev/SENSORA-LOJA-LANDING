@@ -3,7 +3,8 @@
 // Portado de frontend/components/layout/ProtectedLayout.js, com a proteção
 // estendida na Etapa 10 (Task 2 / achado C2 da auditoria): antes só checava
 // isAuthenticated, o que deixava qualquer CLIENTE logado ver o shell inteiro
-// do Admin. Agora é o único ponto de guarda de toda a árvore /admin/* — só
+// do Admin. Agora é o único ponto de guarda de toda a árvore /workspace-x/*
+// (Etapa 8.12 — antes /admin/*) — só
 // ADMIN/VENDEDOR (STAFF_ROLES) passam; CLIENTE vai para a loja. O backend
 // (RolesGuard) continua sendo a autoridade real; isto é defesa em
 // profundidade na camada visual.

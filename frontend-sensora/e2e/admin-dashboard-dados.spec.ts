@@ -10,7 +10,7 @@ import { test, expect, type Page, type Locator } from "@playwright/test";
 // do projeto.
 
 const TOKEN_KEY = "sensora_token";
-const DASHBOARD_URL = "/admin";
+const DASHBOARD_URL = "/workspace-x";
 const API_URL = "http://localhost:3000";
 
 function base64Url(payload: Record<string, unknown>): string {

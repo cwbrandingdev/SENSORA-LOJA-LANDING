@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
-// Etapa 6.6 (Parte B) — suíte E2E de /admin/pedidos dedicada à investigação/
+// Etapa 6.6 (Parte B) — suíte E2E de /workspace-x/pedidos (Etapa 8.12, antes
+// /admin/pedidos) dedicada à investigação/
 // correção do "Editar" em pedidos PENDENTE. Não existia nenhuma suíte para
 // esta página antes (achado da investigação: lacuna real de cobertura).
 //
@@ -16,7 +17,7 @@ import { test, expect, type Page } from "@playwright/test";
 // edição "não funciona corretamente". Corrigido com `{ timeZone: "UTC" }`.
 
 const TOKEN_KEY = "sensora_token";
-const PEDIDOS_URL = "/admin/pedidos";
+const PEDIDOS_URL = "/workspace-x/pedidos";
 const API_URL = "http://localhost:3000";
 
 function base64Url(payload: Record<string, unknown>): string {
@@ -433,7 +434,8 @@ test.describe("Admin / Pedidos — Exclusão (Etapa 8.2, HIGH-02)", () => {
   });
 });
 
-// Etapa 6.6 (Status de Envio) — suíte E2E de /admin/pedidos dedicada à ação
+// Etapa 6.6 (Status de Envio) — suíte E2E de /workspace-x/pedidos (Etapa
+// 8.12, antes /admin/pedidos) dedicada à ação
 // "Marcar como enviado" (POST /pedidos/:id/marcar-enviado) e à nova coluna
 // "Envio". Não duplica as regras de negócio (só a partir de PAGO,
 // idempotência, claim atômico) — isso já está coberto no

@@ -38,10 +38,12 @@ describe('ItensPedidoService — create removido / update com preço confiável 
       findUnique: jest.Mock;
       delete: jest.Mock;
     };
+    $transaction: jest.Mock;
   };
   let pedidosService: {
     findOne: jest.Mock;
     garantirMutavel: jest.Mock;
+    recalcularTotal: jest.Mock;
   };
   let produtosService: {
     findOne: jest.Mock;
@@ -56,36 +58,52 @@ describe('ItensPedidoService — create removido / update com preço confiável 
   };
 
   beforeEach(async () => {
+    const itemPedido = {
+      create: jest.fn(({ data }: { data: Record<string, unknown> }) => ({
+        id: 1,
+        ...data,
+      })),
+      update: jest.fn(({ data }: { data: Record<string, unknown> }) => ({
+        id: 1,
+        pedidoId: 1,
+        produtoId: 10,
+        quantidade: 2,
+        precoUnitario: 19.9,
+        subtotal: 39.8,
+        ...data,
+      })),
+      findUnique: jest.fn(() => ({
+        id: 1,
+        pedidoId: 1,
+        produtoId: 10,
+        quantidade: 2,
+        precoUnitario: 19.9,
+        subtotal: 39.8,
+      })),
+      delete: jest.fn(),
+    };
+
     prisma = {
-      itemPedido: {
-        create: jest.fn(({ data }: { data: Record<string, unknown> }) => ({
-          id: 1,
-          ...data,
-        })),
-        update: jest.fn(({ data }: { data: Record<string, unknown> }) => ({
-          id: 1,
-          pedidoId: 1,
-          produtoId: 10,
-          quantidade: 2,
-          precoUnitario: 19.9,
-          subtotal: 39.8,
-          ...data,
-        })),
-        findUnique: jest.fn(() => ({
-          id: 1,
-          pedidoId: 1,
-          produtoId: 10,
-          quantidade: 2,
-          precoUnitario: 19.9,
-          subtotal: 39.8,
-        })),
-        delete: jest.fn(),
-      },
+      itemPedido,
+      // Etapa 8.8 — update()/remove() rodam a escrita do item + o
+      // recálculo de Pedido.total (via pedidosService.recalcularTotal, já
+      // mockado abaixo) dentro de uma transação. Para este teste unitário
+      // não precisamos simular isolamento real do Postgres — só que o
+      // callback recebe um `tx` com os mesmos métodos de itemPedido, para
+      // que `tx.itemPedido.update`/`.delete` cheguem às mesmas mocks acima.
+      $transaction: jest.fn(async (callback: (tx: unknown) => unknown) =>
+        callback({ itemPedido }),
+      ),
     };
 
     pedidosService = {
       findOne: jest.fn(() => ({ ...pedidoPendente })),
       garantirMutavel: jest.fn(),
+      // Etapa 8.8 — mockado como no-op: os testes deste arquivo continuam
+      // focados em preço confiável/estoque (Etapa 8.1); a prova de que
+      // recalcularTotal() é realmente chamado com o(s) pedidoId(s) certo(s)
+      // fica em testes dedicados logo abaixo.
+      recalcularTotal: jest.fn(() => ({})),
     };
 
     produtosService = {
@@ -182,5 +200,57 @@ describe('ItensPedidoService — create removido / update com preço confiável 
 
     expect(produtosService.adicionarEstoque).toHaveBeenCalledWith(10, 2);
     expect(prisma.itemPedido.findUnique).toHaveBeenCalled();
+  });
+
+  // Etapa 8.8 (integridade financeira) — casos 2/4/5 do enunciado: alterar
+  // quantidade e remover item precisam disparar o recálculo de
+  // Pedido.total do pedido dono do item, dentro da mesma transação da
+  // escrita do item (garante atomicidade sob concorrência — ver comentário
+  // em itens-pedido.service.ts).
+  it('update(): recalcula Pedido.total do pedido do item, dentro da mesma transação da escrita', async () => {
+    await service.update(1, { quantidade: 5 }, VENDEDOR);
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(pedidosService.recalcularTotal).toHaveBeenCalledTimes(1);
+    expect(pedidosService.recalcularTotal).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ itemPedido: expect.anything() }),
+    );
+  });
+
+  it('remove(): recalcula Pedido.total do pedido do item, dentro da mesma transação da exclusão', async () => {
+    await service.remove(1, VENDEDOR);
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(pedidosService.recalcularTotal).toHaveBeenCalledTimes(1);
+    expect(pedidosService.recalcularTotal).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ itemPedido: expect.anything() }),
+    );
+  });
+
+  // Etapa 8.8 — caso extra descoberto no diagnóstico: update() também
+  // permite mover um item para OUTRO pedido (UpdateItemPedidoDto.pedidoId).
+  // Os dois pedidos (origem e destino) ficam com listas de itens diferentes
+  // depois do move, então os DOIS totais precisam ser recalculados — nunca
+  // só o de destino.
+  it('update(): ao mover o item para outro pedido, recalcula o total dos DOIS pedidos (origem e destino)', async () => {
+    const pedidoDestino = { id: 2, usuarioId: VENDEDOR.id, status: StatusPedido.PENDENTE };
+    pedidosService.findOne.mockImplementation((id: number) =>
+      id === 2 ? { ...pedidoDestino } : { ...pedidoPendente },
+    );
+
+    const dto = { pedidoId: 2 } as unknown as UpdateItemPedidoDto;
+    await service.update(1, dto, VENDEDOR);
+
+    expect(pedidosService.recalcularTotal).toHaveBeenCalledTimes(2);
+    expect(pedidosService.recalcularTotal).toHaveBeenCalledWith(
+      2,
+      expect.anything(),
+    ); // destino
+    expect(pedidosService.recalcularTotal).toHaveBeenCalledWith(
+      1,
+      expect.anything(),
+    ); // origem (item.pedidoId original, do mock de itemPedido.findUnique)
   });
 });

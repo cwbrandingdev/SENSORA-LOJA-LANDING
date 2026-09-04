@@ -1,7 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 
 // Etapa 6.6 (Lote 2, Parte B) — regressão do bug de fuso horário
-// identificado originalmente em /admin/pedidos (PedidoTable.tsx) e também
+// identificado originalmente em /workspace-x/pedidos (Etapa 8.12, antes
+// /admin/pedidos — PedidoTable.tsx) e também
 // presente em /conta/pedidos e /conta/pedidos/[id]: `pedido.data` é meia-
 // noite UTC; sem `timeZone: "UTC"` em toLocaleDateString, o navegador
 // converte para o fuso local e pode exibir o dia anterior. Nenhuma suíte

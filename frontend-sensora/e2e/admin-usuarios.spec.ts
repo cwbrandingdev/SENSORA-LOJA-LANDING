@@ -1,13 +1,14 @@
 import { test, expect, type Page } from "@playwright/test";
 
 // Etapa "Dados do Cliente / Cadastro" (fechamento administrativo) — suíte
-// E2E de /admin/usuarios dedicada aos campos novos (CPF/telefone) no
+// E2E de /workspace-x/usuarios (Etapa 8.12, antes /admin/usuarios) dedicada
+// aos campos novos (CPF/telefone) no
 // formulário de criação/edição administrativa. Não recobre o que já era
 // coberto antes (guarda ADMIN-only da página, CRUD de nome/email/perfil/
 // ativo) — só o que mudou. Mesmo padrão de mock via page.route do resto do
 // projeto (backend real indisponível neste ambiente de teste).
 
-const USUARIOS_URL = "/admin/usuarios";
+const USUARIOS_URL = "/workspace-x/usuarios";
 const TOKEN_KEY = "sensora_token";
 
 function base64Url(payload: Record<string, unknown>): string {
@@ -56,7 +57,7 @@ const USUARIO_COM_CPF_TELEFONE = {
 // Padrão de URL EXATO (não "**/usuarios"): a API roda num host separado
 // (NEXT_PUBLIC_API_URL, porta 3000 — ver services/api.ts) do dev server do
 // frontend usado pelo Playwright (porta 3002, ver playwright.config.ts),
-// mas a própria página navegada é "/admin/usuarios" — um glob "**/usuarios"
+// mas a própria página navegada é "/workspace-x/usuarios" — um glob "**/usuarios"
 // também casaria com a navegação para essa página (termina em "usuarios"),
 // substituindo o HTML da página pelo JSON mockado. Mesmo raciocínio se
 // aplicaria a qualquer suíte futura cuja rota do frontend termine com o

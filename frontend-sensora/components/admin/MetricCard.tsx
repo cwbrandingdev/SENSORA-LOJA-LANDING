@@ -1,6 +1,6 @@
 // Etapa 6.6 (Dashboard Admin) — card de métrica genérico, reaproveitado
 // pelos 4 cards de "Visão geral" (Faturamento/Pedidos/Produtos/Categorias,
-// ver app/admin/page.tsx). Criado no Lote 1 só com skeleton (nenhuma API
+// ver app/workspace-x/page.tsx). Criado no Lote 1 só com skeleton (nenhuma API
 // conectada); no Lote 2 os usos passaram a alternar `loading`/`erro`/`valor`
 // conforme o resultado real de GET /pedidos, /produtos e /categorias — o
 // componente em si não mudou, só ganhou uso de verdade das props que já

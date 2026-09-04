@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
-// Central de Integrações (Admin) — suíte E2E de /admin/integracoes: guarda
+// Central de Integrações (Admin) — suíte E2E de /workspace-x/integracoes
+// (Etapa 8.12, antes /admin/integracoes): guarda
 // ADMIN-only (página + item da sidebar), os 4 cards (Asaas/Melhor Envio/
 // Resend/ImageKit) e que nenhum deles expõe segredo. O comportamento
 // específico de cada card de status (loading/erro/retry) já é coberto por
@@ -8,8 +9,8 @@ import { test, expect, type Page } from "@playwright/test";
 // aqui o foco é a página como um todo. Mesmo padrão de mock via page.route
 // do resto do projeto (backend real indisponível neste ambiente).
 
-const INTEGRACOES_URL = "/admin/integracoes";
-const DASHBOARD_URL = "/admin";
+const INTEGRACOES_URL = "/workspace-x/integracoes";
+const DASHBOARD_URL = "/workspace-x";
 const TOKEN_KEY = "sensora_token";
 
 function base64Url(payload: Record<string, unknown>): string {
@@ -40,8 +41,9 @@ async function seedSession(page: Page, perfil: "ADMIN" | "VENDEDOR" | "CLIENTE")
   );
 }
 
-// Etapa 6.6 (Dashboard Admin, Lote 2) — /admin passou a chamar GET
-// /pedidos, /produtos e /categorias (ver app/admin/page.tsx). Sem mockar
+// Etapa 6.6 (Dashboard Admin, Lote 2) — /workspace-x (Etapa 8.12, antes
+// /admin) passou a chamar GET /pedidos, /produtos e /categorias (ver
+// app/workspace-x/page.tsx). Sem mockar
 // essas três rotas, os testes abaixo que navegam para DASHBOARD_URL cairiam
 // no backend real (token fake → 401), disparando o redirect automático do
 // interceptor de services/api.ts NO MEIO do teste — não tem relação com o
@@ -86,7 +88,7 @@ async function mockTodosOsStatus(
 }
 
 test.describe("Admin — Central de Integrações: acesso ADMIN-only", () => {
-  test("ADMIN acessa /admin/integracoes normalmente", async ({ page }) => {
+  test("ADMIN acessa /workspace-x/integracoes normalmente", async ({ page }) => {
     await seedSession(page, "ADMIN");
     await mockTodosOsStatus(page);
 
@@ -96,7 +98,7 @@ test.describe("Admin — Central de Integrações: acesso ADMIN-only", () => {
     await expect(page.getByRole("heading", { name: "Integrações" })).toBeVisible();
   });
 
-  test("VENDEDOR é redirecionado para o Dashboard ao tentar acessar /admin/integracoes diretamente", async ({
+  test("VENDEDOR é redirecionado para o Dashboard ao tentar acessar /workspace-x/integracoes diretamente", async ({
     page,
   }) => {
     await mockDashboardApisVazias(page);

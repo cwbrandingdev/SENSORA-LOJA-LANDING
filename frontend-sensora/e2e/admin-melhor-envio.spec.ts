@@ -2,7 +2,8 @@ import { test, expect, type Page } from "@playwright/test";
 
 // Etapa 6.5 (Painel administrativo) + Central de Integrações (Admin) —
 // suíte E2E do card de integração "Melhor Envio", movido do Dashboard
-// (/admin) para /admin/integracoes (ADMIN-only) nesta última tarefa. Mesmo
+// (/workspace-x) para /workspace-x/integracoes (ADMIN-only, Etapa 8.12 —
+// antes /admin e /admin/integracoes) nesta última tarefa. Mesmo
 // padrão de mocks do resto do projeto (ver e2e/checkout.spec.ts): backend
 // real indisponível neste ambiente de teste, toda chamada de API é
 // interceptada via page.route com respostas controladas. Não testa o
@@ -17,7 +18,7 @@ import { test, expect, type Page } from "@playwright/test";
 // eles fiquem batendo em rede real (não mockada) enquanto estes testes
 // verificam só o card do Melhor Envio.
 
-const INTEGRACOES_URL = "/admin/integracoes";
+const INTEGRACOES_URL = "/workspace-x/integracoes";
 const TOKEN_KEY = "sensora_token";
 
 function base64Url(payload: Record<string, unknown>): string {
@@ -166,8 +167,9 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5 + Central de Integ
   });
 
   // Antes desta tarefa, este cenário era testado com VENDEDOR (o card vivia
-  // no Dashboard, acessível a todo STAFF). A página /admin/integracoes
-  // agora é ADMIN-only (ver e2e/admin-integracoes.spec.ts), então o mesmo
+  // no Dashboard, acessível a todo STAFF). A página /workspace-x/integracoes
+  // (Etapa 8.12, antes /admin/integracoes) agora é ADMIN-only (ver
+  // e2e/admin-integracoes.spec.ts), então o mesmo
   // comportamento do card (status conectado + "Verificar conexão") passa a
   // ser verificado com ADMIN — o endpoint em si
   // (GET /admin/melhor-envio/status) continua STAFF_ROLES, intocado.
@@ -202,7 +204,7 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5 + Central de Integ
     await expect(page.getByText("Conectado", { exact: true })).toBeVisible();
   });
 
-  test("F: usuário CLIENTE não acessa /admin/integracoes (e portanto nunca vê a integração)", async ({
+  test("F: usuário CLIENTE não acessa /workspace-x/integracoes (e portanto nunca vê a integração)", async ({
     page,
   }) => {
     await seedSession(page, "CLIENTE");
