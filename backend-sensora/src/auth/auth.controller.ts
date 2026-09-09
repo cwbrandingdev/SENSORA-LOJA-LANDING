@@ -6,6 +6,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsuarioPublico } from '../usuarios/entities/usuario.entity';
@@ -26,21 +27,31 @@ import { ResendVerificationResponse } from './entities/resend-verification-respo
 import { ResetPasswordResponse } from './entities/reset-password-response.entity';
 import { VerifyEmailResponse } from './entities/verify-email-response.entity';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { CloudflareAwareThrottlerGuard } from './guards/render-throttler.guard';
 
-// Etapa 10 / Task 4 (achado A2): ThrottlerGuard só neste controller — as
-// rotas abaixo são exatamente todas as rotas de auth existentes (Task 27
-// acrescentou refresh/logout às 4 originais), então aplicar no nível da
-// classe cobre todas sem precisar decorar uma por uma (e cobre
-// automaticamente qualquer rota de auth futura, sem risco de esquecer
-// alguma). Nenhum outro controller do sistema é afetado.
+// Etapa 10 / Task 4 (achado A2): limite de tentativas mais rigoroso só para
+// as rotas de auth (login, register, forgot/reset-password, verify/resend,
+// refresh, logout, change-password) — aplicar no nível da classe cobre
+// todas sem precisar decorar uma por uma (e cobre automaticamente qualquer
+// rota de auth futura, sem risco de esquecer alguma).
 //
-// Etapa 8.11 (complemento): CloudflareAwareThrottlerGuard no lugar do
-// ThrottlerGuard puro — mesma configuração/limites (ThrottlerModule em
-// auth.module.ts, inalterado), só troca QUAL IP é usado como tracker por
-// trás do Render (ver render-throttler.guard.ts).
+// Etapa 10 / Task CFG-01 (achado da auditoria — sem rate limit global):
+// o guard que executa esse limite agora é global (CloudflareAwareThrottlerGuard
+// registrado como APP_GUARD em app.module.ts, cobrindo todo o app com um
+// throttler 'default' leve). Este @Throttle() só SOBRESCREVE, para as rotas
+// deste controller, o limite/janela daquele mesmo throttler 'default' — não
+// é um segundo mecanismo, nem um guard adicional: mesmo nome ('default'),
+// mesmo guard, valores mais estritos só aqui. Isso preserva exatamente o
+// limite que já existia (5 tentativas/60s por padrão, configurável via
+// AUTH_RATE_LIMIT_MAX/AUTH_RATE_LIMIT_WINDOW_SECONDS) sem risco de ele ser
+// enfraquecido pelo limite global mais permissivo.
+const AUTH_RATE_LIMIT_MAX = Number(process.env.AUTH_RATE_LIMIT_MAX) || 5;
+const AUTH_RATE_LIMIT_TTL_MS =
+  (Number(process.env.AUTH_RATE_LIMIT_WINDOW_SECONDS) || 60) * 1000;
+
 @Controller('auth')
-@UseGuards(CloudflareAwareThrottlerGuard)
+@Throttle({
+  default: { limit: AUTH_RATE_LIMIT_MAX, ttl: AUTH_RATE_LIMIT_TTL_MS },
+})
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

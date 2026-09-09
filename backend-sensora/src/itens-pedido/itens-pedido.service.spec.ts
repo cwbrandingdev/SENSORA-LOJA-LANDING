@@ -198,7 +198,16 @@ describe('ItensPedidoService — create removido / update com preço confiável 
   it('remove(): continua funcionando e devolvendo o estoque (gerenciamento legítimo de item existente)', async () => {
     await service.remove(1, VENDEDOR);
 
-    expect(produtosService.adicionarEstoque).toHaveBeenCalledWith(10, 2);
+    // Etapa 10 / PED-01 — adicionarEstoque() agora roda dentro do
+    // $transaction, recebendo o `tx` (não mais o `this.prisma` default) —
+    // por isso o terceiro argumento passa a fazer parte da chamada
+    // esperada. Ver describe PED-01 abaixo para os testes dedicados de
+    // atomicidade.
+    expect(produtosService.adicionarEstoque).toHaveBeenCalledWith(
+      10,
+      2,
+      expect.objectContaining({ itemPedido: expect.anything() }),
+    );
     expect(prisma.itemPedido.findUnique).toHaveBeenCalled();
   });
 
@@ -252,5 +261,240 @@ describe('ItensPedidoService — create removido / update com preço confiável 
       1,
       expect.anything(),
     ); // origem (item.pedidoId original, do mock de itemPedido.findUnique)
+  });
+});
+
+// Etapa 10 / PED-01 (achado da auditoria — estoque fora da transação) —
+// suíte dedicada, com um mock de $transaction mais realista que o da suíte
+// acima (que só encaminha o callback): aqui o mock também permite simular
+// o `$transaction` REJEITANDO no meio do caminho (Cenário 2) e o ajuste de
+// estoque lançando por falta de estoque (Cenário 3), para comprovar que:
+// (1) os ajustes de estoque recebem o `tx`, não mais o client default; (2)
+// uma falha depois do ajuste de estoque, mas ainda dentro do callback,
+// rejeita a operação inteira (nível de código — a garantia de ROLLBACK real
+// no Postgres vem do próprio `$transaction` do Prisma, já correto por
+// construção quando tudo roda dentro do mesmo callback); (3) estoque
+// insuficiente aborta antes de qualquer escrita do item ser tentada.
+describe('ItensPedidoService — estoque dentro da transação (Etapa 10 / PED-01)', () => {
+  let service: ItensPedidoService;
+  let prisma: {
+    itemPedido: {
+      update: jest.Mock;
+      findUnique: jest.Mock;
+      delete: jest.Mock;
+    };
+    $transaction: jest.Mock;
+  };
+  let pedidosService: {
+    findOne: jest.Mock;
+    garantirMutavel: jest.Mock;
+    recalcularTotal: jest.Mock;
+  };
+  let produtosService: {
+    findOne: jest.Mock;
+    removerEstoque: jest.Mock;
+    adicionarEstoque: jest.Mock;
+  };
+
+  const pedidoPendente = {
+    id: 1,
+    usuarioId: VENDEDOR.id,
+    status: StatusPedido.PENDENTE,
+  };
+
+  // Ordem de chamadas observada durante a execução de service.update()/
+  // remove() — usada para provar que o ajuste de estoque acontece DENTRO do
+  // callback do $transaction (depois de `$transaction` ser invocado), não
+  // antes (o bug original: estoque em autocommit, $transaction só depois).
+  let ordemDeChamadas: string[];
+
+  beforeEach(async () => {
+    ordemDeChamadas = [];
+
+    const itemPedido = {
+      update: jest.fn(({ data }: { data: Record<string, unknown> }) => {
+        ordemDeChamadas.push('itemPedido.update');
+        return { id: 1, pedidoId: 1, produtoId: 10, quantidade: 5, ...data };
+      }),
+      findUnique: jest.fn(() => ({
+        id: 1,
+        pedidoId: 1,
+        produtoId: 10,
+        quantidade: 2,
+        precoUnitario: 19.9,
+        subtotal: 39.8,
+      })),
+      delete: jest.fn(() => {
+        ordemDeChamadas.push('itemPedido.delete');
+      }),
+    };
+
+    prisma = {
+      itemPedido,
+      // Mock "de verdade" o suficiente para propagar uma rejeição do
+      // callback como uma rejeição do próprio $transaction — é exatamente
+      // o que o Prisma real faz (se o callback lança, a transação inteira
+      // é revertida e $transaction rejeita com o mesmo erro).
+      $transaction: jest.fn(async (callback: (tx: unknown) => unknown) => {
+        ordemDeChamadas.push('$transaction:aberta');
+        return callback({ itemPedido });
+      }),
+    };
+
+    pedidosService = {
+      findOne: jest.fn(() => ({ ...pedidoPendente })),
+      garantirMutavel: jest.fn(),
+      recalcularTotal: jest.fn(() => {
+        ordemDeChamadas.push('recalcularTotal');
+        return {};
+      }),
+    };
+
+    produtosService = {
+      findOne: jest.fn((id: number) => ({ id, preco: 19.9, quantidade: 100 })),
+      removerEstoque: jest.fn(() => {
+        ordemDeChamadas.push('removerEstoque');
+        return {};
+      }),
+      adicionarEstoque: jest.fn(() => {
+        ordemDeChamadas.push('adicionarEstoque');
+        return {};
+      }),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ItensPedidoService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: PedidosService, useValue: pedidosService },
+        { provide: ProdutosService, useValue: produtosService },
+      ],
+    }).compile();
+
+    service = module.get(ItensPedidoService);
+  });
+
+  // Cenário 1 — sucesso: pedido/item/estoque, tudo confirmado.
+  it('Cenário 1 — update() com sucesso: estoque é ajustado, item é atualizado e o total é recalculado, tudo dentro da mesma transação', async () => {
+    const resultado = await service.update(1, { quantidade: 5 }, VENDEDOR);
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(produtosService.removerEstoque).toHaveBeenCalledWith(
+      10,
+      3, // diferença: 5 (nova) - 2 (antiga)
+      expect.objectContaining({ itemPedido: expect.anything() }),
+    );
+    expect(prisma.itemPedido.update).toHaveBeenCalledTimes(1);
+    expect(pedidosService.recalcularTotal).toHaveBeenCalledTimes(1);
+    expect(resultado.quantidade).toBe(5);
+
+    // A ordem prova que o ajuste de estoque acontece DEPOIS de
+    // $transaction abrir (ou seja, dentro do callback) — nunca antes.
+    expect(ordemDeChamadas).toEqual([
+      '$transaction:aberta',
+      'removerEstoque',
+      'itemPedido.update',
+      'recalcularTotal',
+    ]);
+  });
+
+  it('Cenário 1 — remove() com sucesso: estoque é devolvido, item é excluído e o total é recalculado, tudo dentro da mesma transação', async () => {
+    await service.remove(1, VENDEDOR);
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(produtosService.adicionarEstoque).toHaveBeenCalledWith(
+      10,
+      2,
+      expect.objectContaining({ itemPedido: expect.anything() }),
+    );
+    expect(ordemDeChamadas).toEqual([
+      '$transaction:aberta',
+      'adicionarEstoque',
+      'itemPedido.delete',
+      'recalcularTotal',
+    ]);
+  });
+
+  // Cenário 2 — falha posterior (ainda dentro da transação): se a escrita
+  // do item falhar DEPOIS do ajuste de estoque, mas dentro do mesmo
+  // callback, a operação inteira precisa rejeitar — é essa rejeição do
+  // callback que faz o Prisma reverter TUDO (estoque incluído) no Postgres
+  // real. Não há como observar "o estoque voltou" num mock sem banco real;
+  // a prova de nível de unidade é: (a) o ajuste de estoque e a escrita que
+  // falha estão no MESMO callback (não em chamadas separadas antes/depois
+  // de $transaction), e (b) a falha se propaga como rejeição de
+  // service.update() como um todo, sem ser engolida em algum catch.
+  it('Cenário 2 — falha posterior dentro da transação: erro em itemPedido.update() rejeita update() inteiro (estoque já ajustado participa do mesmo callback que falhou)', async () => {
+    prisma.itemPedido.update.mockImplementationOnce(() => {
+      ordemDeChamadas.push('itemPedido.update:falhou');
+      throw new Error('falha simulada depois do ajuste de estoque');
+    });
+
+    await expect(
+      service.update(1, { quantidade: 5 }, VENDEDOR),
+    ).rejects.toThrow('falha simulada depois do ajuste de estoque');
+
+    // O ajuste de estoque rodou (dentro do callback) antes da falha —
+    // exatamente por estar no mesmo callback que falhou, o Prisma reverte
+    // os dois juntos no Postgres real.
+    expect(produtosService.removerEstoque).toHaveBeenCalledTimes(1);
+    expect(ordemDeChamadas).toEqual([
+      '$transaction:aberta',
+      'removerEstoque',
+      'itemPedido.update:falhou',
+    ]);
+    // recalcularTotal nunca chega a rodar — a falha interrompeu o callback
+    // antes desse ponto.
+    expect(pedidosService.recalcularTotal).not.toHaveBeenCalled();
+  });
+
+  it('Cenário 2 — falha posterior dentro da transação (remove()): erro em itemPedido.delete() rejeita remove() inteiro', async () => {
+    prisma.itemPedido.delete.mockImplementationOnce(() => {
+      ordemDeChamadas.push('itemPedido.delete:falhou');
+      throw new Error('falha simulada depois de devolver o estoque');
+    });
+
+    await expect(service.remove(1, VENDEDOR)).rejects.toThrow(
+      'falha simulada depois de devolver o estoque',
+    );
+
+    expect(produtosService.adicionarEstoque).toHaveBeenCalledTimes(1);
+    expect(pedidosService.recalcularTotal).not.toHaveBeenCalled();
+  });
+
+  // Cenário 3 — estoque insuficiente: removerEstoque() já lança
+  // BadRequestException atomicamente quando não há estoque suficiente (ver
+  // ProdutosService) — a escrita do item nunca é sequer tentada, porque o
+  // throw interrompe o callback antes de chegar lá.
+  it('Cenário 3 — estoque insuficiente: removerEstoque() lança, itemPedido.update() nunca é chamado, nenhum recálculo de total acontece', async () => {
+    const erroEstoqueInsuficiente = new Error(
+      'Estoque insuficiente para o produto com id 10',
+    );
+    produtosService.removerEstoque.mockImplementationOnce(() => {
+      ordemDeChamadas.push('removerEstoque:falhou');
+      throw erroEstoqueInsuficiente;
+    });
+
+    await expect(
+      service.update(1, { quantidade: 5 }, VENDEDOR),
+    ).rejects.toThrow('Estoque insuficiente para o produto com id 10');
+
+    expect(prisma.itemPedido.update).not.toHaveBeenCalled();
+    expect(pedidosService.recalcularTotal).not.toHaveBeenCalled();
+    expect(ordemDeChamadas).toEqual([
+      '$transaction:aberta',
+      'removerEstoque:falhou',
+    ]);
+  });
+
+  // Confirma explicitamente que o `client` passado para removerEstoque/
+  // adicionarEstoque é o `tx` da transação aberta, nunca o PrismaService
+  // "cru" (this.prisma) — é essa troca que fecha o achado da auditoria.
+  it('o `client` passado para removerEstoque/adicionarEstoque é sempre o `tx` — nunca this.prisma (PrismaService) diretamente', async () => {
+    await service.update(1, { quantidade: 5 }, VENDEDOR);
+
+    const clienteRecebido = produtosService.removerEstoque.mock.calls[0][2];
+    expect(clienteRecebido).not.toBe(prisma);
+    expect(clienteRecebido).toEqual({ itemPedido: expect.anything() });
   });
 });

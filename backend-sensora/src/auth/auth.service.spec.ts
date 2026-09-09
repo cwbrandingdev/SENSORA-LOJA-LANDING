@@ -42,6 +42,9 @@ describe('AuthService', () => {
     buscarPorResetToken: jest.Mock;
     redefinirSenha: jest.Mock;
     revogarTodosRefreshTokensAtivos: jest.Mock;
+    buscarRefreshTokenPorHash: jest.Mock;
+    buscarAtivoPorId: jest.Mock;
+    revogarRefreshTokenSeAtivo: jest.Mock;
   };
   let mailService: { enviarEmail: jest.Mock };
   let jwtService: { sign: jest.Mock };
@@ -59,6 +62,9 @@ describe('AuthService', () => {
       buscarPorResetToken: jest.fn(),
       redefinirSenha: jest.fn(),
       revogarTodosRefreshTokensAtivos: jest.fn(),
+      buscarRefreshTokenPorHash: jest.fn(),
+      buscarAtivoPorId: jest.fn(),
+      revogarRefreshTokenSeAtivo: jest.fn(),
     };
     mailService = { enviarEmail: jest.fn() };
     jwtService = { sign: jest.fn(() => 'access-token-fake') };
@@ -591,6 +597,156 @@ describe('AuthService', () => {
         service.resetPassword({ token: 'token-expirado', novaSenha: 'novaSenhaSegura123' }),
       ).rejects.toThrow(UnauthorizedException);
       expect(usuariosService.redefinirSenha).not.toHaveBeenCalled();
+      expect(usuariosService.revogarTodosRefreshTokensAtivos).not.toHaveBeenCalled();
+    });
+  });
+
+  // Etapa 10 / AUTH-04 (achado da auditoria — reuso de refresh token sem
+  // revogação em cascata). Cenários pedidos pela correção: (1) refresh
+  // normal não aciona a cascata; (2) reuso de um token já revogado aciona
+  // revogarTodosRefreshTokensAtivos() e rejeita; (3) a chamada de cascata é
+  // exatamente o mecanismo que revoga "B e C" (qualquer token ativo do
+  // usuário, não só o token reapresentado — prova detalhada em
+  // usuarios.service.spec.ts, já que revogarTodosRefreshTokensAtivos() não
+  // filtra por token nenhum); (4) o usuarioId usado na cascata é sempre o
+  // do REGISTRO do token reutilizado, nunca um valor arbitrário.
+  describe('refresh — Etapa 10 / AUTH-04 (revogação em cascata no reuso)', () => {
+    const USUARIO_ATIVO = {
+      id: 1,
+      email: 'cliente@sensora.dev',
+      perfil: PerfilUsuario.CLIENTE,
+      ativo: true,
+    };
+
+    // Cenário 1 — refresh normal.
+    it('A: token A válido (não revogado, não expirado) é aceito — A é revogado, B é criado, cascata NÃO é acionada', async () => {
+      usuariosService.buscarRefreshTokenPorHash.mockResolvedValueOnce({
+        id: 10,
+        usuarioId: 1,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        revokedAt: null,
+      });
+      usuariosService.buscarAtivoPorId.mockResolvedValueOnce(USUARIO_ATIVO);
+      usuariosService.revogarRefreshTokenSeAtivo.mockResolvedValueOnce(1);
+
+      const resultado = await service.refresh({ refresh_token: 'token-A' });
+
+      expect(usuariosService.buscarRefreshTokenPorHash).toHaveBeenCalledWith(
+        sha256('token-A'),
+      );
+      expect(usuariosService.revogarRefreshTokenSeAtivo).toHaveBeenCalledWith(
+        sha256('token-A'),
+      );
+      expect(usuariosService.criarRefreshToken).toHaveBeenCalledTimes(1);
+      expect(usuariosService.criarRefreshToken.mock.calls[0][0]).toBe(1);
+      expect(usuariosService.revogarTodosRefreshTokensAtivos).not.toHaveBeenCalled();
+      expect(resultado.access_token).toBe('access-token-fake');
+      expect(typeof resultado.refresh_token).toBe('string');
+    });
+
+    // Cenário 2 — reutilização de A.
+    it('B: token A já revogado (reuso) é rejeitado — revogarTodosRefreshTokensAtivos(usuarioId) é chamado ANTES da exceção, nenhum novo par de tokens é emitido', async () => {
+      usuariosService.buscarRefreshTokenPorHash.mockResolvedValueOnce({
+        id: 10,
+        usuarioId: 1,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        revokedAt: new Date(Date.now() - 5000), // já usado antes
+      });
+
+      await expect(
+        service.refresh({ refresh_token: 'token-A-ja-usado' }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(usuariosService.revogarTodosRefreshTokensAtivos).toHaveBeenCalledWith(1);
+      expect(usuariosService.revogarTodosRefreshTokensAtivos).toHaveBeenCalledTimes(1);
+      // A rejeição usa o caminho de reuso, não o de rotação normal — nunca
+      // tenta revogar/rotacionar o próprio token A de novo nem emitir B.
+      expect(usuariosService.revogarRefreshTokenSeAtivo).not.toHaveBeenCalled();
+      expect(usuariosService.criarRefreshToken).not.toHaveBeenCalled();
+      expect(usuariosService.buscarAtivoPorId).not.toHaveBeenCalled();
+    });
+
+    // Cenário 3 — contenção (B e C deixam de ser válidos). A prova de que a
+    // chamada abaixo de fato invalida QUALQUER token ativo do usuário (não
+    // só o token A que disparou a detecção) está em
+    // usuarios.service.spec.ts — aqui provamos que AuthService.refresh()
+    // delega para exatamente esse mecanismo, com o usuarioId correto.
+    it('C: reuso de A aciona a revogação de TODAS as sessões do usuário (mecanismo que também invalida B e C, não só A)', async () => {
+      usuariosService.buscarRefreshTokenPorHash.mockResolvedValueOnce({
+        id: 10,
+        usuarioId: 1,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        revokedAt: new Date(Date.now() - 5000),
+      });
+      // Representa B e C (dois outros tokens ativos) tendo sido revogados
+      // pela mesma chamada, junto de qualquer outro que existisse.
+      usuariosService.revogarTodosRefreshTokensAtivos.mockResolvedValueOnce(2);
+
+      await expect(
+        service.refresh({ refresh_token: 'token-A-ja-usado' }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(usuariosService.revogarTodosRefreshTokensAtivos).toHaveBeenCalledWith(1);
+    });
+
+    // Cenário 4 — usuário correto: o usuarioId usado na cascata é sempre o
+    // do REGISTRO do token apresentado (nunca outro usuário arbitrário).
+    it('D: a cascata usa o usuarioId do registro do token reutilizado — nunca revoga tokens de outro usuário', async () => {
+      usuariosService.buscarRefreshTokenPorHash.mockResolvedValueOnce({
+        id: 20,
+        usuarioId: 42,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        revokedAt: new Date(Date.now() - 5000),
+      });
+
+      await expect(
+        service.refresh({ refresh_token: 'token-de-outro-usuario' }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(usuariosService.revogarTodosRefreshTokensAtivos).toHaveBeenCalledWith(42);
+      expect(usuariosService.revogarTodosRefreshTokensAtivos).not.toHaveBeenCalledWith(1);
+    });
+
+    it('token que nunca existiu (registro null): rejeitado sem acionar a cascata (não há usuarioId, e não é evidência de reuso)', async () => {
+      usuariosService.buscarRefreshTokenPorHash.mockResolvedValueOnce(null);
+
+      await expect(
+        service.refresh({ refresh_token: 'token-inexistente' }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(usuariosService.revogarTodosRefreshTokensAtivos).not.toHaveBeenCalled();
+    });
+
+    it('token expirado mas NUNCA revogado: rejeitado sem acionar a cascata (expiração natural não é evidência de reuso)', async () => {
+      usuariosService.buscarRefreshTokenPorHash.mockResolvedValueOnce({
+        id: 10,
+        usuarioId: 1,
+        expiresAt: new Date(Date.now() - 1000),
+        revokedAt: null,
+      });
+
+      await expect(
+        service.refresh({ refresh_token: 'token-so-expirado' }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(usuariosService.revogarTodosRefreshTokensAtivos).not.toHaveBeenCalled();
+    });
+
+    it('corrida de rotação já existente (Task 27): duas requisições com o mesmo token A ainda ativo — a segunda encontra count 0 em revogarRefreshTokenSeAtivo e é rejeitada, sem acionar a cascata (não é reuso de um token já revogado, é uma corrida no MESMO instante)', async () => {
+      usuariosService.buscarRefreshTokenPorHash.mockResolvedValueOnce({
+        id: 10,
+        usuarioId: 1,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        revokedAt: null,
+      });
+      usuariosService.buscarAtivoPorId.mockResolvedValueOnce(USUARIO_ATIVO);
+      usuariosService.revogarRefreshTokenSeAtivo.mockResolvedValueOnce(0);
+
+      await expect(
+        service.refresh({ refresh_token: 'token-A' }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(usuariosService.criarRefreshToken).not.toHaveBeenCalled();
       expect(usuariosService.revogarTodosRefreshTokensAtivos).not.toHaveBeenCalled();
     });
   });

@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
 import * as Joi from 'joi';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { CloudflareAwareThrottlerGuard } from './auth/guards/render-throttler.guard';
 import { CategoriasModule } from './categorias/categorias.module';
 import { CheckoutModule } from './checkout/checkout.module';
 import { ClientesModule } from './clientes/clientes.module';
@@ -82,6 +85,44 @@ import { UsuariosModule } from './usuarios/usuarios.module';
         MELHOR_ENVIO_PACOTE_PESO_GRAMAS: Joi.number().positive(),
       }),
     }),
+    // CFG-01 (achado da auditoria) — throttler global leve, cobrindo por
+    // padrão TODAS as rotas do app (aplicado via APP_GUARD abaixo), incluindo
+    // as que antes não tinham nenhum limite (ex.: GET /public/produtos, que
+    // aceitava bursts ilimitados). Limite pensado para não incomodar
+    // navegação normal (uma página da loja facilmente dispara vários GETs
+    // em paralelo) mas ainda barrar abuso: 30 requisições / 10s por IP
+    // rastreado (mesma lógica de tracker do CloudflareAwareThrottlerGuard
+    // já existente, reaproveitado abaixo — nenhuma implementação nova de
+    // rate limiting, só uma segunda entrada de configuração). Configurável
+    // via .env (GLOBAL_RATE_LIMIT_MAX / GLOBAL_RATE_LIMIT_WINDOW_SECONDS),
+    // mesmo padrão de fallback já usado por AUTH_RATE_LIMIT_MAX/WINDOW_SECONDS
+    // em AuthController.
+    //
+    // O throttler 'auth' (5 tentativas/60s) que já existia só para o
+    // AuthController continua com o MESMO valor, agora expresso como um
+    // override via @Throttle() no próprio controller (ver auth.controller.ts)
+    // em vez de um guard/módulo Throttler separado — evita duas limitações
+    // independentes competindo pela mesma requisição e garante que o limite
+    // de auth nunca fica mais fraco que antes.
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [
+          {
+            name: 'default',
+            limit:
+              Number(configService.get<string>('GLOBAL_RATE_LIMIT_MAX')) ||
+              30,
+            ttl:
+              (Number(
+                configService.get<string>(
+                  'GLOBAL_RATE_LIMIT_WINDOW_SECONDS',
+                ),
+              ) || 10) * 1000,
+          },
+        ],
+      }),
+    }),
     PrismaModule,
     ProdutosModule,
     CategoriasModule,
@@ -97,6 +138,14 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     ImagekitModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // CFG-01 — registra o throttler acima como guard global (roda em toda
+    // requisição, para todo controller, sem precisar de @UseGuards() em
+    // cada um). Reaproveita o CloudflareAwareThrottlerGuard já existente
+    // (Etapa 8.11) só para a identificação de IP atrás do Render/Cloudflare
+    // — nenhum guard novo foi criado.
+    { provide: APP_GUARD, useClass: CloudflareAwareThrottlerGuard },
+  ],
 })
 export class AppModule {}

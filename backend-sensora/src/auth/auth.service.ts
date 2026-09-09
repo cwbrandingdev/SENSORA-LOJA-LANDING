@@ -335,16 +335,37 @@ export class AuthService {
   // um novo par de tokens uma única vez — ver revogarRefreshTokenSeAtivo()
   // em usuarios.service.ts para a garantia de atomicidade contra duas
   // requisições simultâneas com o mesmo token.
+  //
+  // Etapa 10 / AUTH-04 (achado da auditoria — reuso de refresh token sem
+  // revogação em cascata): um token com `revokedAt !== null` já foi usado
+  // uma vez antes — reapresentá-lo é o sinal clássico de token roubado (o
+  // dono legítimo já rotacionou para um token seguinte; se outra parte
+  // ainda tem o valor antigo, é porque o obteve por algum meio ilegítimo).
+  // Antes desta correção, essa reapresentação era só rejeitada — o(s)
+  // token(s) seguinte(s) da cadeia (emitidos pela rotação legítima)
+  // continuavam válidos indefinidamente, mesmo com evidência de
+  // comprometimento. Agora, ao detectar o reuso, revogamos TODAS as
+  // sessões ativas do usuário (revogarTodosRefreshTokensAtivos, já
+  // existente e usado em resetPassword()/alterarMinhaSenha — reaproveitado
+  // aqui, não há uma segunda implementação de revogação) antes de rejeitar
+  // — contenção real, não só detecção. Checado antes de expiresAt/!registro
+  // de propósito: um token revogado É o sinal de reuso mesmo que também já
+  // tenha expirado nesse meio-tempo; um token que nunca existiu ou só
+  // expirou sem nunca ter sido revogado não é evidência de reuso, então não
+  // aciona a cascata.
   async refresh(refreshTokenDto: RefreshTokenDto): Promise<AuthToken> {
     const tokenHash = this.hashToken(refreshTokenDto.refresh_token);
     const registro =
       await this.usuariosService.buscarRefreshTokenPorHash(tokenHash);
 
-    if (
-      !registro ||
-      registro.revokedAt !== null ||
-      registro.expiresAt <= new Date()
-    ) {
+    if (registro && registro.revokedAt !== null) {
+      await this.usuariosService.revogarTodosRefreshTokensAtivos(
+        registro.usuarioId,
+      );
+      throw new UnauthorizedException(REFRESH_TOKEN_INVALIDO_MENSAGEM);
+    }
+
+    if (!registro || registro.expiresAt <= new Date()) {
       throw new UnauthorizedException(REFRESH_TOKEN_INVALIDO_MENSAGEM);
     }
 

@@ -5,6 +5,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 const ALGORITMO = 'aes-256-gcm';
 const TAMANHO_CHAVE_BYTES = 32; // AES-256
 const TAMANHO_IV_BYTES = 12; // tamanho recomendado (NIST SP 800-38D) para GCM
+const TAMANHO_AUTH_TAG_BYTES = 16; // 128 bits — tamanho padrão/máximo de tag do GCM
 const VERSAO_FORMATO = 'v1';
 const SEPARADOR = ':';
 
@@ -43,7 +44,14 @@ export class MelhorEnvioTokenCryptoService {
     const chave = this.resolverChave();
     const iv = randomBytes(TAMANHO_IV_BYTES);
 
-    const cipher = createCipheriv(ALGORITMO, chave, iv);
+    // authTagLength explícito (achado SEMGREP-01 da auditoria): sem essa
+    // opção, o Node aceita, em decipher.setAuthTag(), tags "legacy" mais
+    // curtas que os 16 bytes padrão do GCM — fixar o tamanho aqui e em
+    // decrypt() elimina essa aceitação implícita, independente de qualquer
+    // outra validação já existente.
+    const cipher = createCipheriv(ALGORITMO, chave, iv, {
+      authTagLength: TAMANHO_AUTH_TAG_BYTES,
+    });
     const ciphertext = Buffer.concat([
       cipher.update(plaintext, 'utf8'),
       cipher.final(),
@@ -76,7 +84,9 @@ export class MelhorEnvioTokenCryptoService {
       const authTag = Buffer.from(authTagBase64, 'base64');
       const ciphertext = Buffer.from(ciphertextBase64, 'base64');
 
-      const decipher = createDecipheriv(ALGORITMO, chave, iv);
+      const decipher = createDecipheriv(ALGORITMO, chave, iv, {
+        authTagLength: TAMANHO_AUTH_TAG_BYTES,
+      });
       decipher.setAuthTag(authTag);
       const plaintext = Buffer.concat([
         decipher.update(ciphertext),

@@ -706,3 +706,72 @@ describe('UsuariosService — salvarTokenReset/buscarPorResetToken/redefinirSenh
     expect(typeof dataEnviada.senha).toBe('string');
   });
 });
+
+// Etapa 10 / AUTH-04 (achado da auditoria — reuso de refresh token sem
+// revogação em cascata) — revogarTodosRefreshTokensAtivos() já existia
+// (usado por resetPassword/alterarMinhaSenha) mas nunca tinha um teste
+// próprio. Passa a ser reaproveitado também por AuthService.refresh() ao
+// detectar reuso (ver auth.service.spec.ts) — a prova de que isso revoga
+// "B e C" (todos os tokens ativos de um usuário, não só o token
+// especificamente apresentado) está aqui: o `where` não filtra por
+// tokenHash algum, só por usuarioId + revokedAt:null — por definição,
+// atinge QUALQUER token ativo daquele usuário, não importa qual token
+// disparou a chamada.
+describe('UsuariosService — revogarTodosRefreshTokensAtivos (Etapa 10 / AUTH-04: contenção em cascata)', () => {
+  let service: UsuariosService;
+  let prisma: { refreshToken: { updateMany: jest.Mock } };
+
+  beforeEach(async () => {
+    prisma = {
+      refreshToken: {
+        updateMany: jest.fn(() => ({ count: 2 })),
+      },
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        UsuariosService,
+        { provide: PrismaService, useValue: prisma },
+      ],
+    }).compile();
+
+    service = module.get(UsuariosService);
+  });
+
+  it('revoga TODOS os refresh tokens ativos do usuário — sem filtrar por um token específico (é isso que garante que B e C também sejam revogados, não só o token A que disparou a chamada)', async () => {
+    await service.revogarTodosRefreshTokensAtivos(1);
+
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { usuarioId: 1, revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+  });
+
+  it('escopo é só o usuarioId informado — o where não tem nenhuma outra condição que pudesse vazar para tokens de outro usuário', async () => {
+    await service.revogarTodosRefreshTokensAtivos(42);
+
+    const chamada = prisma.refreshToken.updateMany.mock.calls[0][0] as {
+      where: Record<string, unknown>;
+    };
+    expect(chamada.where.usuarioId).toBe(42);
+    expect(Object.keys(chamada.where)).toEqual(['usuarioId', 'revokedAt']);
+  });
+
+  it('retorna a contagem de tokens efetivamente revogados', async () => {
+    const resultado = await service.revogarTodosRefreshTokensAtivos(1);
+
+    expect(resultado).toBe(2);
+  });
+
+  it('não afeta tokens já revogados (revokedAt: null no where garante idempotência — chamar duas vezes não é um erro)', async () => {
+    await service.revogarTodosRefreshTokensAtivos(1);
+    await service.revogarTodosRefreshTokensAtivos(1);
+
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledTimes(2);
+    for (const chamada of prisma.refreshToken.updateMany.mock.calls) {
+      expect((chamada[0] as { where: Record<string, unknown> }).where).toEqual(
+        { usuarioId: 1, revokedAt: null },
+      );
+    }
+  });
+});

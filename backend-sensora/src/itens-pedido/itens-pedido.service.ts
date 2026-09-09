@@ -94,26 +94,14 @@ export class ItensPedidoService {
     // removerEstoque() (ver ProdutosService), que lança BadRequestException
     // se não houver. A matemática de diferença entre quantidade antiga/nova
     // é a mesma de antes, só a forma de aplicar o decremento mudou.
+    //
+    // A leitura do preço do novo produto (quando o produto do item muda)
+    // continua fora da transação — é só consulta, não escreve nada, mesmo
+    // comportamento de sempre; só os ajustes de ESTOQUE (que escrevem) se
+    // moveram para dentro do $transaction abaixo (Etapa 10 / PED-01).
     if (novoProdutoId !== produtoIdAntigo) {
       const novoProduto = await this.produtosService.findOne(novoProdutoId);
       precoUnitarioFinal = novoProduto.preco;
-
-      await this.produtosService.adicionarEstoque(
-        produtoIdAntigo,
-        quantidadeAntiga,
-      );
-      await this.produtosService.removerEstoque(novoProdutoId, novaQuantidade);
-    } else if (novaQuantidade !== quantidadeAntiga) {
-      const diferenca = novaQuantidade - quantidadeAntiga;
-
-      if (diferenca > 0) {
-        await this.produtosService.removerEstoque(produtoIdAntigo, diferenca);
-      } else {
-        await this.produtosService.adicionarEstoque(
-          produtoIdAntigo,
-          -diferenca,
-        );
-      }
     }
 
     // Etapa 8.8 (integridade financeira) — `pedidoId` pode mudar aqui
@@ -126,7 +114,46 @@ export class ItensPedidoService {
     const pedidoOrigemId = item.pedidoId;
     const pedidoDestinoId = updateItemPedidoDto.pedidoId ?? pedidoOrigemId;
 
+    // Etapa 10 / PED-01 (achado da auditoria — estoque fora da transação):
+    // antes, os ajustes de estoque abaixo rodavam em autocommit, ANTES de
+    // abrir este $transaction — se a escrita do item ou o recálculo do
+    // total falhassem depois, o estoque já alterado não era revertido.
+    // removerEstoque()/adicionarEstoque() já aceitavam um `client` opcional
+    // (ver ProdutosService, usado por CheckoutService/PedidosService da
+    // mesma forma), então basta passar `tx` aqui — mesma lógica, mesma
+    // matemática, mesma proteção contra estoque insuficiente (atômica
+    // dentro do próprio removerEstoque), só agora participando do mesmo
+    // contexto transacional que o resto da operação.
     const atualizado = await this.prisma.$transaction(async (tx) => {
+      if (novoProdutoId !== produtoIdAntigo) {
+        await this.produtosService.adicionarEstoque(
+          produtoIdAntigo,
+          quantidadeAntiga,
+          tx,
+        );
+        await this.produtosService.removerEstoque(
+          novoProdutoId,
+          novaQuantidade,
+          tx,
+        );
+      } else if (novaQuantidade !== quantidadeAntiga) {
+        const diferenca = novaQuantidade - quantidadeAntiga;
+
+        if (diferenca > 0) {
+          await this.produtosService.removerEstoque(
+            produtoIdAntigo,
+            diferenca,
+            tx,
+          );
+        } else {
+          await this.produtosService.adicionarEstoque(
+            produtoIdAntigo,
+            -diferenca,
+            tx,
+          );
+        }
+      }
+
       const itemAtualizado = await tx.itemPedido.update({
         where: { id },
         data: {
@@ -155,14 +182,17 @@ export class ItensPedidoService {
     const pedido = await this.pedidosService.findOne(item.pedidoId, user);
     this.pedidosService.garantirMutavel(pedido);
 
-    await this.produtosService.adicionarEstoque(
-      item.produtoId,
-      item.quantidade,
-    );
-
-    // Etapa 8.8 (integridade financeira) — exclusão do item e recálculo de
-    // Pedido.total na mesma transação (mesmo raciocínio de update() acima).
+    // Etapa 10 / PED-01 (mesmo achado/correção de update() acima) —
+    // devolução de estoque, exclusão do item e recálculo de Pedido.total
+    // agora na MESMA transação: antes, adicionarEstoque() rodava em
+    // autocommit antes de abrir o $transaction — se a exclusão ou o
+    // recálculo falhassem depois, o estoque já devolvido não era revertido.
     await this.prisma.$transaction(async (tx) => {
+      await this.produtosService.adicionarEstoque(
+        item.produtoId,
+        item.quantidade,
+        tx,
+      );
       await tx.itemPedido.delete({ where: { id } });
       await this.pedidosService.recalcularTotal(item.pedidoId, tx);
     });
