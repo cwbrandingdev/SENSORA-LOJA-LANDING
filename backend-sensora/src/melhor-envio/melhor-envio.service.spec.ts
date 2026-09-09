@@ -5,6 +5,7 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { MelhorEnvioTokenCryptoService } from './melhor-envio-token-crypto.service';
 import {
+  CODIGO_ERRO_FRETE_MELHOR_ENVIO,
   MelhorEnvioErroHttpError,
   MelhorEnvioIndisponivelError,
   MelhorEnvioNaoConectadoError,
@@ -279,6 +280,64 @@ describe('MelhorEnvioService — cotar (Etapa 6.5, Parte 3)', () => {
     ]);
   });
 
+  // Achado da auditoria (Etapa 6.5) — CreateEnderecoDto aceita CEP com ou
+  // sem hífen, mas a API do Melhor Envio espera `postal_code` só com
+  // dígitos. CONFIG_VALORES já configura MELHOR_ENVIO_CEP_ORIGEM com hífen
+  // ('80000-000'), então este teste exercita os dois lados do payload
+  // (origem via env, destino via input) na mesma chamada.
+  it('normaliza CEP com hífen (origem e destino) para somente dígitos no payload enviado ao Melhor Envio', async () => {
+    const { service, prisma, tokenCrypto } = await criarService();
+    prisma.melhorEnvioToken.findUnique.mockResolvedValue({
+      accessToken: tokenCrypto.encrypt('access-valido'),
+      refreshToken: tokenCrypto.encrypt('refresh-valido'),
+      expiresAt: new Date(Date.now() + 60 * 60_000),
+    });
+    const fetchMock = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => [],
+    } as unknown as Response);
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await service.cotar({
+      cepDestino: '12345-678',
+      pacote: PACOTE,
+      valorDeclarado: 100,
+    });
+
+    const corpo = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    ) as { from: { postal_code: string }; to: { postal_code: string } };
+    expect(corpo.from.postal_code).toBe('80000000');
+    expect(corpo.to.postal_code).toBe('12345678');
+  });
+
+  it('mantém inalterado no payload um CEP de destino já salvo sem hífen', async () => {
+    const { service, prisma, tokenCrypto } = await criarService();
+    prisma.melhorEnvioToken.findUnique.mockResolvedValue({
+      accessToken: tokenCrypto.encrypt('access-valido'),
+      refreshToken: tokenCrypto.encrypt('refresh-valido'),
+      expiresAt: new Date(Date.now() + 60 * 60_000),
+    });
+    const fetchMock = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => [],
+    } as unknown as Response);
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await service.cotar({
+      cepDestino: '12345678',
+      pacote: PACOTE,
+      valorDeclarado: 100,
+    });
+
+    const corpo = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    ) as { to: { postal_code: string } };
+    expect(corpo.to.postal_code).toBe('12345678');
+  });
+
   it('token expirado: renova via refresh_token ANTES de cotar, e persiste o novo token', async () => {
     const { service, prisma, tokenCrypto } = await criarService();
     prisma.melhorEnvioToken.findUnique.mockResolvedValue({
@@ -363,6 +422,73 @@ describe('MelhorEnvioService — cotar (Etapa 6.5, Parte 3)', () => {
     await expect(
       service.cotar({ cepDestino: 'cep-invalido', pacote: PACOTE, valorDeclarado: 100 }),
     ).rejects.toThrow(MelhorEnvioErroHttpError);
+  });
+
+  // Achado da auditoria (Etapa 6.5) — antes desta correção, o frontend
+  // (lib/errors.ts) descartava QUALQUER mensagem de erro com status >= 500,
+  // então esta mensagem segura ("O Melhor Envio recusou a cotação") nunca
+  // chegava à tela. `code` é o contrato explícito que permite ao frontend
+  // reconhecer que esta mensagem específica é segura para exibir, mesmo
+  // sendo um 502.
+  it('erro de cotação do Melhor Envio chega com o código explícito CODIGO_ERRO_FRETE_MELHOR_ENVIO (consumido por lib/errors.ts no frontend)', async () => {
+    const { service, prisma, tokenCrypto } = await criarService();
+    prisma.melhorEnvioToken.findUnique.mockResolvedValue({
+      accessToken: tokenCrypto.encrypt('access-valido'),
+      refreshToken: tokenCrypto.encrypt('refresh-valido'),
+      expiresAt: new Date(Date.now() + 60 * 60_000),
+    });
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 422,
+      statusText: 'Unprocessable Entity',
+      text: async () => '{"message":"CEP inválido"}',
+    } as unknown as Response) as unknown as typeof fetch;
+
+    let erroCapturado: MelhorEnvioErroHttpError | undefined;
+    try {
+      await service.cotar({
+        cepDestino: '20040-020',
+        pacote: PACOTE,
+        valorDeclarado: 100,
+      });
+    } catch (erro) {
+      erroCapturado = erro as MelhorEnvioErroHttpError;
+    }
+
+    expect(erroCapturado).toBeInstanceOf(MelhorEnvioErroHttpError);
+    expect(erroCapturado?.getStatus()).toBe(502);
+    expect(erroCapturado?.getResponse()).toEqual({
+      message: 'O Melhor Envio recusou a cotação',
+      code: CODIGO_ERRO_FRETE_MELHOR_ENVIO,
+    });
+  });
+
+  // Mesmo contrato acima, mas para o caminho "loja não conectada"
+  // (MelhorEnvioNaoConectadoError, InternalServerErrorException/500) — o
+  // teste "sem conexão prévia" já cobre o tipo da exceção; este cobre
+  // especificamente que ela também sai com o código explícito quando
+  // atravessa `cotar()`.
+  it('erro "loja não conectada" também chega com o código explícito CODIGO_ERRO_FRETE_MELHOR_ENVIO', async () => {
+    const { service, prisma } = await criarService();
+    prisma.melhorEnvioToken.findUnique.mockResolvedValueOnce(null);
+    global.fetch = jest.fn() as unknown as typeof fetch;
+
+    let erroCapturado: MelhorEnvioNaoConectadoError | undefined;
+    try {
+      await service.cotar({
+        cepDestino: '20040-020',
+        pacote: PACOTE,
+        valorDeclarado: 100,
+      });
+    } catch (erro) {
+      erroCapturado = erro as MelhorEnvioNaoConectadoError;
+    }
+
+    expect(erroCapturado).toBeInstanceOf(MelhorEnvioNaoConectadoError);
+    expect(erroCapturado?.getResponse()).toEqual({
+      message: 'A loja ainda não está conectada ao Melhor Envio.',
+      code: CODIGO_ERRO_FRETE_MELHOR_ENVIO,
+    });
   });
 
   it('falha de rede/timeout: propaga MelhorEnvioIndisponivelError (distinto de recusa HTTP)', async () => {

@@ -10,6 +10,12 @@ import { Request, Response } from 'express';
 
 interface HttpExceptionResponseObject {
   message: string | string[];
+  // Contrato explícito e opcional (ver MelhorEnvioService.comCodigoDeFrete e
+  // frontend-sensora/lib/errors.ts) — presente só quando a exceção original
+  // marcou deliberadamente sua mensagem como segura para exibição, mesmo com
+  // status >= 500. Nunca inventado aqui: só repassado quando a própria
+  // exceção já o incluiu na resposta.
+  code?: string;
 }
 
 const GENERIC_SERVER_ERROR_MESSAGE = 'Internal server error';
@@ -36,7 +42,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const { statusCode, message } = this.resolverResposta(exception);
+    const { statusCode, message, code } = this.resolverResposta(exception);
 
     if (statusCode >= 500) {
       this.logger.error(
@@ -50,21 +56,27 @@ export class AllExceptionsFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path: request.url,
       message,
+      ...(code ? { code } : {}),
     });
   }
 
   private resolverResposta(exception: unknown): {
     statusCode: number;
     message: string | string[];
+    code?: string;
   } {
     if (exception instanceof HttpException) {
       const statusCode = exception.getStatus();
       const exceptionResponse = exception.getResponse();
-      const message =
-        typeof exceptionResponse === 'string'
-          ? exceptionResponse
-          : (exceptionResponse as HttpExceptionResponseObject).message;
-      return { statusCode, message };
+      if (typeof exceptionResponse === 'string') {
+        return { statusCode, message: exceptionResponse };
+      }
+      const respostaObjeto = exceptionResponse as HttpExceptionResponseObject;
+      return {
+        statusCode,
+        message: respostaObjeto.message,
+        code: respostaObjeto.code,
+      };
     }
 
     // Qualquer exceção não-HTTP (ex.: PrismaClientKnownRequestError, erro

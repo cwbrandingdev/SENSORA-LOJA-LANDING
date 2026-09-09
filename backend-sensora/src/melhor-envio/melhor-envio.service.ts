@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -37,6 +38,17 @@ export interface MelhorEnvioOpcao {
 export class MelhorEnvioErroHttpError extends BadGatewayException {}
 export class MelhorEnvioIndisponivelError extends BadGatewayException {}
 export class MelhorEnvioNaoConectadoError extends InternalServerErrorException {}
+
+// Contrato explícito consumido pelo frontend (ver lib/errors.ts,
+// CODIGOS_ERRO_SEGUROS) — identifica, na resposta HTTP, mensagens de erro
+// que já são seguras e foram produzidas deliberadamente por este serviço
+// para o fluxo de cotação de frete (nunca stack trace/SQL/segredo). Só
+// `cotar()` (abaixo, via `comCodigoDeFrete`) anexa este código — os mesmos
+// erros lançados pelo fluxo de OAuth (trocarCodigoPorToken/conectar) nunca
+// o recebem, preservando o comportamento atual desse fluxo. Mantenha o
+// valor sincronizado com a constante equivalente em
+// frontend-sensora/lib/errors.ts caso precise alterá-lo.
+export const CODIGO_ERRO_FRETE_MELHOR_ENVIO = 'FRETE_MELHOR_ENVIO_INDISPONIVEL';
 
 interface TokenResponse {
   access_token: string;
@@ -282,7 +294,65 @@ export class MelhorEnvioService {
 
   // ---- Cotação (Parte 3) --------------------------------------------------
 
+  // Ponto único chamado pelo CheckoutController/CheckoutService — nunca lança
+  // a exceção original diretamente: `comCodigoDeFrete` decide se ela recebe
+  // o código explícito de erro seguro (ver CODIGO_ERRO_FRETE_MELHOR_ENVIO)
+  // antes de propagar. O fluxo de OAuth (trocarCodigoPorToken/conectar) não
+  // passa por aqui, então nunca é afetado por essa etiquetagem.
   async cotar(input: MelhorEnvioCotacaoInput): Promise<MelhorEnvioOpcao[]> {
+    try {
+      return await this.executarCotacao(input);
+    } catch (erro) {
+      throw this.comCodigoDeFrete(erro);
+    }
+  }
+
+  // Reconstrói a MESMA classe/status/mensagem da exceção original — só
+  // adiciona `code` na resposta HTTP (ver AllExceptionsFilter) quando a
+  // exceção capturada for uma das três classes dedicadas deste serviço.
+  // Qualquer outra exceção (ex.: InternalServerErrorException genérica de
+  // configuração ausente) atravessa sem alteração, continuando a cair no
+  // fallback do frontend — nunca vira "segura" por engano.
+  private comCodigoDeFrete(erro: unknown): unknown {
+    if (erro instanceof MelhorEnvioNaoConectadoError) {
+      return new MelhorEnvioNaoConectadoError({
+        message: this.extrairMensagem(erro),
+        code: CODIGO_ERRO_FRETE_MELHOR_ENVIO,
+      });
+    }
+    if (erro instanceof MelhorEnvioIndisponivelError) {
+      return new MelhorEnvioIndisponivelError({
+        message: this.extrairMensagem(erro),
+        code: CODIGO_ERRO_FRETE_MELHOR_ENVIO,
+      });
+    }
+    if (erro instanceof MelhorEnvioErroHttpError) {
+      return new MelhorEnvioErroHttpError({
+        message: this.extrairMensagem(erro),
+        code: CODIGO_ERRO_FRETE_MELHOR_ENVIO,
+      });
+    }
+    return erro;
+  }
+
+  private extrairMensagem(erro: HttpException): string {
+    const resposta = erro.getResponse();
+    return typeof resposta === 'string'
+      ? resposta
+      : (resposta as { message: string }).message;
+  }
+
+  // Melhor Envio espera `postal_code` só com dígitos — tanto
+  // MELHOR_ENVIO_CEP_ORIGEM quanto o CEP salvo em Endereco (Etapa 6.5) podem
+  // conter hífen (00000-000, formato também aceito por CreateEnderecoDto),
+  // então nenhum dos dois é enviado à API sem passar por aqui antes.
+  private normalizarCep(cep: string): string {
+    return cep.replace(/\D/g, '');
+  }
+
+  private async executarCotacao(
+    input: MelhorEnvioCotacaoInput,
+  ): Promise<MelhorEnvioOpcao[]> {
     if (!this.userAgent) {
       throw new InternalServerErrorException(
         'MELHOR_ENVIO_USER_AGENT não configurado',
@@ -310,8 +380,8 @@ export class MelhorEnvioService {
           'User-Agent': this.userAgent,
         },
         body: JSON.stringify({
-          from: { postal_code: this.cepOrigem },
-          to: { postal_code: input.cepDestino },
+          from: { postal_code: this.normalizarCep(this.cepOrigem) },
+          to: { postal_code: this.normalizarCep(input.cepDestino) },
           package: {
             height: input.pacote.alturaCm,
             width: input.pacote.larguraCm,

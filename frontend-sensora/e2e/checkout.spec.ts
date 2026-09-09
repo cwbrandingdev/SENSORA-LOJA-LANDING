@@ -139,6 +139,26 @@ async function mockFreteCotacaoError(page: Page, status = 500) {
   });
 }
 
+// Achado da auditoria (Etapa 6.5) — mesmo formato real do AllExceptionsFilter
+// (backend) quando MelhorEnvioService.comCodigoDeFrete anexa `code` a um
+// erro seguro de cotação: usado para verificar que lib/errors.ts (frontend)
+// mostra essa mensagem específica em vez do fallback genérico, mesmo com
+// status >= 500.
+async function mockFreteCotacaoErroSeguro(
+  page: Page,
+  status: number,
+  message: string,
+  code: string,
+) {
+  await page.route("**/checkout/frete/cotacao", async (route) => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({ status, json: { statusCode: status, message, code } });
+      return;
+    }
+    await route.continue();
+  });
+}
+
 async function mockEnderecos(page: Page, enderecos: unknown[]) {
   await page.route("**/enderecos", async (route) => {
     if (route.request().method() === "GET") {
@@ -1345,6 +1365,76 @@ test.describe("Checkout — Etapa 6.5: frete", () => {
     await expect(
       page.getByRole("radiogroup", { name: "Selecione uma opção de frete" }),
     ).toBeVisible();
+  });
+
+  // Achado da auditoria (Etapa 6.5) — antes desta correção, getErrorMessage
+  // (lib/errors.ts) descartava qualquer mensagem com status >= 500, então
+  // mesmo uma mensagem segura e específica do Melhor Envio (ex.: "O Melhor
+  // Envio recusou a cotação") virava sempre o fallback genérico. Com o
+  // `code` explícito (FRETE_MELHOR_ENVIO_INDISPONIVEL) presente no corpo, a
+  // mensagem real do backend deve aparecer na tela.
+  test("N: erro seguro de cotação do Melhor Envio (com código explícito) mostra a mensagem real do backend, não o fallback genérico", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await seedCart(page, [CART_ITEM]);
+    await page.route("**/enderecos", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({ json: [ENDERECO_PADRAO] });
+        return;
+      }
+      await route.continue();
+    });
+    await mockFreteCotacaoErroSeguro(
+      page,
+      502,
+      "O Melhor Envio recusou a cotação",
+      "FRETE_MELHOR_ENVIO_INDISPONIVEL",
+    );
+
+    await page.goto(CHECKOUT_URL);
+
+    await expect(
+      page.getByText("O Melhor Envio recusou a cotação"),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Não foi possível calcular o frete. Tente novamente."),
+    ).not.toBeVisible();
+  });
+
+  // Complementa o teste acima: uma mensagem 5xx SEM o código explícito (erro
+  // de infraestrutura genuinamente inesperado, nunca sanitizado para exibição)
+  // continua caindo no fallback — o `code` é o que decide, não a simples
+  // presença de uma mensagem no corpo.
+  test("N: erro 500 genérico (sem código explícito) continua mascarado pelo fallback, mesmo com mensagem no corpo", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await seedCart(page, [CART_ITEM]);
+    await page.route("**/enderecos", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({ json: [ENDERECO_PADRAO] });
+        return;
+      }
+      await route.continue();
+    });
+    await page.route("**/checkout/frete/cotacao", async (route) => {
+      if (route.request().method() === "POST") {
+        await route.fulfill({
+          status: 500,
+          json: { statusCode: 500, message: "Internal server error" },
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto(CHECKOUT_URL);
+
+    await expect(
+      page.getByText("Não foi possível calcular o frete. Tente novamente."),
+    ).toBeVisible();
+    await expect(page.getByText("Internal server error")).not.toBeVisible();
   });
 
   // N (nenhuma opção)
