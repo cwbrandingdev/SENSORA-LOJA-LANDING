@@ -7,16 +7,42 @@
 // cotado no checkout (transportadora/serviço/valor — a auditoria encontrou
 // esse dado já salvo no banco, mas nunca exibido no Admin) + o botão
 // "Marcar como enviado", só para pedidos PAGO + NAO_ENVIADO.
+//
+// Refinamento visual (Admin) — cabeçalho claro (em vez de bg-brand-navy
+// sólido) e Badge nos dois eixos de status, mesma receita de
+// components/conta/StatusPedidoBadge.tsx generalizada em components/ui/
+// Badge.tsx. Nenhum status novo, nenhuma coluna/ação removida.
 import Link from "next/link";
 import { ROUTES } from "@/lib/routes";
 import FormButton from "@/components/ui/FormButton";
 import EmptyState from "@/components/ui/EmptyState";
+import Badge, { type BadgeTone } from "@/components/ui/Badge";
 import { StatusEnvio, StatusPedido, type Pedido } from "@/lib/types/loja";
+import { ClipboardList } from "lucide-react";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
+
+// Mesmos rótulos/cores de StatusPedidoBadge.tsx (components/conta) — REEMBOLSO_SOLICITADO/
+// REEMBOLSADO usam tons próprios, nunca reaproveitando warning (PENDENTE)
+// ou danger (CANCELADO).
+const STATUS_LABEL: Record<StatusPedido, string> = {
+  [StatusPedido.PENDENTE]: "Pendente",
+  [StatusPedido.PAGO]: "Pago",
+  [StatusPedido.CANCELADO]: "Cancelado",
+  [StatusPedido.REEMBOLSO_SOLICITADO]: "Reembolso solicitado",
+  [StatusPedido.REEMBOLSADO]: "Reembolsado",
+};
+
+const STATUS_TONE: Record<StatusPedido, BadgeTone> = {
+  [StatusPedido.PENDENTE]: "warning",
+  [StatusPedido.PAGO]: "success",
+  [StatusPedido.CANCELADO]: "danger",
+  [StatusPedido.REEMBOLSO_SOLICITADO]: "info",
+  [StatusPedido.REEMBOLSADO]: "neutral",
+};
 
 // `enviadoEm` é um instante real (`new Date()` no momento do clique em
 // "Marcar como enviado"), não um dia de calendário como `pedido.data` — por
@@ -34,6 +60,12 @@ type PedidoTableProps = {
   onRemove: (pedido: Pedido) => void;
   onMarcarEnviado: (pedido: Pedido) => void;
   marcandoEnviadoId?: number | null;
+  // Filtros (PedidosFiltros.tsx) — distingue "não há nenhum pedido
+  // cadastrado" de "nenhum pedido corresponde ao filtro atual", para não
+  // sugerir que a loja não tem pedido nenhum quando é só o filtro que não
+  // encontrou nada. Default false preserva o texto original para quem
+  // ainda não usa filtro nenhum.
+  filtrosAtivos?: boolean;
 };
 
 export default function PedidoTable({
@@ -42,32 +74,54 @@ export default function PedidoTable({
   onRemove,
   onMarcarEnviado,
   marcandoEnviadoId,
+  filtrosAtivos = false,
 }: PedidoTableProps) {
   if (!pedidos || pedidos.length === 0) {
-    return (
+    return filtrosAtivos ? (
+      <EmptyState
+        compact
+        eyebrow="Pedidos"
+        title="Nenhum pedido encontrado"
+        message="Nenhum pedido corresponde aos filtros selecionados."
+        icon={ClipboardList}
+      />
+    ) : (
       <EmptyState
         compact
         eyebrow="Pedidos"
         title="Nenhum pedido cadastrado"
         message="Ainda não há pedidos registrados."
+        icon={ClipboardList}
       />
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
       <table className="w-full text-left text-sm">
         <thead>
-          <tr className="bg-brand-navy text-white">
-            <th className="px-4 py-2 font-medium">Número</th>
-            <th className="px-4 py-2 font-medium">Data</th>
-            <th className="px-4 py-2 font-medium">Status</th>
-            <th className="px-4 py-2 font-medium">Envio</th>
-            <th className="px-4 py-2 font-medium">Total</th>
-            <th className="px-4 py-2 font-medium">Ações</th>
+          <tr className="border-b border-slate-200 bg-slate-50">
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Número
+            </th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Data
+            </th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Status
+            </th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Envio
+            </th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Total
+            </th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Ações
+            </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-slate-100">
           {pedidos.map((pedido) => {
             const podeMarcarEnviado =
               pedido.status === StatusPedido.PAGO &&
@@ -84,9 +138,9 @@ export default function PedidoTable({
               pedido.freteTransportadora || pedido.freteServico || pedido.freteValor != null;
 
             return (
-              <tr key={pedido.id} className="border-t border-slate-200 hover:bg-slate-50">
-                <td className="px-4 py-2">{pedido.numero}</td>
-                <td className="px-4 py-2">
+              <tr key={pedido.id} className="transition-colors hover:bg-slate-50/80">
+                <td className="px-4 py-3 font-medium text-slate-900">{pedido.numero}</td>
+                <td className="px-4 py-3 text-slate-600">
                   {/* Achado da investigação (Editar pedido PENDENTE, Etapa
                       6.6) — `pedido.data` é meia-noite UTC; sem `timeZone:
                       "UTC"` aqui, toLocaleDateString converte para o fuso
@@ -96,14 +150,14 @@ export default function PedidoTable({
                       diretamente sem passar por Date). */}
                   {new Date(pedido.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
                 </td>
-                <td className="px-4 py-2">{pedido.status}</td>
-                <td className="px-4 py-2">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm">
-                      {pedido.statusEnvio === StatusEnvio.ENVIADO
-                        ? "Enviado"
-                        : "Aguardando envio"}
-                    </span>
+                <td className="px-4 py-3">
+                  <Badge tone={STATUS_TONE[pedido.status]}>{STATUS_LABEL[pedido.status]}</Badge>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-col gap-1">
+                    <Badge tone={pedido.statusEnvio === StatusEnvio.ENVIADO ? "info" : "warning"}>
+                      {pedido.statusEnvio === StatusEnvio.ENVIADO ? "Enviado" : "Aguardando envio"}
+                    </Badge>
                     {pedido.statusEnvio === StatusEnvio.ENVIADO && pedido.enviadoEm && (
                       <span className="text-xs text-slate-500">
                         {formatarDataEnvio(pedido.enviadoEm)}
@@ -124,12 +178,12 @@ export default function PedidoTable({
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-2">{pedido.total}</td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-3 font-medium text-slate-900">{pedido.total}</td>
+                <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-2">
                     <Link
                       href={`${ROUTES.PEDIDOS}/${pedido.id}`}
-                      className="inline-flex items-center justify-center rounded-md border border-brand-navy px-3 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50"
+                      className="inline-flex items-center justify-center rounded-md border border-brand-navy px-3 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
                     >
                       Ver itens
                     </Link>

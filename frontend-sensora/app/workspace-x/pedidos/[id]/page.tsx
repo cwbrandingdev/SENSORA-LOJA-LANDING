@@ -14,13 +14,34 @@ import { isAxiosError } from "axios";
 import ItemPedidoTable from "@/components/tables/ItemPedidoTable";
 import ItemPedidoForm, { type ItemPedidoFormValues } from "@/components/forms/ItemPedidoForm";
 import EmptyState from "@/components/ui/EmptyState";
+import TableSkeleton from "@/components/ui/TableSkeleton";
+import InlineErrorState from "@/components/ui/InlineErrorState";
+import Badge, { type BadgeTone } from "@/components/ui/Badge";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import { buscarPedidoComItens, atualizarPedido } from "@/services/pedidos";
 import { atualizarItemPedido, removerItemPedido } from "@/services/itensPedido";
 import { listarProdutos } from "@/services/produtos";
 import { ROUTES } from "@/lib/routes";
-import type { Pedido, ItemPedido, Produto } from "@/lib/types/loja";
+import { StatusPedido, type Pedido, type ItemPedido, type Produto } from "@/lib/types/loja";
+
+// Mesmos tons de PedidoTable.tsx (Admin) — só o nome do status muda, a
+// receita visual é a mesma em toda a aba Pedidos.
+const STATUS_LABEL: Record<StatusPedido, string> = {
+  [StatusPedido.PENDENTE]: "Pendente",
+  [StatusPedido.PAGO]: "Pago",
+  [StatusPedido.CANCELADO]: "Cancelado",
+  [StatusPedido.REEMBOLSO_SOLICITADO]: "Reembolso solicitado",
+  [StatusPedido.REEMBOLSADO]: "Reembolsado",
+};
+
+const STATUS_TONE: Record<StatusPedido, BadgeTone> = {
+  [StatusPedido.PENDENTE]: "warning",
+  [StatusPedido.PAGO]: "success",
+  [StatusPedido.CANCELADO]: "danger",
+  [StatusPedido.REEMBOLSO_SOLICITADO]: "info",
+  [StatusPedido.REEMBOLSADO]: "neutral",
+};
 
 export default function PedidoDetalhePage() {
   const { id } = useParams<{ id: string }>();
@@ -32,12 +53,14 @@ export default function PedidoDetalhePage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading, setLoading] = useState(true);
   const [pedidoNaoEncontrado, setPedidoNaoEncontrado] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<ItemPedido | undefined>(undefined);
   const [showForm, setShowForm] = useState(false);
 
   async function carregarPedido() {
     setLoading(true);
     setPedidoNaoEncontrado(false);
+    setErro(null);
 
     // ID fora da URL não é um número válido — mesmo resultado prático de um
     // pedido inexistente, sem depender de como o backend reagiria a um path
@@ -70,7 +93,9 @@ export default function PedidoDetalhePage() {
       if (isAxiosError(err) && err.response?.status === 404) {
         setPedidoNaoEncontrado(true);
       } else {
-        toast.error(getErrorMessage(err, "Não foi possível carregar o pedido."));
+        const mensagem = getErrorMessage(err, "Não foi possível carregar o pedido.");
+        toast.error(mensagem);
+        setErro(mensagem);
       }
     } finally {
       setLoading(false);
@@ -143,17 +168,20 @@ export default function PedidoDetalhePage() {
           title="Pedido não encontrado"
           message="O pedido solicitado não existe ou não foi localizado."
         />
+      ) : erro ? (
+        <InlineErrorState message={erro} onRetry={carregarPedido} />
       ) : loading || !pedido ? (
-        <p className="text-sm text-slate-500">Carregando pedido...</p>
+        <TableSkeleton rows={3} columns={4} />
       ) : (
         <>
-          <div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-xl font-semibold text-brand-navy">
               Pedido {pedido.numero}
             </h2>
-            <p className="text-sm text-slate-600">
-              Status: {pedido.status} · Total: {pedido.total}
-            </p>
+            <div className="flex items-center gap-3 text-sm text-slate-600">
+              <Badge tone={STATUS_TONE[pedido.status]}>{STATUS_LABEL[pedido.status]}</Badge>
+              <span>Total: {pedido.total}</span>
+            </div>
           </div>
 
           {showForm && editingItem && (

@@ -5,6 +5,7 @@
 // conforme o resultado real de GET /pedidos, /produtos e /categorias — o
 // componente em si não mudou, só ganhou uso de verdade das props que já
 // existiam.
+import type { ComponentType } from "react";
 import Skeleton from "@/components/ui/Skeleton";
 
 type MetricCardProps = {
@@ -13,6 +14,10 @@ type MetricCardProps = {
   descricao?: string;
   loading?: boolean;
   erro?: string;
+  /** Opcional — undefined preserva os 4 usos existentes (Dashboard) sem
+   *  nenhuma mudança visual. Mesmo raciocínio de EmptyState.tsx: ícone
+   *  decorativo (lucide-react), sempre aria-hidden. */
+  icon?: ComponentType<{ className?: string }>;
 };
 
 export default function MetricCard({
@@ -21,12 +26,23 @@ export default function MetricCard({
   descricao,
   loading = false,
   erro,
+  icon: Icon,
 }: MetricCardProps) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-6 shadow-sm transition-shadow duration-200 hover:shadow-md">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-        {titulo}
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+          {titulo}
+        </p>
+        {Icon && (
+          <span
+            aria-hidden
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-orange/10 text-brand-orange"
+          >
+            <Icon className="h-4 w-4" />
+          </span>
+        )}
+      </div>
 
       {loading ? (
         <Skeleton className="h-9 w-24" />

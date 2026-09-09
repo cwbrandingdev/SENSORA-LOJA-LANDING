@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import CategoryTable from "@/components/tables/CategoryTable";
 import CategoryForm, { type CategoryFormValues } from "@/components/forms/CategoryForm";
 import FormButton from "@/components/ui/FormButton";
+import TableSkeleton from "@/components/ui/TableSkeleton";
+import InlineErrorState from "@/components/ui/InlineErrorState";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import {
@@ -19,16 +21,20 @@ export default function CategoriasPage() {
   const toast = useToast();
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
   const [editingCategory, setEditingCategory] = useState<Categoria | undefined>(undefined);
   const [showForm, setShowForm] = useState(false);
 
   async function carregarCategorias() {
     setLoading(true);
+    setErro(null);
     try {
       const data = await listarCategorias();
       setCategorias(data);
     } catch (err) {
-      toast.error(getErrorMessage(err, "Não foi possível carregar as categorias."));
+      const mensagem = getErrorMessage(err, "Não foi possível carregar as categorias.");
+      toast.error(mensagem);
+      setErro(mensagem);
     } finally {
       setLoading(false);
     }
@@ -104,7 +110,9 @@ export default function CategoriasPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Carregando categorias...</p>
+        <TableSkeleton rows={3} columns={3} />
+      ) : erro ? (
+        <InlineErrorState message={erro} onRetry={carregarCategorias} />
       ) : (
         <CategoryTable categorias={categorias} onEdit={handleEdit} onRemove={handleRemove} />
       )}

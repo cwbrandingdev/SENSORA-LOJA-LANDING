@@ -8,6 +8,7 @@
 // "conectar", só um booleano de configuração que o backend já calcula (ver
 // asaas.controller.ts/mail.controller.ts/imagekit.controller.ts).
 import { useCallback, useEffect, useState } from "react";
+import InlineErrorState from "@/components/ui/InlineErrorState";
 import { getErrorMessage } from "@/lib/errors";
 
 type StatusResposta = {
@@ -92,18 +93,7 @@ export default function IntegracaoStatusCard({
         </p>
       )}
 
-      {erro && (
-        <div className="flex items-center justify-between gap-3 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
-          <span>{erro}</span>
-          <button
-            type="button"
-            onClick={carregarStatus}
-            className="shrink-0 font-medium underline underline-offset-2 hover:text-red-800"
-          >
-            Tentar novamente
-          </button>
-        </div>
-      )}
+      {erro && <InlineErrorState message={erro} onRetry={carregarStatus} />}
     </div>
   );
 }

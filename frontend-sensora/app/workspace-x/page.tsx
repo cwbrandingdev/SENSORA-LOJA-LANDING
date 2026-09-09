@@ -18,6 +18,7 @@
 // Produtos/Categorias vazios (listas vazias, sem PAGO nenhum) são estados
 // legítimos, distintos de erro — nunca tratados como falha.
 import { useEffect, useState } from "react";
+import { Wallet, ClipboardList, Package, Tags } from "lucide-react";
 import MetricCard from "@/components/admin/MetricCard";
 import { getErrorMessage } from "@/lib/errors";
 import { listarCategorias } from "@/services/categorias";
@@ -122,6 +123,7 @@ export default function AdminDashboardPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard
             titulo="Faturamento"
+            icon={Wallet}
             loading={pedidos === null && !pedidosErro}
             erro={pedidosErro ?? undefined}
             valor={faturamento !== null ? formatPrice.format(faturamento) : undefined}
@@ -129,6 +131,7 @@ export default function AdminDashboardPage() {
           />
           <MetricCard
             titulo="Pedidos"
+            icon={ClipboardList}
             loading={pedidos === null && !pedidosErro}
             erro={pedidosErro ?? undefined}
             valor={pedidos ? String(pedidos.length) : undefined}
@@ -136,6 +139,7 @@ export default function AdminDashboardPage() {
           />
           <MetricCard
             titulo="Produtos"
+            icon={Package}
             loading={produtos === null && !produtosErro}
             erro={produtosErro ?? undefined}
             valor={produtos ? String(produtos.length) : undefined}
@@ -149,6 +153,7 @@ export default function AdminDashboardPage() {
           />
           <MetricCard
             titulo="Categorias"
+            icon={Tags}
             loading={categorias === null && !categoriasErro}
             erro={categoriasErro ?? undefined}
             valor={categorias ? String(categorias.length) : undefined}

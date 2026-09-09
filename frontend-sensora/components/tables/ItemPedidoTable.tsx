@@ -1,5 +1,9 @@
 // Portado de frontend/components/tables/ItemPedidoTable.js — mesmo
 // comportamento e colunas.
+//
+// Refinamento visual (Admin) — cabeçalho claro, mesmo padrão de
+// PedidoTable.tsx/ProductTable.tsx. Nenhuma coluna/ação removida.
+import { ClipboardList } from "lucide-react";
 import FormButton from "@/components/ui/FormButton";
 import EmptyState from "@/components/ui/EmptyState";
 import type { ItemPedido, Produto } from "@/lib/types/loja";
@@ -19,6 +23,7 @@ export default function ItemPedidoTable({ itens, produtos, onEdit, onRemove }: I
         eyebrow="Itens do pedido"
         title="Nenhum item neste pedido"
         message="Este pedido ainda não tem itens."
+        icon={ClipboardList}
       />
     );
   }
@@ -29,25 +34,35 @@ export default function ItemPedidoTable({ itens, produtos, onEdit, onRemove }: I
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
       <table className="w-full text-left text-sm">
         <thead>
-          <tr className="bg-brand-navy text-white">
-            <th className="px-4 py-2 font-medium">Produto</th>
-            <th className="px-4 py-2 font-medium">Quantidade</th>
-            <th className="px-4 py-2 font-medium">Preço unitário</th>
-            <th className="px-4 py-2 font-medium">Subtotal</th>
-            <th className="px-4 py-2 font-medium">Ações</th>
+          <tr className="border-b border-slate-200 bg-slate-50">
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Produto
+            </th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Quantidade
+            </th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Preço unitário
+            </th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Subtotal
+            </th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Ações
+            </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-slate-100">
           {itens.map((item) => (
-            <tr key={item.id} className="border-t border-slate-200 hover:bg-slate-50">
-              <td className="px-4 py-2">{nomeProduto(item.produtoId)}</td>
-              <td className="px-4 py-2">{item.quantidade}</td>
-              <td className="px-4 py-2">{item.precoUnitario}</td>
-              <td className="px-4 py-2">{item.subtotal}</td>
-              <td className="px-4 py-2">
+            <tr key={item.id} className="transition-colors hover:bg-slate-50/80">
+              <td className="px-4 py-3 font-medium text-slate-900">{nomeProduto(item.produtoId)}</td>
+              <td className="px-4 py-3 text-slate-600">{item.quantidade}</td>
+              <td className="px-4 py-3 text-slate-600">{item.precoUnitario}</td>
+              <td className="px-4 py-3 text-slate-600">{item.subtotal}</td>
+              <td className="px-4 py-3">
                 <div className="flex gap-2">
                   <FormButton variant="secondary" onClick={() => onEdit(item)}>
                     Editar

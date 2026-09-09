@@ -6,9 +6,17 @@
 // nasceram do fluxo real (Carrinho -> Checkout -> Asaas). O que resta aqui é
 // só edição de numero/data/total, remoção, marcar como enviado e listagem —
 // nunca criação de venda.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PedidoTable from "@/components/tables/PedidoTable";
 import PedidoForm, { type PedidoFormValues } from "@/components/forms/PedidoForm";
+import PedidosParaEnviarCard from "@/components/admin/PedidosParaEnviarCard";
+import PedidosFiltros, {
+  PEDIDOS_FILTROS_VAZIO,
+  temFiltroAtivo,
+  type PedidosFiltrosValue,
+} from "@/components/admin/PedidosFiltros";
+import TableSkeleton from "@/components/ui/TableSkeleton";
+import InlineErrorState from "@/components/ui/InlineErrorState";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import {
@@ -17,12 +25,17 @@ import {
   removerPedido,
   marcarPedidoComoEnviado,
 } from "@/services/pedidos";
-import type { Pedido } from "@/lib/types/loja";
+import { StatusEnvio, StatusPedido, type Pedido } from "@/lib/types/loja";
 
 export default function PedidosPage() {
   const toast = useToast();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
+  // Refinamento visual (Admin) — eco persistente do erro (o toast some só;
+  // isto fica até um novo carregamento com sucesso), com ação de retry.
+  // Aditivo: o toast de erro já existente em carregarPedidos() continua
+  // disparando exatamente como antes.
+  const [erro, setErro] = useState<string | null>(null);
   const [editingPedido, setEditingPedido] = useState<Pedido | undefined>(undefined);
   const [showForm, setShowForm] = useState(false);
   // Etapa 6.6 (Status de Envio) — id do pedido com a ação "Marcar como
@@ -30,13 +43,62 @@ export default function PedidosPage() {
   // tabela inteira) e evita clique duplicado disparando duas chamadas.
   const [marcandoEnviadoId, setMarcandoEnviadoId] = useState<number | null>(null);
 
+  // Destaque "Pedidos para enviar" + filtros — inteiramente client-side
+  // sobre a lista já carregada (nenhum parâmetro novo em GET /pedidos).
+  const [filtros, setFiltros] = useState<PedidosFiltrosValue>(PEDIDOS_FILTROS_VAZIO);
+
+  const pedidosFiltrados = useMemo(() => {
+    return pedidos.filter((pedido) => {
+      if (filtros.status !== "TODOS" && pedido.status !== filtros.status) {
+        return false;
+      }
+
+      if (filtros.cliente.trim() !== "") {
+        const termo = filtros.cliente.trim().toLowerCase();
+        const nome = pedido.clienteNome?.toLowerCase() ?? "";
+        const email = pedido.clienteEmail?.toLowerCase() ?? "";
+        if (!nome.includes(termo) && !email.includes(termo)) {
+          return false;
+        }
+      }
+
+      // `pedido.data` é meia-noite UTC representando um DIA de calendário
+      // (mesmo raciocínio de PedidoTable.tsx) — comparar a substring
+      // "YYYY-MM-DD" diretamente contra o valor de <input type="date">
+      // evita qualquer conversão de fuso (um Date local aqui reintroduziria
+      // o mesmo bug de "dia anterior" já corrigido nas colunas de data).
+      const diaPedido = pedido.data.slice(0, 10);
+      if (filtros.dataDe !== "" && diaPedido < filtros.dataDe) return false;
+      if (filtros.dataAte !== "" && diaPedido > filtros.dataAte) return false;
+
+      return true;
+    });
+  }, [pedidos, filtros]);
+
+  // "Aguardando envio" nunca é um status novo — é a mesma condição que já
+  // habilita "Marcar como enviado" em PedidoTable.tsx (status PAGO +
+  // statusEnvio NAO_ENVIADO), aplicada sobre a lista já filtrada acima: os
+  // filtros (cliente/status/data) afetam igualmente este destaque e a
+  // tabela completa abaixo, nunca dois conjuntos de dados dessincronizados.
+  const pedidosAguardandoEnvio = useMemo(
+    () =>
+      pedidosFiltrados.filter(
+        (pedido) =>
+          pedido.status === StatusPedido.PAGO && pedido.statusEnvio === StatusEnvio.NAO_ENVIADO,
+      ),
+    [pedidosFiltrados],
+  );
+
   async function carregarPedidos() {
     setLoading(true);
+    setErro(null);
     try {
       const data = await listarPedidos();
       setPedidos(data);
     } catch (err) {
-      toast.error(getErrorMessage(err, "Não foi possível carregar os pedidos."));
+      const mensagem = getErrorMessage(err, "Não foi possível carregar os pedidos.");
+      toast.error(mensagem);
+      setErro(mensagem);
     } finally {
       setLoading(false);
     }
@@ -134,15 +196,24 @@ export default function PedidosPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Carregando pedidos...</p>
+        <TableSkeleton rows={5} columns={6} />
+      ) : erro ? (
+        <InlineErrorState message={erro} onRetry={carregarPedidos} />
       ) : (
-        <PedidoTable
-          pedidos={pedidos}
-          onEdit={handleEdit}
-          onRemove={handleRemove}
-          onMarcarEnviado={handleMarcarEnviado}
-          marcandoEnviadoId={marcandoEnviadoId}
-        />
+        <>
+          <PedidosParaEnviarCard pedidos={pedidosAguardandoEnvio} />
+
+          <PedidosFiltros value={filtros} onChange={setFiltros} />
+
+          <PedidoTable
+            pedidos={pedidosFiltrados}
+            onEdit={handleEdit}
+            onRemove={handleRemove}
+            onMarcarEnviado={handleMarcarEnviado}
+            marcandoEnviadoId={marcandoEnviadoId}
+            filtrosAtivos={temFiltroAtivo(filtros)}
+          />
+        </>
       )}
     </div>
   );

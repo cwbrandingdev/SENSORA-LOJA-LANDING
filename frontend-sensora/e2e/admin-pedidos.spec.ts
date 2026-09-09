@@ -460,7 +460,15 @@ test.describe("Admin / Pedidos — Status de Envio", () => {
 
     await page.goto(PEDIDOS_URL);
 
-    await expect(page.getByText("Aguardando envio")).toBeVisible();
+    // Achado ao adicionar o destaque "Pedidos para enviar" (PedidosParaEnviarCard):
+    // esse mesmo pedido também aparece ali, então "Aguardando envio" passa a
+    // existir em mais de um lugar na página — escopar à linha que tem o
+    // botão "Marcar como enviado" garante que é a tabela principal (não o
+    // card de destaque) quem está sendo verificado aqui.
+    const linhaDoPedido = page
+      .getByRole("row")
+      .filter({ has: page.getByRole("button", { name: "Marcar como enviado" }) });
+    await expect(linhaDoPedido.getByText("Aguardando envio")).toBeVisible();
     await expect(page.getByRole("button", { name: "Marcar como enviado" })).toBeVisible();
   });
 
@@ -538,6 +546,12 @@ test.describe("Admin / Pedidos — Status de Envio", () => {
     await page.getByRole("button", { name: "Marcar como enviado" }).click();
 
     expect(chamadasMarcarEnviado).toEqual([]);
-    await expect(page.getByText("Aguardando envio")).toBeVisible();
+    // Mesmo raciocínio do teste acima: escopa à linha da tabela principal,
+    // já que o card de destaque "Pedidos para enviar" também mostra
+    // "Aguardando envio" para este mesmo pedido.
+    const linhaDoPedido = page
+      .getByRole("row")
+      .filter({ has: page.getByRole("button", { name: "Marcar como enviado" }) });
+    await expect(linhaDoPedido.getByText("Aguardando envio")).toBeVisible();
   });
 });

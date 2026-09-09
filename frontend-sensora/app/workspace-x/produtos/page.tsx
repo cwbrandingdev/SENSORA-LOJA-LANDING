@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import ProductTable from "@/components/tables/ProductTable";
 import ProductForm, { type ProductFormValues } from "@/components/forms/ProductForm";
 import FormButton from "@/components/ui/FormButton";
+import TableSkeleton from "@/components/ui/TableSkeleton";
+import InlineErrorState from "@/components/ui/InlineErrorState";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import {
@@ -36,16 +38,22 @@ export default function ProdutosPage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [loading, setLoading] = useState(true);
+  // Refinamento visual (Admin) — eco persistente do erro (aditivo: o toast
+  // já existente abaixo continua disparando exatamente como antes).
+  const [erro, setErro] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Produto | undefined>(undefined);
   const [showForm, setShowForm] = useState(false);
 
   async function carregarProdutos() {
     setLoading(true);
+    setErro(null);
     try {
       const data = await listarProdutos();
       setProdutos(data);
     } catch (err) {
-      toast.error(getErrorMessage(err, "Não foi possível carregar os produtos."));
+      const mensagem = getErrorMessage(err, "Não foi possível carregar os produtos.");
+      toast.error(mensagem);
+      setErro(mensagem);
     } finally {
       setLoading(false);
     }
@@ -132,7 +140,9 @@ export default function ProdutosPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Carregando produtos...</p>
+        <TableSkeleton rows={4} columns={6} />
+      ) : erro ? (
+        <InlineErrorState message={erro} onRetry={carregarProdutos} />
       ) : (
         <ProductTable
           produtos={produtos}

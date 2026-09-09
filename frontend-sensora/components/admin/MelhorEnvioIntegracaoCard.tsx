@@ -12,6 +12,7 @@
 // inteiramente responsabilidade do backend, já validada.
 import { useCallback, useEffect, useState } from "react";
 import FormButton from "@/components/ui/FormButton";
+import InlineErrorState from "@/components/ui/InlineErrorState";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import { buscarStatusMelhorEnvio, obterUrlConexaoMelhorEnvio } from "@/services/melhor-envio";
@@ -106,18 +107,7 @@ export default function MelhorEnvioIntegracaoCard() {
           : "Conecte a conta Sandbox/Produção do Melhor Envio para habilitar a cotação de frete no checkout."}
       </p>
 
-      {erroStatus && (
-        <div className="flex items-center justify-between gap-3 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
-          <span>{erroStatus}</span>
-          <button
-            type="button"
-            onClick={carregarStatus}
-            className="shrink-0 font-medium underline underline-offset-2 hover:text-red-800"
-          >
-            Tentar novamente
-          </button>
-        </div>
-      )}
+      {erroStatus && <InlineErrorState message={erroStatus} onRetry={carregarStatus} />}
 
       {!erroStatus && !carregandoStatus && (
         <div>

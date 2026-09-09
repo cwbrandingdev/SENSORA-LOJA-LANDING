@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import UserTable from "@/components/tables/UserTable";
 import UserForm from "@/components/forms/UserForm";
 import FormButton from "@/components/ui/FormButton";
+import TableSkeleton from "@/components/ui/TableSkeleton";
+import InlineErrorState from "@/components/ui/InlineErrorState";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
@@ -30,16 +32,20 @@ export default function UsuariosPage() {
   const toast = useToast();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<Usuario | undefined>(undefined);
   const [showForm, setShowForm] = useState(false);
 
   async function carregarUsuarios() {
     setLoading(true);
+    setErro(null);
     try {
       const data = await listarUsuarios();
       setUsuarios(data);
     } catch (err) {
-      toast.error(getErrorMessage(err, "Não foi possível carregar os usuários."));
+      const mensagem = getErrorMessage(err, "Não foi possível carregar os usuários.");
+      toast.error(mensagem);
+      setErro(mensagem);
     } finally {
       setLoading(false);
     }
@@ -137,7 +143,9 @@ export default function UsuariosPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Carregando usuários...</p>
+        <TableSkeleton rows={4} columns={5} />
+      ) : erro ? (
+        <InlineErrorState message={erro} onRetry={carregarUsuarios} />
       ) : (
         <UserTable usuarios={usuarios} onEdit={handleEdit} onRemove={handleRemove} />
       )}

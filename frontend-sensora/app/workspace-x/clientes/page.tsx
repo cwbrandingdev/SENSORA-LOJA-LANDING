@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import ClientTable from "@/components/tables/ClientTable";
 import ClientForm, { type ClientFormValues } from "@/components/forms/ClientForm";
 import FormButton from "@/components/ui/FormButton";
+import TableSkeleton from "@/components/ui/TableSkeleton";
+import InlineErrorState from "@/components/ui/InlineErrorState";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import {
@@ -18,16 +20,20 @@ export default function ClientesPage() {
   const toast = useToast();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
   const [editingClient, setEditingClient] = useState<Cliente | undefined>(undefined);
   const [showForm, setShowForm] = useState(false);
 
   async function carregarClientes() {
     setLoading(true);
+    setErro(null);
     try {
       const data = await listarClientes();
       setClientes(data);
     } catch (err) {
-      toast.error(getErrorMessage(err, "Não foi possível carregar os clientes."));
+      const mensagem = getErrorMessage(err, "Não foi possível carregar os clientes.");
+      toast.error(mensagem);
+      setErro(mensagem);
     } finally {
       setLoading(false);
     }
@@ -101,7 +107,9 @@ export default function ClientesPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Carregando clientes...</p>
+        <TableSkeleton rows={4} columns={6} />
+      ) : erro ? (
+        <InlineErrorState message={erro} onRetry={carregarClientes} />
       ) : (
         <ClientTable clientes={clientes} onEdit={handleEdit} onRemove={handleRemove} />
       )}
