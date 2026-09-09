@@ -15,7 +15,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
-import { CheckoutService } from './checkout.service';
+import {
+  CheckoutService,
+  EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT,
+} from './checkout.service';
 
 // Etapa 6.4 (Confirmação de e-mail) — CheckoutService agora também injeta
 // UsuariosService (checagem de emailVerificado em createSession), então
@@ -1277,7 +1280,13 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
 // qualquer outra validação, e bloqueia com ForbiddenException se a conta
 // ainda não confirmou o e-mail. Testes H/I da etapa.
 describe('CheckoutService — createSession: bloqueio por e-mail não confirmado (Etapa 6.4)', () => {
-  it('H: usuário com e-mail não confirmado não consegue criar sessão de checkout', async () => {
+  // Bloqueio desativado temporariamente (ver EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT
+  // em checkout.service.ts) — teste preservado intacto (não removido) para
+  // quando o bloqueio for reativado: nesse momento esta condição volta a
+  // ser `true` sozinha, sem precisar tocar neste arquivo de novo.
+  (EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT ? it : it.skip)(
+    'H: usuário com e-mail não confirmado não consegue criar sessão de checkout',
+    async () => {
     const pedidoCreate = jest.fn();
     const produtosService = { findOne: jest.fn() };
     const enderecosService = { findOneForUsuario: jest.fn() };
@@ -1322,7 +1331,8 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
     expect(produtosService.findOne).not.toHaveBeenCalled();
     expect(enderecosService.findOneForUsuario).not.toHaveBeenCalled();
     expect(pedidoCreate).not.toHaveBeenCalled();
-  });
+    },
+  );
 
   it('I: usuário com e-mail confirmado consegue criar a sessão normalmente (gate não bloqueia quem já verificou)', async () => {
     const pedidoCreate = jest.fn(() => ({ id: 42, numero: 'PED-1' }));

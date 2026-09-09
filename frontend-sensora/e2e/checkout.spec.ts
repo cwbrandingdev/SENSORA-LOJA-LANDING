@@ -1020,7 +1020,13 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
   // backend/src/checkout/checkout.service.ts). Diferente do 401 (sessão
   // inválida, redireciona para /login), aqui a sessão continua válida — só
   // mostra o aviso com a opção de reenviar, sem navegar para nenhum lugar.
-  test("403/e-mail não confirmado: mostra aviso com opção de reenviar, não redireciona, permite reenviar a confirmação", async ({
+  // Bloqueio desativado temporariamente (ver EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT
+  // em checkout/page.tsx e checkout.service.ts no backend) — teste
+  // preservado intacto (não removido) para quando o bloqueio for
+  // reativado: nesse momento basta trocar esta constante para `true`, sem
+  // tocar no resto do teste.
+  const EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT = false;
+  (EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT ? test : test.skip)("403/e-mail não confirmado: mostra aviso com opção de reenviar, não redireciona, permite reenviar a confirmação", async ({
     page,
   }) => {
     await seedSession(page);

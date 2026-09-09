@@ -29,6 +29,17 @@ import {
 } from './entities/checkout-session.entity';
 import { OpcaoFreteResponse } from './entities/opcao-frete.entity';
 
+// Desativação TEMPORÁRIA, a pedido do negócio, do bloqueio de "e-mail não
+// confirmado" especificamente no checkout (ver uso em createSession
+// abaixo) — nada mais do sistema de confirmação de e-mail é afetado:
+// cadastro continua criando o usuário com emailVerificado:false, o e-mail
+// de confirmação continua sendo enviado, e POST /auth/resend-verification e
+// GET /auth/confirmar-email continuam funcionando normalmente. Para
+// reativar o bloqueio, troque para `true` (mude também
+// EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT em frontend-sensora/app/(site)/loja/
+// checkout/page.tsx, que oculta a mensagem/botão de reenvio no frontend).
+export const EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT = false;
+
 type CheckoutGateway = 'asaas' | 'stripe';
 type PedidoCriado = Awaited<ReturnType<PrismaService['pedido']['create']>>;
 
@@ -118,7 +129,7 @@ export class CheckoutService {
     // /usuarios/me é feita aqui — o registro já foi buscado por causa da
     // checagem de e-mail verificado logo acima.
     const usuario = await this.usuariosService.findOne(usuarioId);
-    if (!usuario.emailVerificado) {
+    if (EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT && !usuario.emailVerificado) {
       throw new ForbiddenException(
         'Confirme seu e-mail para finalizar a compra.',
       );

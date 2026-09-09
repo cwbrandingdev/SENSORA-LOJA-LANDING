@@ -37,6 +37,15 @@ const formatPrice = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 
+// Desativação TEMPORÁRIA, a pedido do negócio, do bloqueio de "e-mail não
+// confirmado" no checkout — espelha EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT em
+// backend-sensora/src/checkout/checkout.service.ts. Com o backend não
+// lançando mais 403 por esse motivo, `emailNaoConfirmado` nunca chega a
+// virar true na prática; esta flag só garante que a mensagem/botão de
+// reenvio (exclusivos deste bloqueio) fiquem ocultos mesmo assim. Para
+// reativar: troque para `true` aqui E no backend.
+const EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT = false;
+
 export default function CheckoutPage() {
   const router = useRouter();
   const toast = useToast();
@@ -602,7 +611,7 @@ export default function CheckoutPage() {
                 })()}
 
                 <div className="mt-6 flex flex-col gap-3">
-                  {emailNaoConfirmado && (
+                  {EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT && emailNaoConfirmado && (
                     <div className="flex flex-col gap-2 rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                       <p>Confirme seu e-mail para finalizar a compra.</p>
                       {confirmacaoReenviada ? (
