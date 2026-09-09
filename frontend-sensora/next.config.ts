@@ -34,7 +34,14 @@ const origemApi = obterOrigemApi();
 const IMAGEKIT_UPLOAD_ORIGIN = "https://upload.imagekit.io";
 const IMAGEKIT_DELIVERY_ORIGIN = "https://ik.imagekit.io";
 
-const connectSrc = ["'self'", origemApi, IMAGEKIT_UPLOAD_ORIGIN]
+// Preenchimento automático de endereço a partir do CEP (EnderecoForm) — API
+// pública de terceiros, chamada via fetch direto do navegador (ver
+// services/via-cep.ts), nunca através do backend da Sensora. Sem esta
+// origem em connect-src, o navegador bloquearia a chamada via CSP mesmo com
+// a rede/CORS do ViaCEP funcionando normalmente.
+const VIACEP_ORIGIN = "https://viacep.com.br";
+
+const connectSrc = ["'self'", origemApi, IMAGEKIT_UPLOAD_ORIGIN, VIACEP_ORIGIN]
   .filter((origem): origem is string => Boolean(origem))
   .join(" ");
 

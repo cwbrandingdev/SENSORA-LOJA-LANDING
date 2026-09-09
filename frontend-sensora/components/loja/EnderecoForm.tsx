@@ -9,12 +9,24 @@
 // formulário também na edição em /conta/enderecos, sem duplicar campos/
 // validação. Uso existente no checkout (sem initialData) continua
 // idêntico — defaultValues cai no mesmo fallback de string vazia de antes.
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import FormButton from "@/components/ui/FormButton";
+import { cepCompleto, normalizarCep } from "@/lib/cep";
+import { buscarEnderecoPorCep } from "@/services/via-cep";
 import type { Endereco } from "@/lib/types/loja";
+
+// Preenchimento automático via ViaCEP — só dispara quando o CEP muda para
+// um valor diferente do que reset()/initialData acabou de carregar (ver
+// cepCarregadoPeloResetRef mais abaixo), nunca no carregamento inicial de
+// um endereço existente: sem essa guarda, abrir o formulário de edição já
+// reconsultaria e sobrescreveria rua/bairro/cidade/estado antes de
+// qualquer digitação real do usuário.
+const DEBOUNCE_BUSCA_CEP_MS = 400;
+
+type StatusBuscaCep = "ocioso" | "buscando" | "nao-encontrado" | "erro";
 
 const enderecoSchema = z.object({
   rua: z.string().min(1, "Rua é obrigatória").max(200),
@@ -59,15 +71,82 @@ export default function EnderecoForm({ initialData, onSubmit, onCancel }: Endere
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<EnderecoFormValues>({
     resolver: zodResolver(enderecoSchema),
     defaultValues: toDefaultValues(initialData),
   });
 
+  // Guarda o CEP (só dígitos) carregado pelo reset mais recente — é contra
+  // esse valor que o efeito de busca abaixo compara o CEP atual, para nunca
+  // disparar uma consulta só porque initialData/reset mudou o valor do
+  // campo (edição de um endereço existente não deve reconsultar e
+  // sobrescrever rua/bairro/cidade/estado antes de qualquer digitação real).
+  const cepCarregadoPeloResetRef = useRef(normalizarCep(toDefaultValues(initialData).cep));
+
   useEffect(() => {
-    reset(toDefaultValues(initialData));
+    const valores = toDefaultValues(initialData);
+    reset(valores);
+    cepCarregadoPeloResetRef.current = normalizarCep(valores.cep);
   }, [initialData, reset]);
+
+  const [statusBuscaCep, setStatusBuscaCep] = useState<StatusBuscaCep>("ocioso");
+  // Guarda o último CEP já consultado com sucesso/falha — evita repetir a
+  // mesma busca enquanto o valor completo não mudar de verdade.
+  const ultimoCepConsultadoRef = useRef<string | null>(null);
+
+  async function buscarCep(cepDigitos: string) {
+    if (ultimoCepConsultadoRef.current === cepDigitos) return;
+    ultimoCepConsultadoRef.current = cepDigitos;
+    setStatusBuscaCep("buscando");
+    try {
+      const endereco = await buscarEnderecoPorCep(cepDigitos);
+      if (!endereco) {
+        setStatusBuscaCep("nao-encontrado");
+        return;
+      }
+      // Só rua/bairro/cidade/estado — número e complemento nunca são
+      // tocados aqui (continuam exclusivamente manuais, ver requisito).
+      setValue("rua", endereco.logradouro, { shouldValidate: true });
+      setValue("bairro", endereco.bairro, { shouldValidate: true });
+      setValue("cidade", endereco.cidade, { shouldValidate: true });
+      setValue("estado", endereco.estado, { shouldValidate: true });
+      setStatusBuscaCep("ocioso");
+    } catch {
+      setStatusBuscaCep("erro");
+    }
+  }
+
+  // react-hooks/refs (React Compiler) não permite ler `ref.current` num
+  // callback criado dentro do JSX renderizado (ex.: `register("cep",
+  // {onChange})` inline) — só é seguro em event handlers "de verdade" ou em
+  // efeitos. Por isso o gatilho da busca mora aqui, reagindo a `watch("cep")`
+  // (estado do próprio react-hook-form, não uma ref nossa) dentro de um
+  // efeito, com debounce local via setTimeout/clearTimeout.
+  const cepAtual = watch("cep");
+  useEffect(() => {
+    const cepDigitos = normalizarCep(cepAtual ?? "");
+
+    if (!cepCompleto(cepAtual ?? "")) {
+      setStatusBuscaCep("ocioso");
+      return;
+    }
+
+    // Mesmo valor que reset()/initialData acabou de carregar — não é
+    // digitação do usuário, não dispara consulta nenhuma.
+    if (cepDigitos === cepCarregadoPeloResetRef.current) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      void buscarCep(cepDigitos);
+    }, DEBOUNCE_BUSCA_CEP_MS);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cepAtual]);
 
   return (
     <form
@@ -139,6 +218,25 @@ export default function EnderecoForm({ initialData, onSubmit, onCancel }: Endere
           </label>
           <input id="cep" type="text" placeholder="00000-000" className={inputClass} {...register("cep")} />
           {errors.cep && <p className={errorClass}>{errors.cep.message}</p>}
+          {!errors.cep && statusBuscaCep === "buscando" && (
+            <p className="inline-flex items-center gap-2 text-xs text-slate-500">
+              <span
+                aria-hidden
+                className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-brand-navy"
+              />
+              Buscando endereço...
+            </p>
+          )}
+          {!errors.cep && statusBuscaCep === "nao-encontrado" && (
+            <p className="text-xs text-slate-500">
+              CEP não encontrado. Preencha o endereço manualmente.
+            </p>
+          )}
+          {!errors.cep && statusBuscaCep === "erro" && (
+            <p className="text-xs text-slate-500">
+              Não foi possível buscar o endereço automaticamente. Preencha manualmente.
+            </p>
+          )}
         </div>
       </div>
 
