@@ -55,12 +55,10 @@ import { isAxiosError } from "axios";
 import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 import { login, register as registerUser } from "@/services/auth";
 import { setToken } from "@/lib/storage";
-import { decodeToken } from "@/lib/jwt";
 import { isDestinoInternoValido } from "@/lib/auth-redirect";
 import { ROUTES } from "@/lib/routes";
 import { useAuth } from "@/context/AuthContext";
 import { ToastProvider, useToast } from "@/context/ToastContext";
-import { PerfilUsuario } from "@/lib/types/loja";
 import { cn } from "@/lib/utils";
 import Logo from "@/components/ui/Logo";
 
@@ -180,26 +178,20 @@ function SignInForm({ active }: { active: boolean }) {
       markAuthenticated();
 
       // Task 7: se veio de um fluxo protegido (ex.: /loja/checkout), volta
-      // exatamente para lá em vez do destino padrão por perfil — só quando
-      // o parâmetro é um caminho interno de verdade (isDestinoInternoValido
-      // recusa URL absoluta e "//host", que abririam um open redirect via
-      // ?redirect=). Sem esse parâmetro, comportamento idêntico ao anterior.
+      // exatamente para lá em vez da Landing Page — só quando o parâmetro é
+      // um caminho interno de verdade (isDestinoInternoValido recusa URL
+      // absoluta e "//host", que abririam um open redirect via ?redirect=).
       const redirectParam = searchParams.get("redirect");
       if (isDestinoInternoValido(redirectParam)) {
         router.push(redirectParam);
         return;
       }
 
-      // Decodifica o token recém-recebido (em vez de ler `perfil` do
-      // AuthContext) porque a atualização do context só se reflete no
-      // próximo render — decidir o destino aqui evita depender desse
-      // timing. CLIENTE vai para a loja; qualquer outro perfil (ADMIN,
-      // VENDEDOR) vai para o Admin, onde o ProtectedLayout é quem valida
-      // de fato o acesso.
-      const perfil = decodeToken(access_token)?.perfil;
-      router.push(
-        perfil === PerfilUsuario.CLIENTE ? ROUTES.LOJA : ROUTES.DASHBOARD,
-      );
+      // Etapa (Redirecionamento pós-login) — sem ?redirect=, todo login
+      // bem-sucedido vai direto para a Landing Page ("/"), independente do
+      // perfil (CLIENTE, ADMIN, VENDEDOR ou qualquer outro autorizado pelo
+      // sistema). Não existe mais decisão de rota por perfil aqui.
+      router.push("/");
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 401) {
         // Etapa (Toast de login) — credenciais inválidas passam a usar o

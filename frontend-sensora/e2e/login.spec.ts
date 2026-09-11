@@ -1,10 +1,15 @@
 import { test, expect } from "@playwright/test";
 
-// Etapa (Toast de login) — suíte E2E de /login (SignInForm, dentro de
-// components/auth/AuthSwitch.tsx). Não existia nenhuma suíte dedicada a este
-// formulário antes desta etapa — login válido já era coberto indiretamente
-// por e2e/checkout.spec.ts (Task 7), mas credenciais inválidas nunca tinham
-// asserção própria.
+// Etapa (Toast de login / Redirecionamento pós-login) — suíte E2E de /login
+// (SignInForm, dentro de components/auth/AuthSwitch.tsx). Não existia
+// nenhuma suíte dedicada a este formulário antes da etapa do Toast — login
+// válido só era coberto indiretamente por e2e/checkout.spec.ts (Task 7, via
+// ?redirect=), e credenciais inválidas nunca tinham asserção própria.
+//
+// Etapa (Redirecionamento pós-login) — todo login bem-sucedido SEM
+// ?redirect= vai direto para "/" (Landing Page), independente do perfil
+// (CLIENTE, ADMIN, VENDEDOR...). Não existe mais decisão de rota por perfil
+// (antes: CLIENTE -> /loja, outros -> /workspace-x) — ver AuthSwitch.tsx.
 //
 // SignInForm e SignUpForm ficam sempre os dois montados no DOM (alternam via
 // opacity/z-index, não por desmontagem — ver AuthSwitch.tsx), então ids
@@ -17,7 +22,58 @@ import { test, expect } from "@playwright/test";
 
 const SUBMIT_BUTTON = 'form:has(#login-senha) button[type="submit"]';
 
+// Token decodificável por lib/jwt.ts (sem verificação de assinatura — só o
+// payload é lido no client), mesmo formato/helper já usado em
+// e2e/checkout.spec.ts (fakeToken/base64Url), parametrizado por perfil para
+// cobrir CLIENTE e ADMIN aqui.
+function base64Url(payload: Record<string, unknown>): string {
+  return Buffer.from(JSON.stringify(payload))
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function fakeToken(perfil: "CLIENTE" | "ADMIN"): string {
+  const header = base64Url({ alg: "HS256", typ: "JWT" });
+  const payload = base64Url({
+    sub: 1,
+    email: "usuario@sensora.dev",
+    perfil,
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  });
+  return `${header}.${payload}.assinatura-fake`;
+}
+
 test.describe("Entrar — /login", () => {
+  test("login válido de CLIENTE: redireciona para / (Landing Page)", async ({ page }) => {
+    await page.route("**/auth/login", async (route) => {
+      await route.fulfill({ json: { access_token: fakeToken("CLIENTE") } });
+    });
+
+    await page.goto("/login");
+    await page.locator("#login-email").fill("cliente@sensora.dev");
+    await page.locator("#login-senha").fill("senha123");
+    await page.locator(SUBMIT_BUTTON).click();
+
+    await expect(page).toHaveURL(/\/$/);
+  });
+
+  test("login válido de ADMIN: redireciona para / (Landing Page), não mais para /workspace-x", async ({
+    page,
+  }) => {
+    await page.route("**/auth/login", async (route) => {
+      await route.fulfill({ json: { access_token: fakeToken("ADMIN") } });
+    });
+
+    await page.goto("/login");
+    await page.locator("#login-email").fill("admin@sensora.dev");
+    await page.locator("#login-senha").fill("senha123");
+    await page.locator(SUBMIT_BUTTON).click();
+
+    await expect(page).toHaveURL(/\/$/);
+  });
+
   test("credenciais inválidas (401): mostra Toast de erro, sem mensagem inline", async ({
     page,
   }) => {
