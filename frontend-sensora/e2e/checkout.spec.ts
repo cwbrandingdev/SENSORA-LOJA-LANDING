@@ -17,6 +17,12 @@ import { test, expect, type Page } from "@playwright/test";
 const CHECKOUT_URL = "/loja/checkout";
 const TOKEN_KEY = "sensora_token";
 const CART_STORAGE_KEY = "sensora_carrinho";
+// Etapa (Carrinho por conta) — context/CartContext.tsx passou a gravar o
+// carrinho numa chave por conta (`${CART_STORAGE_KEY}_${sub}`) quando há
+// sessão, em vez da chave única de visitante. fakeToken() nesta suíte
+// sempre usa sub: 1, então esta é a chave que os testes com sessão
+// (seedSession + seedCart, quase todos os deste arquivo) precisam ler.
+const CART_STORAGE_KEY_CONTA = `${CART_STORAGE_KEY}_1`;
 
 function base64Url(payload: Record<string, unknown>): string {
   return Buffer.from(JSON.stringify(payload))
@@ -95,12 +101,19 @@ async function seedSession(page: Page) {
   );
 }
 
+// Etapa (Carrinho por conta) — espelha a resolução de chave de
+// context/CartContext.tsx (guest key vs `${CART_STORAGE_KEY}_${sub}`)
+// checando se sensora_token já foi semeado nesta mesma página (ver
+// seedSession acima — sempre chamado ANTES de seedCart nos testes com
+// sessão, convenção já existente em ~100% dos usos deste arquivo). Sem
+// sessão, continua indo para a chave de visitante de sempre.
 async function seedCart(page: Page, itens: unknown[]) {
   await page.addInitScript(
-    ([cartKey, itensJson]) => {
-      window.localStorage.setItem(cartKey, itensJson);
+    ([guestKey, contaKey, tokenKey, itensJson]) => {
+      const chave = window.localStorage.getItem(tokenKey) ? contaKey : guestKey;
+      window.localStorage.setItem(chave, itensJson);
     },
-    [CART_STORAGE_KEY, JSON.stringify(itens)] as const,
+    [CART_STORAGE_KEY, CART_STORAGE_KEY_CONTA, TOKEN_KEY, JSON.stringify(itens)] as const,
   );
 }
 
@@ -336,9 +349,16 @@ test.describe("Checkout — autenticação (Task 7, preservada)", () => {
     await expect(page).toHaveURL(new RegExp(CHECKOUT_URL.replace("/", "\\/")));
     await expect(page.getByRole("heading", { name: "Checkout" })).toBeVisible();
 
+    // Etapa (Carrinho por conta) — este login é o PRIMEIRO desta conta
+    // (sub: 1) neste teste: o carrinho de visitante semeado por seedCart()
+    // acima migra para a chave da conta no momento do login (ver
+    // resolverChaveCarrinho em context/CartContext.tsx) — "permanece
+    // intacto" continua verdadeiro, só que agora na chave da conta, não
+    // mais na de visitante (que fica esvaziada de propósito após a
+    // migração).
     const cartRaw = await page.evaluate(
       (key) => window.localStorage.getItem(key),
-      CART_STORAGE_KEY,
+      CART_STORAGE_KEY_CONTA,
     );
     expect(JSON.parse(cartRaw ?? "[]")).toEqual([CART_ITEM]);
   });
@@ -932,7 +952,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
     await expect(page).toHaveURL(new RegExp(CHECKOUT_URL.replace("/", "\\/")));
     expect(asaasCalls).toEqual([]);
 
-    const cartRaw = await page.evaluate((key) => window.localStorage.getItem(key), CART_STORAGE_KEY);
+    const cartRaw = await page.evaluate((key) => window.localStorage.getItem(key), CART_STORAGE_KEY_CONTA);
     expect(JSON.parse(cartRaw ?? "[]")).toEqual([CART_ITEM]);
   });
 
@@ -1011,7 +1031,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
     expect(sessionRequests).toHaveLength(1);
     expect(asaasCalls).toEqual([]);
 
-    const cartRaw = await page.evaluate((key) => window.localStorage.getItem(key), CART_STORAGE_KEY);
+    const cartRaw = await page.evaluate((key) => window.localStorage.getItem(key), CART_STORAGE_KEY_CONTA);
     expect(JSON.parse(cartRaw ?? "[]")).toEqual([CART_ITEM]);
   });
 

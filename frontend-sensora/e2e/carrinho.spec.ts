@@ -38,28 +38,55 @@ function base64Url(payload: Record<string, unknown>): string {
     .replace(/=+$/, "");
 }
 
-function fakeToken(): string {
+// Etapa (Carrinho por conta) — `sub` agora é parâmetro (default 1, mesmo
+// valor fixo de sempre — nenhum teste pré-existente muda de comportamento)
+// para o novo teste de isolamento entre contas poder simular uma segunda
+// conta (sub diferente) no mesmo navegador.
+function fakeToken(sub: number = 1): string {
   const header = base64Url({ alg: "HS256", typ: "JWT" });
   const payload = base64Url({
-    sub: 1,
-    email: "cliente@sensora.dev",
+    sub,
+    email: `cliente${sub}@sensora.dev`,
     perfil: "CLIENTE",
     exp: Math.floor(Date.now() / 1000) + 3600,
   });
   return `${header}.${payload}.assinatura-fake`;
 }
 
+// Etapa (Carrinho por conta) — context/CartContext.tsx passou a gravar o
+// carrinho numa chave por conta (`${CART_STORAGE_KEY}_${sub}`) quando há
+// sessão, em vez da chave única de visitante. Este helper espelha
+// exatamente essa mesma resolução (lendo se `sensora_token` já foi
+// semeado nesta mesma página, ver seedSession abaixo — sempre chamado
+// ANTES de seedCart nos testes que precisam de sessão, convenção já
+// existente em 100% dos usos deste arquivo) para continuar semeando no
+// lugar certo. Guest (sem seedSession) continua indo para a chave de
+// visitante de sempre — comportamento inalterado.
 async function seedCart(page: Page, itens: unknown[]) {
   await page.addInitScript(
-    ([key, itensJson]) => window.localStorage.setItem(key, itensJson),
-    [CART_STORAGE_KEY, JSON.stringify(itens)] as const,
+    ([guestKey, tokenKey, itensJson]) => {
+      const token = window.localStorage.getItem(tokenKey);
+      let chave: string = guestKey;
+      if (token) {
+        try {
+          const payload = JSON.parse(
+            atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")),
+          );
+          if (typeof payload.sub === "number") chave = `${guestKey}_${payload.sub}`;
+        } catch {
+          // token de teste sempre bem formado — nunca deve cair aqui.
+        }
+      }
+      window.localStorage.setItem(chave, itensJson);
+    },
+    [CART_STORAGE_KEY, TOKEN_KEY, JSON.stringify(itens)] as const,
   );
 }
 
-async function seedSession(page: Page) {
+async function seedSession(page: Page, sub: number = 1) {
   await page.addInitScript(
     ([key, token]) => window.localStorage.setItem(key, token),
-    [TOKEN_KEY, fakeToken()] as const,
+    [TOKEN_KEY, fakeToken(sub)] as const,
   );
 }
 
@@ -412,4 +439,183 @@ test.describe("Carrinho — console e responsividade", () => {
       expect(await hasHorizontalOverflow(page)).toBe(false);
     });
   }
+});
+
+// Etapa (Carrinho por conta) — achado da auditoria: CartContext usava uma
+// única chave fixa no localStorage para qualquer sessão no mesmo
+// navegador, então a Conta B via o carrinho que a Conta A tinha deixado.
+// Esta suíte exercita o fluxo REAL de login/logout pela UI (Navbar "Sair" +
+// AuthSwitch, não só seedSession) — é essa navegação real entre /login e o
+// site (root layouts diferentes, sempre um reload completo) que remonta o
+// CartProvider e faz a resolução de chave por conta entrar em ação (ver
+// comentário no topo de context/CartContext.tsx).
+test.describe("Carrinho — isolamento por conta (Etapa Carrinho por conta)", () => {
+  const SUBMIT_LOGIN = 'form:has(#login-senha) button[type="submit"]';
+
+  async function mockLoginPorEmail(page: Page) {
+    await page.route("**/auth/login", async (route) => {
+      const body = route.request().postDataJSON() as { email: string };
+      const sub = body.email === "contab@sensora.dev" ? 2 : 1;
+      await route.fulfill({ json: { access_token: fakeToken(sub) } });
+    });
+  }
+
+  async function logout(page: Page) {
+    // O botão "Sair" existe duas vezes no DOM (Navbar desktop e o menu
+    // mobile, sempre montados os dois — só a visibilidade muda por CSS
+    // responsivo, ver components/layout/Navbar.tsx) — filtra pelo
+    // visível no viewport de teste (desktop) para não colidir com o modo
+    // estrito do Playwright (2 elementos combinando o mesmo role+nome).
+    await page
+      .getByRole("button", { name: "Sair" })
+      .and(page.locator(":visible"))
+      .click();
+    // waitForURL (não expect(page).toHaveURL) + waitForLoadState: /login é
+    // outro root layout (reload completo do documento, ver comentário no
+    // topo de context/CartContext.tsx) — sem esperar o load/hidratação
+    // terminar aqui, o próximo fill()/click() do formulário pode acontecer
+    // antes do React anexar o onSubmit, e o clique vira um submit HTML
+    // nativo (GET com ?email=...&senha=... na URL, formulário nunca
+    // processado pela app).
+    await page.waitForURL(/\/login$/);
+    // networkidle (não só "load"): em dev, a rota /login pode ainda estar
+    // sendo compilada sob demanda pelo Next.js (chunk buscado via rede
+    // depois do evento "load") — mesmo padrão já usado em
+    // e2e/checkout-sucesso.spec.ts para o mesmo tipo de corrida.
+    await page.waitForLoadState("networkidle");
+  }
+
+  // Sempre chamado logo depois de logout() (já em /login) ou no início do
+  // teste (goto("/login") já feito pelo chamador) — nunca navega para
+  // /login aqui: um segundo page.goto("/login") para a MESMA URL já
+  // carregada produz elementos duplicados no DOM em dev (HMR), quebrando
+  // os seletores por id (#login-email) que assumem um único formulário.
+  async function login(page: Page, email: string) {
+    await page.locator("#login-email").fill(email);
+    await page.locator("#login-senha").fill("senha123");
+    await page.locator(SUBMIT_LOGIN).click();
+    await expect(page).toHaveURL(/\/$/);
+  }
+
+  // A página /loja/carrinho também renderiza um bloco de destaque (fora do
+  // escopo desta task) que pode repetir o nome de um produto fora da lista
+  // do carrinho em si — getByText(nome) sozinho é ambíguo. Escopado à
+  // lista real (mesmo `ul.divide-y > li` já usado pelos demais testes
+  // deste arquivo, ex.: "remover um item entre vários" acima).
+  function itemNoCarrinho(page: Page, nome: string) {
+    return page.locator("ul.divide-y > li").filter({ hasText: nome });
+  }
+
+  // Etapa (Carrinho por conta) — seedSession()/seedCart() usam
+  // page.addInitScript, que reaplica o valor semeado em TODA navegação
+  // seguinte da mesma page (não é um seed único) — inofensivo nos outros
+  // testes deste arquivo (nunca fazem logout/login de verdade depois), mas
+  // aqui reinjetaria o token da Conta A por cima do login real como B a
+  // cada navegação subsequente, mascarando a troca de conta. Semeia direto
+  // via page.evaluate (escrita única, não reaplicada) depois de uma
+  // primeira navegação neutra, só para este teste.
+  async function seedContaAUmaUnicaVez(page: Page) {
+    await page.goto("/");
+    await page.evaluate(
+      ([tokenKey, cartKey, token, itensJson]) => {
+        window.localStorage.setItem(tokenKey, token);
+        window.localStorage.setItem(cartKey, itensJson);
+      },
+      [TOKEN_KEY, `${CART_STORAGE_KEY}_1`, fakeToken(1), JSON.stringify([ITEM_VELA])] as const,
+    );
+  }
+
+  test("Conta A e Conta B têm carrinhos próprios; trocar de conta nunca vaza itens entre elas", async ({
+    page,
+  }) => {
+    await mockLoginPorEmail(page);
+
+    // 1) Conta A já está logada e tem um produto no carrinho.
+    await seedContaAUmaUnicaVez(page);
+    await page.goto(CARRINHO_URL);
+    await expect(itemNoCarrinho(page, "Vela Aromática Lavanda")).toBeVisible();
+
+    // 2) Logout real (Navbar) e login real como Conta B (formulário).
+    await logout(page);
+    await login(page, "contab@sensora.dev");
+
+    // 3) Conta B NÃO vê o produto da Conta A — carrinho vazio, não o de A.
+    await page.goto(CARRINHO_URL);
+    await expect(page.getByText("Ainda não há nada por aqui")).toBeVisible();
+    await expect(itemNoCarrinho(page, "Vela Aromática Lavanda")).toHaveCount(0);
+
+    // 4) Conta B adiciona outro produto (próprio carrinho, chave própria —
+    // sensora_carrinho_2). Sem UI de "adicionar produto" nesta suíte (só
+    // /loja/carrinho é testado aqui, ver cabeçalho do arquivo) — grava
+    // diretamente, mesmo papel que seedCart cumpre para os demais testes,
+    // só que já com a página carregada.
+    await page.evaluate((item) => {
+      window.localStorage.setItem("sensora_carrinho_2", JSON.stringify([item]));
+    }, ITEM_SPRAY);
+    await page.reload();
+    await expect(itemNoCarrinho(page, "Spray de Ambiente Cedro")).toBeVisible();
+    await expect(itemNoCarrinho(page, "Vela Aromática Lavanda")).toHaveCount(0);
+
+    // 5) Volta para a Conta A (logout real + login real).
+    await logout(page);
+    await login(page, "cliente1@sensora.dev");
+
+    // 6) Conta A recupera EXATAMENTE o que deixou — só o item dela, nunca
+    // o item que a Conta B adicionou (prova de isolamento nos dois
+    // sentidos, não só B não vendo A).
+    await page.goto(CARRINHO_URL);
+    await expect(itemNoCarrinho(page, "Vela Aromática Lavanda")).toBeVisible();
+    await expect(itemNoCarrinho(page, "Spray de Ambiente Cedro")).toHaveCount(0);
+
+    // 7) Recarregar preserva o carrinho da conta atual (A).
+    await page.reload();
+    await expect(itemNoCarrinho(page, "Vela Aromática Lavanda")).toBeVisible();
+    await expect(itemNoCarrinho(page, "Spray de Ambiente Cedro")).toHaveCount(0);
+
+    // 8) Quantidade e remoção continuam funcionando (e persistem na chave
+    // certa — sensora_carrinho_1 — não na de visitante nem na da Conta B).
+    await itemNoCarrinho(page, "Vela Aromática Lavanda")
+      .getByRole("button", { name: "Aumentar quantidade" })
+      .click();
+    const cartRawA = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      "sensora_carrinho_1",
+    );
+    expect(JSON.parse(cartRawA ?? "[]")).toEqual([{ ...ITEM_VELA, quantidade: 3 }]);
+
+    await page.getByRole("button", { name: 'Remover "Vela Aromática Lavanda" do carrinho' }).click();
+    await expect(page.getByText("Ainda não há nada por aqui")).toBeVisible();
+    const cartRawAAposRemover = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      "sensora_carrinho_1",
+    );
+    expect(JSON.parse(cartRawAAposRemover ?? "[]")).toEqual([]);
+
+    // A chave de visitante e a da Conta B nunca foram tocadas por nada
+    // disso feito como Conta A.
+    const cartRawB = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      "sensora_carrinho_2",
+    );
+    expect(JSON.parse(cartRawB ?? "[]")).toEqual([ITEM_SPRAY]);
+  });
+
+  test("nova conta (nunca logada neste navegador) começa com carrinho vazio, sem herdar de outra conta", async ({
+    page,
+  }) => {
+    await mockLoginPorEmail(page);
+
+    // Conta A com item salvo (sessão anterior).
+    await seedContaAUmaUnicaVez(page);
+    await page.goto(CARRINHO_URL);
+    await expect(itemNoCarrinho(page, "Vela Aromática Lavanda")).toBeVisible();
+
+    // Uma conta totalmente nova (sub: 2, nunca logou neste navegador antes,
+    // sem carrinho de visitante pendente) faz login pela primeira vez.
+    await logout(page);
+    await login(page, "contab@sensora.dev");
+
+    await page.goto(CARRINHO_URL);
+    await expect(page.getByText("Ainda não há nada por aqui")).toBeVisible();
+  });
 });
