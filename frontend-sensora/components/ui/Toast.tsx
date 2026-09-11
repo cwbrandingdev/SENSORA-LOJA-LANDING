@@ -1,47 +1,57 @@
-// Componente puramente visual — a lógica de mostrar/remover fica no
-// ToastContext. Reaproveita a mesma paleta já usada nos blocos de erro do
-// Admin (bg-red-50/text-red-700); verde é só o par de sucesso da mesma
-// linguagem, nenhuma cor nova introduzida.
-export type ToastItem = {
-  id: number;
-  type: "success" | "error";
-  message: string;
-};
+"use client";
 
-type ToastViewportProps = {
-  toasts: ToastItem[];
-  onDismiss: (id: number) => void;
-};
+// Etapa (Modernização de Toasts) — encapsula o Toaster do Sonner (biblioteca
+// adotada após a vistoria que comparou com a referência do 21st.dev/shadcn:
+// https://21st.dev/community/components/shadcn/sonner). Este é o ÚNICO
+// arquivo do projeto que importa algo de "sonner" para renderização — o
+// resto da aplicação nunca importa Sonner diretamente, só usa useToast()
+// (ver context/ToastContext.tsx), preservando o "componente próprio" que já
+// existia aqui antes desta etapa (era ToastViewport, 100% caseiro).
+//
+// richColors habilitado, mas com a paleta REDEFINIDA abaixo (via CSS custom
+// properties, mecanismo de tema oficial do Sonner) para os mesmos tons
+// pastel de verde/vermelho já usados no projeto antes desta etapa — ver o
+// antigo TOAST_STYLES deste arquivo (bg-green-50/text-green-700,
+// bg-red-50/text-red-700) e .authswitch-alert.success em
+// components/auth/AuthSwitch.tsx (mesmos hex). Nunca a cor de marca
+// (laranja) e nunca um bloco saturado: só o suficiente para sucesso/erro
+// continuarem semanticamente claros à primeira vista, sem exagero (pedido
+// explícito). --normal-*: o toast neutro (usado, por exemplo, pelo estado
+// "loading" de um futuro toast.promise) reaproveita o navy da marca no
+// texto e uma borda com leve tom de navy — o único toque de identidade
+// Sensora fora do verde/vermelho semântico, para não parecer um componente
+// genérico só colado no projeto.
+import type { CSSProperties } from "react";
+import { Toaster } from "sonner";
 
-const TOAST_STYLES: Record<ToastItem["type"], string> = {
-  success: "bg-green-50 text-green-700",
-  error: "bg-red-50 text-red-700",
-};
+const SENSORA_TOAST_THEME = {
+  fontFamily: "var(--font-inter), Arial, Helvetica, sans-serif",
+  "--border-radius": "12px",
+  "--normal-bg": "#ffffff",
+  "--normal-border": "rgba(2, 24, 61, 0.12)",
+  "--normal-text": "var(--brand-navy)",
+  "--success-bg": "#f0fdf4",
+  "--success-border": "#bbf7d0",
+  "--success-text": "#15803d",
+  "--error-bg": "#fef2f2",
+  "--error-border": "#fecaca",
+  "--error-text": "#b91c1c",
+} as CSSProperties;
 
-export default function ToastViewport({ toasts, onDismiss }: ToastViewportProps) {
-  if (toasts.length === 0) {
-    return null;
-  }
-
+export default function SensoraToaster() {
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2 sm:w-auto">
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          role="status"
-          className={`flex items-start justify-between gap-3 rounded-md px-4 py-3 text-sm shadow-sm ${TOAST_STYLES[toast.type]}`}
-        >
-          <span>{toast.message}</span>
-          <button
-            type="button"
-            onClick={() => onDismiss(toast.id)}
-            className="shrink-0 text-current/60 hover:text-current"
-            aria-label="Fechar notificação"
-          >
-            ×
-          </button>
-        </div>
-      ))}
-    </div>
+    <Toaster
+      position="bottom-right"
+      duration={4000}
+      closeButton
+      richColors
+      style={SENSORA_TOAST_THEME}
+      toastOptions={{
+        closeButtonAriaLabel: "Fechar notificação",
+        // Cantos arredondados + sombra discreta já vêm do próprio Sonner
+        // (var(--border-radius) acima e o box-shadow padrão dele) — não
+        // sobrescritos aqui de propósito, para não pesar o visual.
+      }}
+    />
   );
 }
