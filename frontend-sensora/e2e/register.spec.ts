@@ -15,6 +15,13 @@ import { test, expect } from "@playwright/test";
 // sempre escopado ao form (`form:has(#register-senha) button[type="submit"]`)
 // porque o painel de marca ao lado também tem um botão de texto "Criar
 // conta" (troca de modo), que colidiria com getByRole se não escopado.
+//
+// Etapa (Toast de cadastro) — a mensagem de sucesso deixou de ser o
+// role="status" inline dentro do próprio form (substituído por um Toast via
+// useToast()/ToastProvider, ver AuthSwitch.tsx). getByRole("status") não é
+// mais usado para essa asserção de propósito: o ToastViewport também usa
+// role="status" para os próprios toasts, então localizar por texto exato
+// (getByText) é o que não é ambíguo aqui.
 
 const SUBMIT_BUTTON = 'form:has(#register-senha) button[type="submit"]';
 
@@ -59,7 +66,7 @@ test.describe("Criar conta — /register", () => {
     expect(chamadas).toHaveLength(0);
   });
 
-  test("senha válida com confirmação igual: chama /auth/register sem confirmarSenha e mostra sucesso", async ({
+  test("senha válida com confirmação igual: chama /auth/register sem confirmarSenha e mostra Toast de sucesso", async ({
     page,
   }) => {
     let corpoEnviado: unknown = null;
@@ -85,12 +92,37 @@ test.describe("Criar conta — /register", () => {
     await page.locator("#register-confirmar-senha").fill("senhaSegura123");
     await page.locator(SUBMIT_BUTTON).click();
 
-    await expect(page.getByRole("status")).toContainText("Conta criada!");
+    // O Toast (toast.success) é disparado assim que o cadastro é concluído
+    // — antes mesmo do setTimeout(onSuccess, 2200) que troca para o modo
+    // Login — mas expect(...).toBeVisible() já espera/retenta sozinho, sem
+    // precisar de wait manual. Texto exato via getByText (não getByRole
+    // "status": o ToastViewport usa o mesmo role para qualquer toast).
+    await expect(page.getByText("Conta criada!")).toBeVisible();
     expect(corpoEnviado).toEqual({
       nome: "Cliente Teste",
       email: "cliente@sensora.dev",
       senha: "senhaSegura123",
     });
+
+    // Confirma que nenhuma navegação para /login aconteceu — a troca para o
+    // modo Login continua sendo só a animação local do AuthSwitch (estado
+    // React), a URL permanece /register (ver comentário em onSubmit).
+    await expect(page).toHaveURL(/\/register$/);
+
+    // Aguarda a janela de 2,2s até o AuthSwitch trocar para o modo Login
+    // (onSuccess remove a classe "sign-up-mode" do container — SignInForm/
+    // SignUpForm ficam sempre os dois montados, alternando via CSS, então a
+    // classe do container é o sinal real da troca de modo, não a
+    // visibilidade dos campos, que o Playwright não trata como oculta só
+    // por opacity:0) e confirma que o Toast, disparado bem antes desse
+    // ponto, continua de pé (auto-dismiss só em 4s) — a troca de modo não
+    // derruba nem duplica o Toast.
+    await expect(page.locator(".authswitch-container")).not.toHaveClass(
+      /sign-up-mode/,
+      { timeout: 3000 },
+    );
+    await expect(page.getByText("Conta criada!")).toBeVisible();
+    await expect(page).toHaveURL(/\/register$/);
   });
 
   test("campo 'Repetir senha' alterna entre oculto e visível, independente do campo 'Senha'", async ({

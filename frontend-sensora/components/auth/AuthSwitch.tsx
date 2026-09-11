@@ -59,6 +59,7 @@ import { decodeToken } from "@/lib/jwt";
 import { isDestinoInternoValido } from "@/lib/auth-redirect";
 import { ROUTES } from "@/lib/routes";
 import { useAuth } from "@/context/AuthContext";
+import { ToastProvider, useToast } from "@/context/ToastContext";
 import { PerfilUsuario } from "@/lib/types/loja";
 import { cn } from "@/lib/utils";
 import Logo from "@/components/ui/Logo";
@@ -68,8 +69,14 @@ export type AuthMode = "login" | "register";
 export default function AuthSwitch({ initialMode }: { initialMode: AuthMode }) {
   const [isSignUp, setIsSignUp] = useState(initialMode === "register");
 
+  // Etapa (Toast de cadastro) — nem /login nem /register montam
+  // ToastProvider hoje (são root layouts independentes, ver comentário no
+  // topo do arquivo, e nenhum dos dois pertence ao grupo (site)/workspace-x
+  // que já fazem isso). AuthSwitch é o único componente compartilhado pelas
+  // duas rotas, então montar o provider aqui — em vez de duplicá-lo nos dois
+  // layouts — cobre ambas com uma única mudança, sem tocar nos root layouts.
   return (
-    <>
+    <ToastProvider>
       <style>{AUTH_SWITCH_CSS}</style>
       <div className="authswitch-page">
         <div className={cn("authswitch-container", isSignUp && "sign-up-mode")}>
@@ -130,7 +137,7 @@ export default function AuthSwitch({ initialMode }: { initialMode: AuthMode }) {
           </div>
         </div>
       </div>
-    </>
+    </ToastProvider>
   );
 }
 
@@ -154,6 +161,7 @@ function SignInForm({ active }: { active: boolean }) {
   const { login: markAuthenticated } = useAuth();
   const [serverError, setServerError] = useState("");
   const [senhaVisivel, setSenhaVisivel] = useState(false);
+  const toast = useToast();
 
   const {
     register,
@@ -194,7 +202,12 @@ function SignInForm({ active }: { active: boolean }) {
       );
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 401) {
-        setServerError("E-mail ou senha inválidos.");
+        // Etapa (Toast de login) — credenciais inválidas passam a usar o
+        // Toast de erro (canto inferior direito, mesmo ToastProvider já
+        // montado por AuthSwitch para o cadastro) em vez da mensagem inline.
+        // Qualquer outro erro (rede/servidor indisponível, abaixo) continua
+        // inline via `serverError` — só este caso específico mudou.
+        toast.error("Email ou senha inválidos.");
       } else {
         setServerError("Não foi possível conectar ao servidor.");
       }
@@ -348,9 +361,14 @@ function SignUpForm({
   onSuccess: () => void;
 }) {
   const [serverError, setServerError] = useState("");
+  // `success` continua existindo só para travar o botão de submit durante a
+  // janela de 2,2s antes da troca para o modo Login (disabled={isSubmitting
+  // || success} abaixo) — a mensagem inline que ele renderizava foi
+  // substituída pelo Toast (toast.success, ver onSubmit).
   const [success, setSuccess] = useState(false);
   const [senhaVisivel, setSenhaVisivel] = useState(false);
   const [confirmarSenhaVisivel, setConfirmarSenhaVisivel] = useState(false);
+  const toast = useToast();
 
   const {
     register,
@@ -374,10 +392,16 @@ function SignUpForm({
         senha: data.senha,
       });
       setSuccess(true);
+      // Etapa (Toast de cadastro) — substitui a antiga mensagem inline
+      // ("Conta criada!... voltando para o login...") por um Toast de
+      // sucesso (canto inferior direito, via ToastProvider montado acima).
+      toast.success("Conta criada!");
       // O cadastro original redirecionava para /login após 1s. Aqui já
       // estamos na mesma experiência (Auth Switch), então só volta ao modo
       // Entrar via estado do React, sem navegar de rota (uma rota nova
       // recarregaria a página — root layouts distintos, ver topo do arquivo).
+      // onSuccess continua responsável só pela troca de modo — o Toast já
+      // foi disparado acima, não depende deste timeout.
       setTimeout(onSuccess, 2200);
     } catch {
       setServerError("Não foi possível criar a conta.");
@@ -549,13 +573,6 @@ function SignUpForm({
       {serverError && (
         <p role="alert" className="authswitch-alert">
           {serverError}
-        </p>
-      )}
-
-      {success && (
-        <p role="status" className="authswitch-alert success">
-          Conta criada! Enviamos um e-mail de confirmação — voltando para o
-          login...
         </p>
       )}
 
