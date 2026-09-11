@@ -317,14 +317,26 @@ function SignInForm({ active }: { active: boolean }) {
 // só o container/apresentação mudou.
 // ---------------------------------------------------------------------------
 
-const registerSchema = z.object({
-  nome: z.string().min(1, "Nome é obrigatório"),
-  email: z.string().min(1, "Email é obrigatório").email("Email inválido"),
-  senha: z
-    .string()
-    .min(1, "Senha é obrigatória")
-    .min(6, "A senha deve ter no mínimo 6 caracteres"),
-});
+const registerSchema = z
+  .object({
+    nome: z.string().min(1, "Nome é obrigatório"),
+    email: z.string().min(1, "Email é obrigatório").email("Email inválido"),
+    // Etapa (Repetir senha) — mínimo elevado de 6 para 8 caracteres, para
+    // ficar igual ao backend (RegisterDto.senha, ver
+    // backend-sensora/src/auth/dto/register.dto.ts — @MinLength(8)).
+    senha: z
+      .string()
+      .min(1, "Senha é obrigatória")
+      .min(8, "A senha deve ter no mínimo 8 caracteres"),
+    // `confirmarSenha` é validação só do frontend (nunca enviada ao
+    // backend) — mesmo padrão já usado em app/reset-password/page.tsx e
+    // app/(site)/conta/seguranca/page.tsx.
+    confirmarSenha: z.string().min(1, "Confirme a senha"),
+  })
+  .refine((data) => data.senha === data.confirmarSenha, {
+    message: "As senhas não coincidem",
+    path: ["confirmarSenha"],
+  });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
@@ -338,6 +350,7 @@ function SignUpForm({
   const [serverError, setServerError] = useState("");
   const [success, setSuccess] = useState(false);
   const [senhaVisivel, setSenhaVisivel] = useState(false);
+  const [confirmarSenhaVisivel, setConfirmarSenhaVisivel] = useState(false);
 
   const {
     register,
@@ -351,7 +364,15 @@ function SignUpForm({
     setServerError("");
 
     try {
-      await registerUser(data);
+      // `confirmarSenha` nunca é enviada ao backend — é validação só do
+      // frontend (ver refine() do registerSchema acima e o mesmo padrão em
+      // app/reset-password/page.tsx). RegisterPayload só aceita
+      // nome/email/senha (backend-sensora/src/auth/dto/register.dto.ts).
+      await registerUser({
+        nome: data.nome,
+        email: data.email,
+        senha: data.senha,
+      });
       setSuccess(true);
       // O cadastro original redirecionava para /login após 1s. Aqui já
       // estamos na mesma experiência (Auth Switch), então só volta ao modo
@@ -468,6 +489,59 @@ function SignUpForm({
         {errors.senha && (
           <p id="register-senha-error" className="authswitch-field-error">
             {errors.senha.message}
+          </p>
+        )}
+      </div>
+
+      <div className="authswitch-field">
+        <label htmlFor="register-confirmar-senha" className="sr-only">
+          Repetir senha
+        </label>
+        <div
+          className={cn(
+            "authswitch-input-field",
+            errors.confirmarSenha && "has-error",
+          )}
+        >
+          <span className="authswitch-input-icon">
+            <Lock className="h-[18px] w-[18px]" />
+          </span>
+          <input
+            id="register-confirmar-senha"
+            type={confirmarSenhaVisivel ? "text" : "password"}
+            placeholder="Repetir senha"
+            autoComplete="new-password"
+            tabIndex={active ? 0 : -1}
+            aria-invalid={!!errors.confirmarSenha}
+            aria-describedby={
+              errors.confirmarSenha
+                ? "register-confirmar-senha-error"
+                : undefined
+            }
+            {...register("confirmarSenha")}
+          />
+          <button
+            type="button"
+            className="authswitch-toggle-visibility"
+            tabIndex={active ? 0 : -1}
+            onClick={() => setConfirmarSenhaVisivel((v) => !v)}
+            aria-label={
+              confirmarSenhaVisivel ? "Ocultar senha" : "Mostrar senha"
+            }
+          >
+            {confirmarSenhaVisivel ? (
+              <EyeOff className="h-[18px] w-[18px]" />
+            ) : (
+              <Eye className="h-[18px] w-[18px]" />
+            )}
+          </button>
+        </div>
+        {errors.confirmarSenha && (
+          <p
+            id="register-confirmar-senha-error"
+            className="authswitch-field-error"
+          >
+            {errors.confirmarSenha.message}
           </p>
         )}
       </div>
