@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, ShoppingBag, UserRound, X } from "lucide-react";
@@ -11,7 +11,6 @@ import { loginComRedirect } from "@/lib/auth-redirect";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { PerfilUsuario, STAFF_ROLES } from "@/lib/types/loja";
-import { useNavbarScroll } from "@/hooks/useNavbarScroll";
 import { cn } from "@/lib/utils";
 
 const CATEGORY_LINKS = NAV_CATEGORIES.filter((item) => item.href !== ROUTES.LOJA);
@@ -30,8 +29,8 @@ function NavLink({
   active?: boolean;
 }) {
   const classes = cn(
-    "rounded-full px-3 py-1.5 text-[15px] font-medium tracking-tight text-slate-600 transition-colors duration-300 hover:bg-white/45 hover:text-brand-navy",
-    active && "bg-white/50 text-brand-navy",
+    "rounded-full px-3 py-1.5 text-[15px] font-medium tracking-tight text-brand-navy/80 transition-colors duration-300 hover:bg-slate-100 hover:text-brand-navy",
+    active && "bg-slate-100 text-brand-navy",
     className,
   );
 
@@ -68,7 +67,7 @@ function IconLink({
       href={href}
       aria-label={label}
       onClick={onClick}
-      className="relative inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-600 transition-colors duration-300 hover:bg-white/45 hover:text-brand-navy"
+      className="relative inline-flex h-10 w-10 items-center justify-center rounded-full text-brand-navy/85 transition-colors duration-300 hover:bg-slate-100 hover:text-brand-navy"
     >
       {children}
       {badge != null && badge > 0 && (
@@ -85,7 +84,6 @@ export default function Navbar() {
   const { totalItens } = useCart();
   const pathname = usePathname();
   const { isAuthenticated, loading, perfil, logout } = useAuth();
-  const { progress, isHome } = useNavbarScroll();
 
   let contaLabel = "Entrar";
   let contaHref: string = loginComRedirect(pathname ?? "/");
@@ -99,30 +97,22 @@ export default function Navbar() {
     }
   }
 
-  const fill = isHome ? progress : 1;
-  const glassStyle = {
-    "--nav-progress": progress,
-    "--nav-glass-top": 0.42 + fill * 0.3,
-    "--nav-glass-bottom": 0.22 + fill * 0.34,
-  } as CSSProperties;
-
   const isActive = (href: string) =>
     pathname === href || Boolean(pathname?.startsWith(`${href}/`));
 
   const mobileLinkClass =
-    "flex items-center rounded-2xl px-4 py-3 text-base font-medium tracking-tight text-slate-600 transition-colors duration-300 hover:bg-white/50 hover:text-brand-navy";
+    "flex items-center rounded-2xl px-4 py-3 text-base font-medium tracking-tight text-brand-navy/85 transition-colors duration-300 hover:bg-slate-100 hover:text-brand-navy";
 
   return (
     <header className="pointer-events-none fixed inset-x-0 top-0 z-50 font-rounded">
-      <div className="pointer-events-auto mx-auto max-w-6xl px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5">
+      <div className="pointer-events-auto mx-auto max-w-[96rem] px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 lg:px-8">
         <div
           className={cn(
-            "nav-liquid-glass overflow-hidden transition-[border-radius] duration-500 ease-out motion-reduce:transition-none",
+            "overflow-hidden border border-slate-200 bg-white text-brand-navy shadow-[0_8px_28px_rgba(15,23,42,0.08)] transition-[border-radius,background-color,color] duration-300 ease-out motion-reduce:transition-none",
             open ? "rounded-[2rem]" : "rounded-full",
           )}
-          style={glassStyle}
         >
-          <div className="grid grid-cols-[auto_1fr] items-center gap-3 px-3 py-2.5 sm:px-4 lg:grid-cols-[1fr_auto_1fr] lg:px-5">
+          <div className="grid grid-cols-[auto_1fr] items-center gap-3 px-4 py-2.5 sm:px-5 lg:grid-cols-[1fr_auto_1fr] lg:px-7">
             <Link
               href="/"
               aria-label="Sensora, ir para o início"
@@ -168,10 +158,7 @@ export default function Navbar() {
                     <UserRound className="h-[18px] w-[18px]" strokeWidth={1.75} />
                   </IconLink>
                   {isAuthenticated && (
-                    <NavLink
-                      onClick={logout}
-                      className="hidden px-2.5 text-sm lg:inline-flex"
-                    >
+                    <NavLink onClick={logout} className="hidden px-2.5 text-sm lg:inline-flex">
                       Sair
                     </NavLink>
                   )}
@@ -190,7 +177,7 @@ export default function Navbar() {
                 onClick={() => setOpen((value) => !value)}
                 aria-label={open ? "Fechar menu" : "Abrir menu"}
                 aria-expanded={open}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-700 transition-colors duration-300 hover:bg-white/45 lg:hidden"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-brand-navy transition-colors duration-300 hover:bg-slate-100 lg:hidden"
               >
                 {open ? (
                   <X className="h-5 w-5" strokeWidth={1.75} />
@@ -216,7 +203,7 @@ export default function Navbar() {
                     onClick={() => setOpen(false)}
                     className={cn(
                       mobileLinkClass,
-                      isActive(item.href) && "bg-white/50 text-brand-navy",
+                      isActive(item.href) && "bg-slate-100 text-brand-navy",
                     )}
                   >
                     {item.label}

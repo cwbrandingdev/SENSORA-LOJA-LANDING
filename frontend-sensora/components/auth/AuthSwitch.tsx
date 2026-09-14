@@ -193,6 +193,33 @@ function SignInForm({ active }: { active: boolean }) {
       // sistema). Não existe mais decisão de rota por perfil aqui.
       router.push("/");
     } catch (error) {
+      // #region agent log
+      fetch("http://127.0.0.1:7850/ingest/a0c66230-f554-475e-a6e9-668a6dd61ce2", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "9a24a4",
+        },
+        body: JSON.stringify({
+          sessionId: "9a24a4",
+          runId: "pre-fix",
+          hypothesisId: "H2",
+          location: "AuthSwitch.tsx:onSubmit",
+          message: "login failed",
+          data: {
+            isAxiosError: isAxiosError(error),
+            status: isAxiosError(error) ? error.response?.status : null,
+            requestURL: isAxiosError(error) ? error.config?.url : null,
+            baseURL: isAxiosError(error) ? error.config?.baseURL : null,
+            resolvedURL: isAxiosError(error)
+              ? `${error.config?.baseURL ?? ""}${error.config?.url ?? ""}`
+              : null,
+            code: isAxiosError(error) ? error.code : null,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       if (isAxiosError(error) && error.response?.status === 401) {
         // Etapa (Toast de login) — credenciais inválidas passam a usar o
         // Toast de erro (canto inferior direito, mesmo ToastProvider já

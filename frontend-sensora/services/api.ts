@@ -19,6 +19,30 @@ const api = axios.create({
   },
 });
 
+// #region agent log
+if (typeof window !== "undefined") {
+  fetch("http://127.0.0.1:7850/ingest/a0c66230-f554-475e-a6e9-668a6dd61ce2", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "9a24a4",
+    },
+    body: JSON.stringify({
+      sessionId: "9a24a4",
+      runId: "pre-fix",
+      hypothesisId: "H1",
+      location: "services/api.ts:init",
+      message: "axios baseURL resolved",
+      data: {
+        baseURL: process.env.NEXT_PUBLIC_API_URL ?? null,
+        hasBaseURL: Boolean(process.env.NEXT_PUBLIC_API_URL),
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+}
+// #endregion
+
 api.interceptors.request.use((config) => {
   const token = getToken();
 

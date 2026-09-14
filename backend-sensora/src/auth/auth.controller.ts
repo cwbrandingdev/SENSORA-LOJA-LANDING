@@ -58,6 +58,24 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   login(@Body() loginDto: LoginDto): Promise<AuthToken> {
+    // #region agent log
+    fetch('http://127.0.0.1:7850/ingest/a0c66230-f554-475e-a6e9-668a6dd61ce2', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': '9a24a4',
+      },
+      body: JSON.stringify({
+        sessionId: '9a24a4',
+        runId: 'pre-fix',
+        hypothesisId: 'H3',
+        location: 'auth.controller.ts:login',
+        message: 'backend login endpoint hit',
+        data: { emailProvided: Boolean(loginDto.email) },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     return this.authService.login(loginDto);
   }
 

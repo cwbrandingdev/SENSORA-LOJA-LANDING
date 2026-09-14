@@ -101,6 +101,7 @@ async function bootstrap() {
     SwaggerModule.setup('api', app, swaggerDocument);
   }
 
-  await app.listen(process.env.PORT ?? 3003);
+  await app.listen(process.env.PORT ?? 3000);
+  console.log('ta rodando na porta: ', process.env.PORT);
 }
 bootstrap();
