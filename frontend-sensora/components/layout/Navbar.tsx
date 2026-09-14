@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Menu, ShoppingBag, UserRound, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  Menu,
+  Search,
+  ShoppingBag,
+  UserRound,
+  X,
+} from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import { NAV_CATEGORIES } from "@/lib/content";
 import { ROUTES } from "@/lib/routes";
@@ -13,7 +19,9 @@ import { useCart } from "@/context/CartContext";
 import { PerfilUsuario, STAFF_ROLES } from "@/lib/types/loja";
 import { cn } from "@/lib/utils";
 
-const CATEGORY_LINKS = NAV_CATEGORIES.filter((item) => item.href !== ROUTES.LOJA);
+const CATEGORY_LINKS = NAV_CATEGORIES.filter(
+  (item) => item.href !== ROUTES.LOJA,
+);
 
 function NavLink({
   href,
@@ -55,19 +63,24 @@ function IconLink({
   badge,
   children,
   onClick,
+  className,
 }: {
   href: string;
   label: string;
   badge?: number;
   children: ReactNode;
   onClick?: () => void;
+  className?: string;
 }) {
   return (
     <Link
       href={href}
       aria-label={label}
       onClick={onClick}
-      className="relative inline-flex h-10 w-10 items-center justify-center rounded-full text-brand-navy/85 transition-colors duration-300 hover:bg-slate-100 hover:text-brand-navy"
+      className={cn(
+        "relative inline-flex h-10 w-10 items-center justify-center text-brand-navy/70 transition-colors duration-300 hover:text-brand-navy",
+        className,
+      )}
     >
       {children}
       {badge != null && badge > 0 && (
@@ -80,9 +93,13 @@ function IconLink({
 }
 
 export default function Navbar() {
-  const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const { totalItens } = useCart();
   const pathname = usePathname();
+  const router = useRouter();
   const { isAuthenticated, loading, perfil, logout } = useAuth();
 
   let contaLabel = "Entrar";
@@ -100,24 +117,201 @@ export default function Navbar() {
   const isActive = (href: string) =>
     pathname === href || Boolean(pathname?.startsWith(`${href}/`));
 
+  const cartLabel =
+    totalItens > 0
+      ? `Carrinho, ${totalItens} ${totalItens === 1 ? "item" : "itens"}`
+      : "Carrinho";
+
   const mobileLinkClass =
-    "flex items-center rounded-2xl px-4 py-3 text-base font-medium tracking-tight text-brand-navy/85 transition-colors duration-300 hover:bg-slate-100 hover:text-brand-navy";
+    "flex items-center py-3 text-[15px] font-medium tracking-[0.08em] text-brand-navy/80 transition-colors duration-300 hover:text-brand-navy";
+
+  useEffect(() => {
+    setMenuOpen(false);
+    setSearchOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    searchInputRef.current?.focus();
+  }, [searchOpen]);
+
+  function toggleMenu() {
+    setSearchOpen(false);
+    setMenuOpen((value) => !value);
+  }
+
+  function toggleSearch() {
+    setMenuOpen(false);
+    setSearchOpen((value) => !value);
+  }
+
+  function handleSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const term = query.trim();
+    if (!term) {
+      router.push(ROUTES.LOJA_PRODUTOS);
+    } else {
+      router.push(
+        `${ROUTES.LOJA_PRODUTOS}?q=${encodeURIComponent(term)}`,
+      );
+    }
+    setSearchOpen(false);
+    setQuery("");
+  }
 
   return (
     <header className="pointer-events-none fixed inset-x-0 top-0 z-50 font-rounded">
-      <div className="pointer-events-auto mx-auto max-w-[96rem] px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 lg:px-8">
-        <div
-          className={cn(
-            "overflow-hidden border border-slate-200 bg-white text-brand-navy shadow-[0_8px_28px_rgba(15,23,42,0.08)] transition-[border-radius,background-color,color] duration-300 ease-out motion-reduce:transition-none",
-            open ? "rounded-[2rem]" : "rounded-full",
+      <div className="pointer-events-auto lg:hidden">
+        <div className="border-b border-stone-200/80 bg-background">
+          <div className="grid h-14 grid-cols-3 items-center px-4">
+            <button
+              type="button"
+              onClick={toggleMenu}
+              aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
+              aria-expanded={menuOpen}
+              className="inline-flex h-10 w-10 items-center justify-start text-brand-navy/70 transition-colors hover:text-brand-navy"
+            >
+              {menuOpen ? (
+                <X className="h-6 w-6" strokeWidth={1.5} />
+              ) : (
+                <Menu className="h-6 w-6" strokeWidth={1.5} />
+              )}
+            </button>
+
+            <Link
+              href="/"
+              aria-label="Sensora, ir para o início"
+              className="justify-self-center"
+              onClick={() => {
+                setMenuOpen(false);
+                setSearchOpen(false);
+              }}
+            >
+              <Logo
+                variant="dark"
+                showTagline={false}
+                className="h-7"
+                imageClassName="h-7 w-auto"
+              />
+            </Link>
+
+            <div className="flex items-center justify-end gap-1">
+              <button
+                type="button"
+                onClick={toggleSearch}
+                aria-label={searchOpen ? "Fechar busca" : "Buscar produtos"}
+                aria-expanded={searchOpen}
+                className="inline-flex h-10 w-10 items-center justify-center text-brand-navy/70 transition-colors hover:text-brand-navy"
+              >
+                <Search className="h-[22px] w-[22px]" strokeWidth={1.5} />
+              </button>
+              <IconLink href={ROUTES.LOJA_CARRINHO} label={cartLabel} badge={totalItens}>
+                <ShoppingBag className="h-[22px] w-[22px]" strokeWidth={1.5} />
+              </IconLink>
+            </div>
+          </div>
+
+          {searchOpen && (
+            <form
+              onSubmit={handleSearch}
+              className="border-t border-stone-200/80 px-4 py-3"
+            >
+              <label htmlFor="navbar-search" className="sr-only">
+                Buscar produtos
+              </label>
+              <input
+                id="navbar-search"
+                ref={searchInputRef}
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Buscar produtos"
+                className="w-full border-b border-brand-navy/20 bg-transparent py-2 text-[15px] text-brand-navy outline-none placeholder:text-brand-navy/40"
+              />
+            </form>
           )}
-        >
-          <div className="grid grid-cols-[auto_1fr] items-center gap-3 px-4 py-2.5 sm:px-5 lg:grid-cols-[1fr_auto_1fr] lg:px-7">
+        </div>
+
+        {menuOpen && (
+          <nav
+            aria-label="Menu"
+            className="h-[calc(100dvh-3.5rem)] overflow-y-auto bg-background px-6 py-8"
+          >
+            <ul className="flex flex-col">
+              {CATEGORY_LINKS.map((item) => (
+                <li key={item.label}>
+                  <Link
+                    href={item.href}
+                    onClick={() => setMenuOpen(false)}
+                    className={cn(
+                      mobileLinkClass,
+                      isActive(item.href) && "text-brand-navy",
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+              <li>
+                <Link
+                  href={ROUTES.LOJA}
+                  onClick={() => setMenuOpen(false)}
+                  className={cn(
+                    mobileLinkClass,
+                    isActive(ROUTES.LOJA) && "text-brand-navy",
+                  )}
+                >
+                  Loja
+                </Link>
+              </li>
+              {!loading && (
+                <>
+                  <li className="mt-6 border-t border-stone-200/80 pt-4">
+                    <Link
+                      href={contaHref}
+                      onClick={() => setMenuOpen(false)}
+                      className={mobileLinkClass}
+                    >
+                      {contaLabel}
+                    </Link>
+                  </li>
+                  {isAuthenticated && (
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          logout();
+                        }}
+                        className={cn(mobileLinkClass, "w-full text-left")}
+                      >
+                        Sair
+                      </button>
+                    </li>
+                  )}
+                </>
+              )}
+            </ul>
+          </nav>
+        )}
+      </div>
+
+      <div className="pointer-events-auto mx-auto hidden max-w-[96rem] px-5 pt-[max(0.75rem,env(safe-area-inset-top))] lg:block lg:px-8">
+        <div className="overflow-hidden rounded-full border border-slate-200 bg-white text-brand-navy shadow-[0_8px_28px_rgba(15,23,42,0.08)]">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-7 py-2.5">
             <Link
               href="/"
               aria-label="Sensora, ir para o início"
               className="flex shrink-0 items-center justify-self-start rounded-full px-1 py-0.5"
-              onClick={() => setOpen(false)}
             >
               <Logo
                 variant="dark"
@@ -127,7 +321,7 @@ export default function Navbar() {
               />
             </Link>
 
-            <nav aria-label="Categorias de produtos" className="hidden lg:block">
+            <nav aria-label="Categorias de produtos">
               <ul className="flex items-center gap-0.5">
                 {CATEGORY_LINKS.map((item) => (
                   <li key={item.label}>
@@ -139,26 +333,30 @@ export default function Navbar() {
               </ul>
             </nav>
 
-            <div className="flex items-center justify-self-end gap-1 sm:gap-1.5">
+            <div className="flex items-center justify-self-end gap-1.5">
               <IconLink
                 href={ROUTES.LOJA_CARRINHO}
-                label={
-                  totalItens > 0
-                    ? `Carrinho, ${totalItens} ${totalItens === 1 ? "item" : "itens"}`
-                    : "Carrinho"
-                }
+                label={cartLabel}
                 badge={totalItens}
+                className="rounded-full hover:bg-slate-100"
               >
                 <ShoppingBag className="h-[18px] w-[18px]" strokeWidth={1.75} />
               </IconLink>
 
               {!loading && (
                 <>
-                  <IconLink href={contaHref} label={contaLabel}>
-                    <UserRound className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                  <IconLink
+                    href={contaHref}
+                    label={contaLabel}
+                    className="rounded-full hover:bg-slate-100"
+                  >
+                    <UserRound
+                      className="h-[18px] w-[18px]"
+                      strokeWidth={1.75}
+                    />
                   </IconLink>
                   {isAuthenticated && (
-                    <NavLink onClick={logout} className="hidden px-2.5 text-sm lg:inline-flex">
+                    <NavLink onClick={logout} className="px-2.5 text-sm">
                       Sair
                     </NavLink>
                   )}
@@ -167,101 +365,12 @@ export default function Navbar() {
 
               <Link
                 href={ROUTES.LOJA}
-                className="hidden items-center justify-center rounded-full bg-brand-navy px-5 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors duration-300 hover:bg-brand-navy-light sm:inline-flex"
+                className="inline-flex items-center justify-center rounded-full bg-brand-navy px-5 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors duration-300 hover:bg-brand-navy-light"
               >
                 Adquira já
               </Link>
-
-              <button
-                type="button"
-                onClick={() => setOpen((value) => !value)}
-                aria-label={open ? "Fechar menu" : "Abrir menu"}
-                aria-expanded={open}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-brand-navy transition-colors duration-300 hover:bg-slate-100 lg:hidden"
-              >
-                {open ? (
-                  <X className="h-5 w-5" strokeWidth={1.75} />
-                ) : (
-                  <Menu className="h-5 w-5" strokeWidth={1.75} />
-                )}
-              </button>
             </div>
           </div>
-
-          <nav
-            aria-label="Categorias de produtos"
-            className={cn(
-              "grid transition-[grid-template-rows] duration-300 ease-out lg:hidden motion-reduce:transition-none",
-              open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-            )}
-          >
-            <ul className="min-h-0 overflow-hidden px-3 pb-3">
-              {CATEGORY_LINKS.map((item) => (
-                <li key={item.label}>
-                  <Link
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className={cn(
-                      mobileLinkClass,
-                      isActive(item.href) && "bg-slate-100 text-brand-navy",
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
-              <li>
-                <Link
-                  href={ROUTES.LOJA_CARRINHO}
-                  onClick={() => setOpen(false)}
-                  className={cn(mobileLinkClass, "justify-between")}
-                >
-                  Carrinho
-                  {totalItens > 0 && (
-                    <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-navy px-1 text-[11px] font-semibold text-white">
-                      {totalItens}
-                    </span>
-                  )}
-                </Link>
-              </li>
-              {!loading && (
-                <>
-                  <li>
-                    <Link
-                      href={contaHref}
-                      onClick={() => setOpen(false)}
-                      className={mobileLinkClass}
-                    >
-                      {contaLabel}
-                    </Link>
-                  </li>
-                  {isAuthenticated && (
-                    <li>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOpen(false);
-                          logout();
-                        }}
-                        className={cn(mobileLinkClass, "w-full text-left")}
-                      >
-                        Sair
-                      </button>
-                    </li>
-                  )}
-                </>
-              )}
-              <li className="pt-1 sm:hidden">
-                <Link
-                  href={ROUTES.LOJA}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center justify-center rounded-full bg-brand-navy px-5 py-3 text-[13px] font-semibold uppercase tracking-[0.14em] text-white"
-                >
-                  Adquira já
-                </Link>
-              </li>
-            </ul>
-          </nav>
         </div>
       </div>
     </header>

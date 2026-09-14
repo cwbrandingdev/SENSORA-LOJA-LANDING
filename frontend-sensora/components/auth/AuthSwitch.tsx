@@ -61,6 +61,7 @@ import { useAuth } from "@/context/AuthContext";
 import { ToastProvider, useToast } from "@/context/ToastContext";
 import { cn } from "@/lib/utils";
 import Logo from "@/components/ui/Logo";
+import { BackLink } from "@/components/conta/AccountPageHeader";
 
 export type AuthMode = "login" | "register";
 
@@ -194,31 +195,34 @@ function SignInForm({ active }: { active: boolean }) {
       router.push("/");
     } catch (error) {
       // #region agent log
-      fetch("http://127.0.0.1:7850/ingest/a0c66230-f554-475e-a6e9-668a6dd61ce2", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "9a24a4",
-        },
-        body: JSON.stringify({
-          sessionId: "9a24a4",
-          runId: "pre-fix",
-          hypothesisId: "H2",
-          location: "AuthSwitch.tsx:onSubmit",
-          message: "login failed",
-          data: {
-            isAxiosError: isAxiosError(error),
-            status: isAxiosError(error) ? error.response?.status : null,
-            requestURL: isAxiosError(error) ? error.config?.url : null,
-            baseURL: isAxiosError(error) ? error.config?.baseURL : null,
-            resolvedURL: isAxiosError(error)
-              ? `${error.config?.baseURL ?? ""}${error.config?.url ?? ""}`
-              : null,
-            code: isAxiosError(error) ? error.code : null,
+      fetch(
+        "http://127.0.0.1:7850/ingest/a0c66230-f554-475e-a6e9-668a6dd61ce2",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "9a24a4",
           },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
+          body: JSON.stringify({
+            sessionId: "9a24a4",
+            runId: "pre-fix",
+            hypothesisId: "H2",
+            location: "AuthSwitch.tsx:onSubmit",
+            message: "login failed",
+            data: {
+              isAxiosError: isAxiosError(error),
+              status: isAxiosError(error) ? error.response?.status : null,
+              requestURL: isAxiosError(error) ? error.config?.url : null,
+              baseURL: isAxiosError(error) ? error.config?.baseURL : null,
+              resolvedURL: isAxiosError(error)
+                ? `${error.config?.baseURL ?? ""}${error.config?.url ?? ""}`
+                : null,
+              code: isAxiosError(error) ? error.code : null,
+            },
+            timestamp: Date.now(),
+          }),
+        },
+      ).catch(() => {});
       // #endregion
       if (isAxiosError(error) && error.response?.status === 401) {
         // Etapa (Toast de login) — credenciais inválidas passam a usar o
@@ -313,6 +317,11 @@ function SignInForm({ active }: { active: boolean }) {
       </div>
 
       <div className="authswitch-forgot">
+        <BackLink
+          href="/"
+          label="Voltar ao início"
+          className="authswitch-back-link sm:md:ml-14"
+        />
         <Link href={ROUTES.FORGOT_PASSWORD} tabIndex={active ? 0 : -1}>
           Esqueci minha senha
         </Link>
@@ -625,9 +634,17 @@ function SignUpForm({
 
 const AUTH_SWITCH_CSS = `
 .authswitch-page {
+  position: relative;
   height: 100vh;
   width: 100%;
   background: var(--background);
+}
+
+.authswitch-back-link {
+  position: absolute;
+  top: 1.25rem;
+  left: 1.25rem;
+  z-index: 20;
 }
 
 .authswitch-container {

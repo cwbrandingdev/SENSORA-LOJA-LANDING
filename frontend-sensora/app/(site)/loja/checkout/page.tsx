@@ -16,8 +16,10 @@ import EmptyState from "@/components/ui/EmptyState";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import EnderecoCard from "@/components/loja/EnderecoCard";
 import EnderecoCardSkeleton from "@/components/loja/EnderecoCardSkeleton";
-import EnderecoForm, { type EnderecoFormValues } from "@/components/loja/EnderecoForm";
-import CheckoutItemRow from "@/components/loja/CheckoutItemRow";
+import EnderecoForm, {
+  type EnderecoFormValues,
+} from "@/components/loja/EnderecoForm";
+import CheckoutItemsShowcase from "@/components/loja/CheckoutItemsShowcase";
 import FreteOptions from "@/components/loja/FreteOptions";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
@@ -27,10 +29,17 @@ import { decodeToken } from "@/lib/jwt";
 import { ROUTES } from "@/lib/routes";
 import { getToken, setCheckoutPendente } from "@/lib/storage";
 import { criarEndereco, listarEnderecos } from "@/services/enderecos";
-import { criarSessaoCheckout, isUrlDeCheckoutSegura } from "@/services/checkout";
+import {
+  criarSessaoCheckout,
+  isUrlDeCheckoutSegura,
+} from "@/services/checkout";
 import { cotarFrete } from "@/services/frete";
 import { resendVerification } from "@/services/auth";
-import type { CheckoutSessionResponse, Endereco, OpcaoFrete } from "@/lib/types/loja";
+import type {
+  CheckoutSessionResponse,
+  Endereco,
+  OpcaoFrete,
+} from "@/lib/types/loja";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -58,7 +67,9 @@ export default function CheckoutPage() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
-  const [enderecoSelecionadoId, setEnderecoSelecionadoId] = useState<number | null>(null);
+  const [enderecoSelecionadoId, setEnderecoSelecionadoId] = useState<
+    number | null
+  >(null);
 
   // Realce temporário da seção de endereço quando o usuário tenta continuar
   // sem selecionar nenhum — some sozinho, sem exigir outra interação.
@@ -73,7 +84,9 @@ export default function CheckoutPage() {
   const [freteOpcoes, setFreteOpcoes] = useState<OpcaoFrete[]>([]);
   const [freteCarregando, setFreteCarregando] = useState(false);
   const [freteErro, setFreteErro] = useState<string | null>(null);
-  const [freteSelecionadoId, setFreteSelecionadoId] = useState<number | null>(null);
+  const [freteSelecionadoId, setFreteSelecionadoId] = useState<number | null>(
+    null,
+  );
   const [destacarFrete, setDestacarFrete] = useState(false);
   const freteSectionRef = useRef<HTMLDivElement>(null);
 
@@ -111,10 +124,14 @@ export default function CheckoutPage() {
         if (atual !== null && data.some((endereco) => endereco.id === atual)) {
           return atual;
         }
-        return (data.find((endereco) => endereco.padrao) ?? data[0])?.id ?? null;
+        return (
+          (data.find((endereco) => endereco.padrao) ?? data[0])?.id ?? null
+        );
       });
     } catch (err) {
-      setErro(getErrorMessage(err, "Não foi possível carregar seus endereços."));
+      setErro(
+        getErrorMessage(err, "Não foi possível carregar seus endereços."),
+      );
     } finally {
       setCarregando(false);
     }
@@ -166,7 +183,10 @@ export default function CheckoutPage() {
         setFreteSelecionadoId(opcoes[0]?.id ?? null);
       } catch (err) {
         setFreteErro(
-          getErrorMessage(err, "Não foi possível calcular o frete. Tente novamente."),
+          getErrorMessage(
+            err,
+            "Não foi possível calcular o frete. Tente novamente.",
+          ),
         );
       } finally {
         setFreteCarregando(false);
@@ -187,7 +207,10 @@ export default function CheckoutPage() {
 
   async function handleCadastrarEndereco(data: EnderecoFormValues) {
     try {
-      const novoEndereco = await criarEndereco({ ...data, estado: data.estado.toUpperCase() });
+      const novoEndereco = await criarEndereco({
+        ...data,
+        estado: data.estado.toUpperCase(),
+      });
       toast.success("Endereço cadastrado com sucesso.");
       // Atualiza a lista localmente (sem refazer a requisição inteira) e
       // seleciona o endereço recém-criado automaticamente.
@@ -195,7 +218,9 @@ export default function CheckoutPage() {
       setEnderecoSelecionadoId(novoEndereco.id);
       setMostrarFormulario(false);
     } catch (err) {
-      toast.error(getErrorMessage(err, "Não foi possível cadastrar o endereço."));
+      toast.error(
+        getErrorMessage(err, "Não foi possível cadastrar o endereço."),
+      );
     }
   }
 
@@ -221,7 +246,10 @@ export default function CheckoutPage() {
           : "Selecione um endereço de entrega para continuar.",
       );
       setDestacarEndereco(true);
-      enderecoSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      enderecoSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
       return;
     }
 
@@ -239,7 +267,10 @@ export default function CheckoutPage() {
             : "Selecione uma opção de frete para continuar.",
       );
       setDestacarFrete(true);
-      freteSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      freteSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
       return;
     }
 
@@ -316,7 +347,10 @@ export default function CheckoutPage() {
         setEnderecoSelecionadoId(null);
         carregarEnderecos();
         setDestacarEndereco(true);
-        enderecoSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        enderecoSectionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
         return;
       }
 
@@ -327,12 +361,17 @@ export default function CheckoutPage() {
       // essa mensagem específica. Recotiza automaticamente em vez de deixar
       // o cliente preso numa opção que o backend já rejeitou.
       if (mensagem.toLowerCase().includes("frete")) {
-        toast.error("Essa opção de frete não está mais disponível. Escolha outra.");
+        toast.error(
+          "Essa opção de frete não está mais disponível. Escolha outra.",
+        );
         if (enderecoSelecionadoId !== null) {
           carregarFrete(enderecoSelecionadoId);
         }
         setDestacarFrete(true);
-        freteSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        freteSectionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
         return;
       }
 
@@ -401,7 +440,7 @@ export default function CheckoutPage() {
 
   return (
     <>
-      <section className="relative mx-auto max-w-3xl overflow-hidden px-6 pt-28 pb-8 text-center sm:pt-36 lg:px-10">
+      <section className="relative mx-auto max-w-3xl overflow-hidden px-6 py-8 pb-8 text-center lg:px-10">
         <RevealOnScroll>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
             Loja
@@ -432,9 +471,21 @@ export default function CheckoutPage() {
           </RevealOnScroll>
         </div>
       ) : (
-        <section className="mx-auto max-w-6xl px-6 pb-24 sm:pb-32 lg:px-10 lg:pb-40">
-          <div className="grid grid-cols-1 gap-12 lg:grid-cols-[1.6fr_1fr] lg:gap-16">
-            <RevealOnScroll>
+        <section className="relative pb-24 sm:pb-32 lg:pb-0">
+          <div className="fixed inset-y-0 right-0 z-0 hidden w-[min(480px,42vw)] lg:block xl:w-[min(520px,38vw)]">
+            <CheckoutItemsShowcase itens={itens} className="h-screen" />
+          </div>
+
+          <div className="relative z-10 lg:pr-[min(480px,42vw)] xl:pr-[min(520px,38vw)]">
+            <div className="mx-auto w-full max-w-2xl px-6 pb-12 lg:max-w-none lg:px-10 lg:py-8 lg:pb-24">
+              <RevealOnScroll>
+                <CheckoutItemsShowcase
+                  itens={itens}
+                  className="mb-10 h-[min(50dvh,420px)] rounded-sm lg:hidden"
+                />
+              </RevealOnScroll>
+
+              <RevealOnScroll>
               <div
                 ref={enderecoSectionRef}
                 className={`rounded-sm transition-shadow duration-500 ${
@@ -451,7 +502,11 @@ export default function CheckoutPage() {
 
                 <div className="mt-6">
                   {carregando ? (
-                    <div className="flex flex-col gap-3" aria-busy="true" aria-live="polite">
+                    <div
+                      className="flex flex-col gap-3"
+                      aria-busy="true"
+                      aria-live="polite"
+                    >
                       <EnderecoCardSkeleton />
                       <EnderecoCardSkeleton />
                     </div>
@@ -475,7 +530,10 @@ export default function CheckoutPage() {
                         compact
                       />
                       <div className="flex justify-center">
-                        <Button onClick={() => setMostrarFormulario(true)} variant="primary">
+                        <Button
+                          onClick={() => setMostrarFormulario(true)}
+                          variant="primary"
+                        >
                           Cadastrar endereço
                         </Button>
                       </div>
@@ -492,8 +550,12 @@ export default function CheckoutPage() {
                             <EnderecoCard
                               key={endereco.id}
                               endereco={endereco}
-                              selecionado={endereco.id === enderecoSelecionadoId}
-                              onSelecionar={() => setEnderecoSelecionadoId(endereco.id)}
+                              selecionado={
+                                endereco.id === enderecoSelecionadoId
+                              }
+                              onSelecionar={() =>
+                                setEnderecoSelecionadoId(endereco.id)
+                              }
                             />
                           ))}
                         </div>
@@ -502,7 +564,11 @@ export default function CheckoutPage() {
                       {mostrarFormulario ? (
                         <EnderecoForm
                           onSubmit={handleCadastrarEndereco}
-                          onCancel={enderecos.length > 0 ? () => setMostrarFormulario(false) : undefined}
+                          onCancel={
+                            enderecos.length > 0
+                              ? () => setMostrarFormulario(false)
+                              : undefined
+                          }
                         />
                       ) : (
                         // Task 18: mesmo sublinhado-revelado do carrinho
@@ -551,15 +617,17 @@ export default function CheckoutPage() {
                       opcoes={freteOpcoes}
                       selecionadoId={freteSelecionadoId}
                       onSelecionar={(opcao) => setFreteSelecionadoId(opcao.id)}
-                      onTentarNovamente={() => carregarFrete(enderecoSelecionadoId)}
+                      onTentarNovamente={() =>
+                        carregarFrete(enderecoSelecionadoId)
+                      }
                     />
                   </div>
                 </div>
               )}
-            </RevealOnScroll>
+              </RevealOnScroll>
 
-            <RevealOnScroll delayMs={90}>
-              <aside className="rounded-sm border border-slate-200 p-6 lg:sticky lg:top-28">
+              <RevealOnScroll delayMs={90}>
+                <aside className="mt-10 rounded-sm border border-slate-200 p-6 lg:mt-12">
                 <div className="flex items-baseline justify-between">
                   <h2 className="font-serif text-xl font-normal text-brand-navy">
                     Resumo do pedido
@@ -568,12 +636,6 @@ export default function CheckoutPage() {
                     {totalItens} {totalItens === 1 ? "item" : "itens"}
                   </p>
                 </div>
-
-                <ul className="mt-4 divide-y divide-slate-200 border-t border-slate-200">
-                  {itens.map((item) => (
-                    <CheckoutItemRow key={item.produtoId} item={item} />
-                  ))}
-                </ul>
 
                 {/* Etapa 6.5 (Frete) — Total = subtotal + frete (só quando
                     uma opção já foi escolhida; até lá, mostra um placeholder
@@ -585,7 +647,7 @@ export default function CheckoutPage() {
                   );
                   const total = subtotal + (opcaoFreteEscolhida?.preco ?? 0);
                   return (
-                    <dl className="mt-2 space-y-3 border-t border-slate-200 pt-4 text-sm">
+                    <dl className="mt-4 space-y-3 border-t border-slate-200 pt-4 text-sm">
                       <div className="flex items-center justify-between">
                         <dt className="text-slate-500">Subtotal</dt>
                         <dd className="font-medium tabular-nums text-brand-navy">
@@ -611,28 +673,29 @@ export default function CheckoutPage() {
                 })()}
 
                 <div className="mt-6 flex flex-col gap-3">
-                  {EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT && emailNaoConfirmado && (
-                    <div className="flex flex-col gap-2 rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                      <p>Confirme seu e-mail para finalizar a compra.</p>
-                      {confirmacaoReenviada ? (
-                        <p className="text-red-600">
-                          Se ainda não estiver confirmado, você receberá um
-                          novo link em instantes.
-                        </p>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handleReenviarConfirmacao}
-                          disabled={reenviandoConfirmacao}
-                          className="w-fit text-[13px] font-semibold uppercase tracking-[0.14em] underline underline-offset-4 hover:text-red-800 disabled:opacity-60"
-                        >
-                          {reenviandoConfirmacao
-                            ? "Enviando..."
-                            : "Reenviar e-mail de confirmação"}
-                        </button>
-                      )}
-                    </div>
-                  )}
+                  {EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT &&
+                    emailNaoConfirmado && (
+                      <div className="flex flex-col gap-2 rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        <p>Confirme seu e-mail para finalizar a compra.</p>
+                        {confirmacaoReenviada ? (
+                          <p className="text-red-600">
+                            Se ainda não estiver confirmado, você receberá um
+                            novo link em instantes.
+                          </p>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleReenviarConfirmacao}
+                            disabled={reenviandoConfirmacao}
+                            className="w-fit text-[13px] font-semibold uppercase tracking-[0.14em] underline underline-offset-4 hover:text-red-800 disabled:opacity-60"
+                          >
+                            {reenviandoConfirmacao
+                              ? "Enviando..."
+                              : "Reenviar e-mail de confirmação"}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   <Button
                     onClick={handleContinuar}
                     variant="primary"
@@ -658,8 +721,9 @@ export default function CheckoutPage() {
                     ← Voltar ao carrinho
                   </Link>
                 </div>
-              </aside>
-            </RevealOnScroll>
+                </aside>
+              </RevealOnScroll>
+            </div>
           </div>
         </section>
       )}

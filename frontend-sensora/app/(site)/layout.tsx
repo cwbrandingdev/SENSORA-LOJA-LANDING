@@ -3,7 +3,7 @@ import { Fraunces, Geist_Mono, Inter, Nunito } from "next/font/google";
 import "../globals.css";
 import Navbar from "@/components/layout/Navbar";
 import SiteMain from "@/components/layout/SiteMain";
-import Footer from "@/components/layout/Footer";
+import SiteFooter from "@/components/layout/SiteFooter";
 import PageFadeIn from "@/components/ui/PageFadeIn";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
@@ -65,7 +65,7 @@ export default function RootLayout({
                 <Navbar />
               </AuthProvider>
               <SiteMain>{children}</SiteMain>
-              <Footer />
+              <SiteFooter />
             </PageFadeIn>
           </ToastProvider>
         </CartProvider>

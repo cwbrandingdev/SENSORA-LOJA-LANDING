@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { buscarProdutoPublicoPorSlug, ApiPublicaIndisponivelError } from "@/lib/api-publica";
+import {
+  buscarProdutoPublicoPorSlug,
+  ApiPublicaIndisponivelError,
+} from "@/lib/api-publica";
 import { ROUTES } from "@/lib/routes";
 import PlaceholderImage from "@/components/ui/PlaceholderImage";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
@@ -17,7 +20,9 @@ type ProdutoPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-export async function generateMetadata({ params }: ProdutoPageProps): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: ProdutoPageProps): Promise<Metadata> {
   const { slug } = await params;
 
   try {
@@ -68,7 +73,7 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 pt-28 pb-12 sm:pt-36 lg:px-10 lg:pb-20">
+    <div className="mx-auto max-w-7xl px-6 pb-12  lg:px-10 lg:pb-20">
       <Link
         href={
           produto.categoria?.slug
@@ -111,7 +116,9 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
           </h1>
 
           {produto.aroma && (
-            <p className="mt-3 text-[15px] italic text-slate-600">{produto.aroma}</p>
+            <p className="mt-3 text-[15px] italic text-slate-600">
+              {produto.aroma}
+            </p>
           )}
 
           <p className="mt-8 text-3xl font-semibold tracking-tight tabular-nums text-brand-navy">
