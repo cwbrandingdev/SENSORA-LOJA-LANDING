@@ -7,7 +7,7 @@ import { COLLECTIONS, getCollectionHref } from "@/lib/content";
 export default function ColecoesPage() {
   return (
     <>
-      <section className="relative mx-auto max-w-3xl overflow-hidden px-6 pt-28 pb-8 text-center sm:pt-36 lg:px-10">
+      <section className="relative mx-auto max-w-3xl overflow-hidden px-6 py-8 text-center lg:px-10">
         <RevealOnScroll>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
             Sensora
@@ -27,7 +27,10 @@ export default function ColecoesPage() {
           const totalAromas = collection.items.length;
           return (
             <RevealOnScroll key={collection.slug} delayMs={index * 120}>
-              <Link href={getCollectionHref(collection)} className="group block">
+              <Link
+                href={getCollectionHref(collection)}
+                className="group block"
+              >
                 <div className="relative aspect-[4/5] w-full overflow-hidden rounded-sm shadow-lg shadow-brand-navy/10 transition-shadow duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:shadow-2xl group-hover:shadow-brand-navy/20 sm:aspect-[16/10] lg:aspect-[21/9]">
                   <ImageReveal>
                     <PlaceholderImage
@@ -44,7 +47,8 @@ export default function ColecoesPage() {
                   />
                   <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-brand-orange-light">
-                      {collection.eyebrow ?? "Kit"} · {totalAromas} {totalAromas === 1 ? "aroma" : "aromas"}
+                      {collection.eyebrow ?? "Kit"} · {totalAromas}{" "}
+                      {totalAromas === 1 ? "aroma" : "aromas"}
                     </p>
                     <h2 className="mt-2 font-serif text-2xl font-normal text-white transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5 sm:text-3xl">
                       {collection.name}

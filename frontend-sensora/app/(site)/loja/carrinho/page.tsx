@@ -26,7 +26,9 @@ export default function CarrinhoPage() {
   const toast = useToast();
 
   function handleLimparCarrinho() {
-    if (!window.confirm("Esvaziar o carrinho? Essa ação não pode ser desfeita.")) {
+    if (
+      !window.confirm("Esvaziar o carrinho? Essa ação não pode ser desfeita.")
+    ) {
       return;
     }
     limparCarrinho();
@@ -38,13 +40,15 @@ export default function CarrinhoPage() {
   // (CartContext/localStorage) não é tocado aqui de forma alguma.
   function handleIrParaCheckout() {
     router.push(
-      possuiSessaoValida() ? ROUTES.LOJA_CHECKOUT : loginComRedirect(ROUTES.LOJA_CHECKOUT),
+      possuiSessaoValida()
+        ? ROUTES.LOJA_CHECKOUT
+        : loginComRedirect(ROUTES.LOJA_CHECKOUT),
     );
   }
 
   return (
     <>
-      <section className="relative mx-auto max-w-3xl overflow-hidden px-6 pt-28 pb-8 text-center sm:pt-36 lg:px-10">
+      <section className="relative mx-auto max-w-3xl overflow-hidden px-6 py-8 pb-8 text-center lg:px-10">
         <RevealOnScroll>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
             Loja
@@ -131,7 +135,11 @@ export default function CarrinhoPage() {
                 </dl>
 
                 <div className="mt-6 flex flex-col gap-3">
-                  <Button onClick={handleIrParaCheckout} variant="primary" className="w-full">
+                  <Button
+                    onClick={handleIrParaCheckout}
+                    variant="primary"
+                    className="w-full"
+                  >
                     Ir para o checkout →
                   </Button>
                   <Link
