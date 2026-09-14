@@ -15,11 +15,12 @@ export const metadata: Metadata = {
 };
 
 type CatalogoPageProps = {
-  searchParams: Promise<{ categoria?: string }>;
+  searchParams: Promise<{ categoria?: string; q?: string }>;
 };
 
 export default async function CatalogoPage({ searchParams }: CatalogoPageProps) {
-  const { categoria: categoriaAtiva } = await searchParams;
+  const { categoria: categoriaAtiva, q } = await searchParams;
+  const busca = q?.trim();
 
   let categorias;
   let produtos;
@@ -54,9 +55,19 @@ export default async function CatalogoPage({ searchParams }: CatalogoPageProps) 
     throw err;
   }
 
-  const produtosFiltrados = categoriaAtiva
-    ? produtos.filter((produto) => produto.categoria?.slug === categoriaAtiva)
-    : produtos;
+  const termo = busca?.toLowerCase();
+  const produtosFiltrados = produtos.filter((produto) => {
+    if (
+      categoriaAtiva &&
+      produto.categoria?.slug !== categoriaAtiva
+    ) {
+      return false;
+    }
+    if (!termo) return true;
+    return [produto.nome, produto.aroma, produto.descricao]
+      .filter((campo): campo is string => Boolean(campo))
+      .some((campo) => campo.toLowerCase().includes(termo));
+  });
 
   return (
     <div className="mx-auto max-w-7xl px-6 pt-28 pb-24 sm:pt-36 sm:pb-32 lg:px-10 lg:pb-40">
@@ -65,10 +76,12 @@ export default async function CatalogoPage({ searchParams }: CatalogoPageProps) 
           Produtos
         </p>
         <h1 className="mt-4 font-serif text-4xl font-normal tracking-tight text-brand-navy">
-          Catálogo
+          {busca ? `Resultados para “${busca}”` : "Catálogo"}
         </h1>
         <p className="mt-4 max-w-md text-base leading-relaxed text-slate-600">
-          Velas, difusores e sprays de ambiente.
+          {busca
+            ? "Produtos que correspondem à sua busca."
+            : "Velas, difusores e sprays de ambiente."}
         </p>
       </RevealOnScroll>
 

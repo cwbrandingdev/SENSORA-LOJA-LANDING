@@ -1,6 +1,10 @@
 import Link from "next/link";
 import Logo from "@/components/ui/Logo";
-import { FOOTER_CONTENT, NAV_CATEGORIES, PRODUCT_CATEGORIES } from "@/lib/content";
+import {
+  FOOTER_CONTENT,
+  NAV_CATEGORIES,
+  PRODUCT_CATEGORIES,
+} from "@/lib/content";
 
 export default function Footer() {
   const year = new Date().getFullYear();
@@ -10,7 +14,9 @@ export default function Footer() {
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 px-6 py-20 sm:grid-cols-2 lg:grid-cols-5 lg:px-10">
         <div className="sm:col-span-2 lg:col-span-2">
           <Logo className="items-start text-left" />
-          <p className="mt-4 max-w-xs text-sm text-white/70">{FOOTER_CONTENT.tagline}</p>
+          <p className="mt-4 max-w-xs text-sm text-white/70">
+            {FOOTER_CONTENT.tagline}
+          </p>
         </div>
 
         <div>
@@ -20,7 +26,10 @@ export default function Footer() {
           <ul className="mt-4 space-y-2 text-sm text-white/80">
             {NAV_CATEGORIES.map((item) => (
               <li key={item.label}>
-                <Link href={item.href} className="group relative inline-block transition-colors duration-300 hover:text-white">
+                <Link
+                  href={item.href}
+                  className="group relative inline-block transition-colors duration-300 hover:text-white"
+                >
                   {item.label}
                   <span
                     aria-hidden
@@ -39,7 +48,10 @@ export default function Footer() {
           <ul className="mt-4 space-y-2 text-sm text-white/80">
             {PRODUCT_CATEGORIES.map((item) => (
               <li key={item.id}>
-                <Link href={item.href} className="group relative inline-block transition-colors duration-300 hover:text-white">
+                <Link
+                  href={item.href}
+                  className="group relative inline-block transition-colors duration-300 hover:text-white"
+                >
                   {item.label}
                   <span
                     aria-hidden
