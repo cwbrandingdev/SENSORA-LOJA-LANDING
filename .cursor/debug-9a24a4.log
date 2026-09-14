@@ -2,3 +2,7 @@
 {"sessionId":"9a24a4","runId":"pre-fix","hypothesisId":"H3","location":"auth.controller.ts:login","message":"backend login endpoint hit","data":{"emailProvided":true},"timestamp":1789399698885}
 {"sessionId":"9a24a4","runId":"pre-fix","hypothesisId":"H3","location":"auth.controller.ts:login","message":"backend login endpoint hit","data":{"emailProvided":true},"timestamp":1789399768458}
 {"sessionId":"9a24a4","runId":"pre-fix","hypothesisId":"H3","location":"auth.controller.ts:login","message":"backend login endpoint hit","data":{"emailProvided":true},"timestamp":1789406224477}
+{"sessionId":"9a24a4","runId":"pre-fix","hypothesisId":"H3","location":"auth.controller.ts:login","message":"backend login endpoint hit","data":{"emailProvided":true},"timestamp":1789411585087}
+{"sessionId":"9a24a4","runId":"pre-fix","hypothesisId":"H3","location":"auth.controller.ts:login","message":"backend login endpoint hit","data":{"emailProvided":true},"timestamp":1789412118455}
+{"sessionId":"9a24a4","runId":"pre-fix","hypothesisId":"H3","location":"auth.controller.ts:login","message":"backend login endpoint hit","data":{"emailProvided":true},"timestamp":1789416333815}
+{"sessionId":"9a24a4","runId":"pre-fix","hypothesisId":"H3","location":"auth.controller.ts:login","message":"backend login endpoint hit","data":{"emailProvided":true},"timestamp":1789416462627}

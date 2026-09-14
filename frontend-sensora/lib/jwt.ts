@@ -3,19 +3,31 @@
 // tipado contra JwtPayload.
 import type { JwtPayload } from "./types/loja";
 
-export function decodeToken(token: string | null): JwtPayload | null {
-  if (!token || typeof window === "undefined") return null;
-
+function decodePayloadSegment(segment: string): JwtPayload | null {
   try {
-    const payload = token.split(".")[1];
-    let base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    let base64 = segment.replace(/-/g, "+").replace(/_/g, "/");
     while (base64.length % 4) {
       base64 += "=";
     }
-    return JSON.parse(window.atob(base64)) as JwtPayload;
+
+    const json =
+      typeof window !== "undefined"
+        ? window.atob(base64)
+        : Buffer.from(base64, "base64").toString("utf-8");
+
+    return JSON.parse(json) as JwtPayload;
   } catch {
     return null;
   }
+}
+
+export function decodeToken(token: string | null): JwtPayload | null {
+  if (!token) return null;
+
+  const segment = token.split(".")[1];
+  if (!segment) return null;
+
+  return decodePayloadSegment(segment);
 }
 
 // Task 17: só olha o `exp` do payload para decidir se a sessão local ainda

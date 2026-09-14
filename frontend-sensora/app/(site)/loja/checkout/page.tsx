@@ -19,7 +19,7 @@ import EnderecoCardSkeleton from "@/components/loja/EnderecoCardSkeleton";
 import EnderecoForm, {
   type EnderecoFormValues,
 } from "@/components/loja/EnderecoForm";
-import CheckoutItemRow from "@/components/loja/CheckoutItemRow";
+import CheckoutItemsShowcase from "@/components/loja/CheckoutItemsShowcase";
 import FreteOptions from "@/components/loja/FreteOptions";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
@@ -471,9 +471,21 @@ export default function CheckoutPage() {
           </RevealOnScroll>
         </div>
       ) : (
-        <section className="mx-auto max-w-6xl px-6 pb-24 sm:pb-32 lg:px-10 lg:pb-40">
-          <div className="grid grid-cols-1 gap-12 lg:grid-cols-[1.6fr_1fr] lg:gap-16">
-            <RevealOnScroll>
+        <section className="relative pb-24 sm:pb-32 lg:pb-0">
+          <div className="fixed inset-y-0 right-0 z-0 hidden w-[min(480px,42vw)] lg:block xl:w-[min(520px,38vw)]">
+            <CheckoutItemsShowcase itens={itens} className="h-screen" />
+          </div>
+
+          <div className="relative z-10 lg:pr-[min(480px,42vw)] xl:pr-[min(520px,38vw)]">
+            <div className="mx-auto w-full max-w-2xl px-6 pb-12 lg:max-w-none lg:px-10 lg:py-8 lg:pb-24">
+              <RevealOnScroll>
+                <CheckoutItemsShowcase
+                  itens={itens}
+                  className="mb-10 h-[min(50dvh,420px)] rounded-sm lg:hidden"
+                />
+              </RevealOnScroll>
+
+              <RevealOnScroll>
               <div
                 ref={enderecoSectionRef}
                 className={`rounded-sm transition-shadow duration-500 ${
@@ -612,10 +624,10 @@ export default function CheckoutPage() {
                   </div>
                 </div>
               )}
-            </RevealOnScroll>
+              </RevealOnScroll>
 
-            <RevealOnScroll delayMs={90}>
-              <aside className="rounded-sm border border-slate-200 p-6 lg:sticky lg:top-28">
+              <RevealOnScroll delayMs={90}>
+                <aside className="mt-10 rounded-sm border border-slate-200 p-6 lg:mt-12">
                 <div className="flex items-baseline justify-between">
                   <h2 className="font-serif text-xl font-normal text-brand-navy">
                     Resumo do pedido
@@ -624,12 +636,6 @@ export default function CheckoutPage() {
                     {totalItens} {totalItens === 1 ? "item" : "itens"}
                   </p>
                 </div>
-
-                <ul className="mt-4 divide-y divide-slate-200 border-t border-slate-200">
-                  {itens.map((item) => (
-                    <CheckoutItemRow key={item.produtoId} item={item} />
-                  ))}
-                </ul>
 
                 {/* Etapa 6.5 (Frete) — Total = subtotal + frete (só quando
                     uma opção já foi escolhida; até lá, mostra um placeholder
@@ -641,7 +647,7 @@ export default function CheckoutPage() {
                   );
                   const total = subtotal + (opcaoFreteEscolhida?.preco ?? 0);
                   return (
-                    <dl className="mt-2 space-y-3 border-t border-slate-200 pt-4 text-sm">
+                    <dl className="mt-4 space-y-3 border-t border-slate-200 pt-4 text-sm">
                       <div className="flex items-center justify-between">
                         <dt className="text-slate-500">Subtotal</dt>
                         <dd className="font-medium tabular-nums text-brand-navy">
@@ -715,8 +721,9 @@ export default function CheckoutPage() {
                     ← Voltar ao carrinho
                   </Link>
                 </div>
-              </aside>
-            </RevealOnScroll>
+                </aside>
+              </RevealOnScroll>
+            </div>
           </div>
         </section>
       )}

@@ -7,7 +7,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { getToken, removeToken } from "@/lib/storage";
+import { getToken, removeToken, syncAuthCookieFromStorage } from "@/lib/storage";
 import { decodeToken, isTokenExpired } from "@/lib/jwt";
 import { ROUTES } from "@/lib/routes";
 import type { PerfilUsuario } from "@/lib/types/loja";
@@ -72,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPerfil(payload?.perfil ?? null);
     setUserId(payload?.sub ?? null);
     setEmail(payload?.email ?? null);
+    syncAuthCookieFromStorage();
 
     // Agenda o logout automático para o instante exato do `exp` — cobre o
     // caso do usuário parado numa tela sem disparar nenhuma chamada de API
