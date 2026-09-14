@@ -4,9 +4,9 @@
 // visual: se o slug não bater com nada aqui, a categoria continua sendo
 // renderizada normalmente com os dados reais, só sem a imagem temática.
 const BANNER_POR_SLUG_CATEGORIA: Record<string, string> = {
-  velas: "/images/categories/velas-aromaticas.jpg",
+  "velas-aromaticas": "/images/categories/velas-aromaticas.jpg",
   "sprays-de-ambientes": "/images/categories/sprays-de-ambiente.png",
-  "difusores-aromaticos": "/images/categories/difusores-de-aroma.jpg",
+  "difusores-de-aroma": "/images/categories/difusores-de-aroma.jpg",
   kits: "/images/categories/kits.png",
 };
 

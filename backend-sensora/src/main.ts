@@ -102,6 +102,9 @@ async function bootstrap() {
   }
 
   await app.listen(process.env.PORT ?? 3000);
+<<<<<<< Updated upstream
   console.log('ta rodando na porta: ', process.env.PORT);
+=======
+>>>>>>> Stashed changes
 }
 bootstrap();
