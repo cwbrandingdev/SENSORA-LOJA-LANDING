@@ -10,7 +10,7 @@ import {
 import LatestReleaseCard, { type ReleaseItem } from "./LatestReleaseCard";
 
 const arrowClass =
-  "h-10 w-10 border-0 bg-white/85 text-slate-500 shadow-[0_2px_10px_rgba(15,23,42,0.12)] hover:bg-white hover:text-slate-800 hover:scale-100 disabled:opacity-0";
+  "h-10 w-10 border-0 bg-white/85 text-brand-navy shadow-[0_2px_10px_rgba(15,23,42,0.12)] hover:bg-white hover:text-brand-navy-light hover:scale-100 disabled:opacity-0";
 
 export default function LatestReleasesCarousel({
   produtos,

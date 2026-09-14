@@ -84,6 +84,16 @@ const nextConfig: NextConfig = {
   // da stack em produção).
   poweredByHeader: false,
 
+  // Imagens da API pública (ImageKit) usadas nos cards da Home/Loja.
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "ik.imagekit.io",
+      },
+    ],
+  },
+
   async headers() {
     return [
       {

@@ -13,7 +13,6 @@ export default function Home() {
       <FeaturedProducts />
       <LatestReleases />
       <AboutSection />
-      <Manifesto />
     </>
   );
 }
