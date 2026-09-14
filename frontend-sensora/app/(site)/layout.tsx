@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fraunces, Geist_Mono, Inter } from "next/font/google";
+import { Fraunces, Geist_Mono, Inter, Nunito } from "next/font/google";
 import "../globals.css";
 import Navbar from "@/components/layout/Navbar";
 import SiteMain from "@/components/layout/SiteMain";
@@ -25,6 +25,11 @@ const fraunces = Fraunces({
   style: ["normal", "italic"],
 });
 
+const nunito = Nunito({
+  variable: "--font-nunito",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   title: "Sensora | Marketing Sensorial",
   description:
@@ -39,7 +44,7 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${inter.variable} ${geistMono.variable} ${fraunces.variable} antialiased`}
+      className={`${inter.variable} ${geistMono.variable} ${fraunces.variable} ${nunito.variable} antialiased`}
     >
       <body className="bg-background text-slate-900">
         <CartProvider>

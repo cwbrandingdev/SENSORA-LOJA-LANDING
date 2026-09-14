@@ -7,7 +7,7 @@
   --brand-navy-light: #123a66;
   --brand-orange: #c45a31;
   --brand-orange-light: #d97f5c;
-  --navbar-height: 4.5rem;
+  --navbar-height: 6.25rem;
 }
 
 @theme inline {
@@ -20,12 +20,37 @@
   --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
   --font-serif: var(--font-fraunces);
+  --font-rounded: var(--font-nunito);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-inter), Arial, Helvetica, sans-serif;
+}
+
+/* Capsule flutuante no estilo iOS: vidro fosco, borda especular e sombra
+   suave. A opacidade do preenchimento é controlada em Navbar.tsx. */
+.nav-liquid-glass {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, var(--nav-glass-top, 0.62)) 0%,
+    rgba(250, 248, 244, var(--nav-glass-bottom, 0.38)) 100%
+  );
+  backdrop-filter: blur(28px) saturate(1.85);
+  -webkit-backdrop-filter: blur(28px) saturate(1.85);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 12px 40px rgba(2, 24, 61, 0.1),
+    0 2px 10px rgba(2, 24, 61, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .nav-liquid-glass {
+    background: rgba(250, 248, 244, 0.94);
+  }
 }
 
 @keyframes hero-progress {

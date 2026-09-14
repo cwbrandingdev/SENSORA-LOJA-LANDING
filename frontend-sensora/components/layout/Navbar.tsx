@@ -3,6 +3,7 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Menu, ShoppingBag, UserRound, X } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import { NAV_CATEGORIES } from "@/lib/content";
 import { ROUTES } from "@/lib/routes";
@@ -13,34 +14,31 @@ import { PerfilUsuario, STAFF_ROLES } from "@/lib/types/loja";
 import { useNavbarScroll } from "@/hooks/useNavbarScroll";
 import { cn } from "@/lib/utils";
 
+const CATEGORY_LINKS = NAV_CATEGORIES.filter((item) => item.href !== ROUTES.LOJA);
+
 function NavLink({
   href,
   className,
   children,
   onClick,
+  active,
 }: {
   href?: string;
   className?: string;
   children: ReactNode;
   onClick?: () => void;
+  active?: boolean;
 }) {
   const classes = cn(
-    "group relative inline-block text-base font-medium tracking-wide text-slate-600 transition-colors duration-300 hover:text-brand-orange",
+    "rounded-full px-3 py-1.5 text-[15px] font-medium tracking-tight text-slate-600 transition-colors duration-300 hover:bg-white/45 hover:text-brand-navy",
+    active && "bg-white/50 text-brand-navy",
     className,
-  );
-
-  const underline = (
-    <span
-      aria-hidden
-      className="absolute inset-x-0 -bottom-1 h-px origin-left scale-x-0 bg-brand-orange transition-transform duration-300 ease-out group-hover:scale-x-100 motion-reduce:transition-none"
-    />
   );
 
   if (href) {
     return (
       <Link href={href} className={classes} onClick={onClick}>
         {children}
-        {underline}
       </Link>
     );
   }
@@ -48,8 +46,37 @@ function NavLink({
   return (
     <button type="button" className={classes} onClick={onClick}>
       {children}
-      {underline}
     </button>
+  );
+}
+
+function IconLink({
+  href,
+  label,
+  badge,
+  children,
+  onClick,
+}: {
+  href: string;
+  label: string;
+  badge?: number;
+  children: ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      onClick={onClick}
+      className="relative inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-600 transition-colors duration-300 hover:bg-white/45 hover:text-brand-navy"
+    >
+      {children}
+      {badge != null && badge > 0 && (
+        <span className="absolute -right-0.5 -top-0.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-brand-navy px-1 text-[10px] font-semibold text-white">
+          {badge}
+        </span>
+      )}
+    </Link>
   );
 }
 
@@ -72,163 +99,184 @@ export default function Navbar() {
     }
   }
 
-  const heroOpacity = isHome ? 1 - progress : 0;
-
-  const headerStyle = {
+  const fill = isHome ? progress : 1;
+  const glassStyle = {
     "--nav-progress": progress,
-    backgroundColor: `color-mix(in srgb, var(--background) ${heroOpacity * 100}%, transparent)`,
-    borderBottomColor: `rgba(15, 23, 42, ${heroOpacity * 0.08})`,
-    boxShadow: `0 1px 12px rgba(15, 23, 42, ${heroOpacity * 0.06})`,
+    "--nav-glass-top": 0.42 + fill * 0.3,
+    "--nav-glass-bottom": 0.22 + fill * 0.34,
   } as CSSProperties;
 
+  const isActive = (href: string) =>
+    pathname === href || Boolean(pathname?.startsWith(`${href}/`));
+
   const mobileLinkClass =
-    "block rounded-md px-2 py-3 text-sm font-medium tracking-wide text-slate-600 transition-colors duration-300 hover:bg-black/5 hover:text-brand-orange";
+    "flex items-center rounded-2xl px-4 py-3 text-base font-medium tracking-tight text-slate-600 transition-colors duration-300 hover:bg-white/50 hover:text-brand-navy";
 
   return (
-    <header
-      className="fixed inset-x-0 top-0 z-50 border-b border-transparent backdrop-blur-[2px] transition-[background-color,border-color,box-shadow] duration-500 ease-out motion-reduce:transition-none"
-      style={headerStyle}
-    >
-      <div className="flex items-center justify-between px-4 py-4 md:hidden">
-        <Link href="/" aria-label="Sensora, ir para o início">
-          <Logo variant="dark" showTagline className="scale-90" />
-        </Link>
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          aria-label={open ? "Fechar menu" : "Abrir menu"}
-          aria-expanded={open}
-          className="flex h-9 w-9 flex-col items-center justify-center gap-1.5"
+    <header className="pointer-events-none fixed inset-x-0 top-0 z-50 font-rounded">
+      <div className="pointer-events-auto mx-auto max-w-6xl px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5">
+        <div
+          className={cn(
+            "nav-liquid-glass overflow-hidden transition-[border-radius] duration-500 ease-out motion-reduce:transition-none",
+            open ? "rounded-[2rem]" : "rounded-full",
+          )}
+          style={glassStyle}
         >
-          <span
-            className="h-0.5 w-6 bg-slate-800 transition-[transform,background-color] duration-500"
-            style={{
-              transform: open ? "translateY(8px) rotate(45deg)" : undefined,
-            }}
-          />
-          <span
-            className="h-0.5 w-6 bg-slate-800 transition-[opacity,background-color] duration-500"
-            style={{
-              opacity: open ? 0 : 1,
-            }}
-          />
-          <span
-            className="h-0.5 w-6 bg-slate-800 transition-[transform,background-color] duration-500"
-            style={{
-              transform: open ? "translateY(-8px) rotate(-45deg)" : undefined,
-            }}
-          />
-        </button>
-      </div>
+          <div className="grid grid-cols-[auto_1fr] items-center gap-3 px-3 py-2.5 sm:px-4 lg:grid-cols-[1fr_auto_1fr] lg:px-5">
+            <Link
+              href="/"
+              aria-label="Sensora, ir para o início"
+              className="flex shrink-0 items-center justify-self-start rounded-full px-1 py-0.5"
+              onClick={() => setOpen(false)}
+            >
+              <Logo
+                variant="dark"
+                showTagline={false}
+                className="h-8"
+                imageClassName="h-8 w-auto"
+              />
+            </Link>
 
-      <div className="mx-auto hidden max-w-7xl items-center justify-between px-6 py-4 md:flex lg:px-10">
-        <Link href="/" aria-label="Sensora, ir para o início">
-          <Logo variant="dark" showTagline={false} className="scale-90" />
-        </Link>
-        <nav aria-label="Categorias de produtos">
-          <ul className="flex items-center gap-9">
-            {NAV_CATEGORIES.map((item) => (
-              <li key={item.label}>
-                <NavLink href={item.href}>
-                  {item.label}
-                </NavLink>
-              </li>
-            ))}
-            <li>
-              <NavLink
-                href={ROUTES.LOJA_CARRINHO}
-                className="inline-flex items-center gap-1.5"
-              >
-                Carrinho
-                {totalItens > 0 && (
-                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-orange px-1 text-[11px] font-semibold text-white">
-                    {totalItens}
-                  </span>
-                )}
-              </NavLink>
-            </li>
-            {!loading && (
-              <>
-                <li>
-                  <NavLink href={contaHref}>
-                    {contaLabel}
-                  </NavLink>
-                </li>
-                {isAuthenticated && (
-                  <li>
-                    <NavLink onClick={logout}>
-                      Sair
+            <nav aria-label="Categorias de produtos" className="hidden lg:block">
+              <ul className="flex items-center gap-0.5">
+                {CATEGORY_LINKS.map((item) => (
+                  <li key={item.label}>
+                    <NavLink href={item.href} active={isActive(item.href)}>
+                      {item.label}
                     </NavLink>
                   </li>
-                )}
-              </>
-            )}
-          </ul>
-        </nav>
-      </div>
+                ))}
+              </ul>
+            </nav>
 
-      <nav
-        aria-label="Categorias de produtos"
-        className={cn(
-          "overflow-hidden bg-background transition-[max-height] duration-300 md:hidden",
-          open ? "max-h-96" : "max-h-0",
-        )}
-      >
-        <ul className="flex flex-col gap-1 px-6 pb-4">
-          {NAV_CATEGORIES.map((item) => (
-            <li key={item.label}>
-              <Link
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className={mobileLinkClass}
+            <div className="flex items-center justify-self-end gap-1 sm:gap-1.5">
+              <IconLink
+                href={ROUTES.LOJA_CARRINHO}
+                label={
+                  totalItens > 0
+                    ? `Carrinho, ${totalItens} ${totalItens === 1 ? "item" : "itens"}`
+                    : "Carrinho"
+                }
+                badge={totalItens}
               >
-                {item.label}
-              </Link>
-            </li>
-          ))}
-          <li>
-            <Link
-              href={ROUTES.LOJA_CARRINHO}
-              onClick={() => setOpen(false)}
-              className={cn(mobileLinkClass, "flex items-center gap-1.5")}
-            >
-              Carrinho
-              {totalItens > 0 && (
-                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-orange px-1 text-[11px] font-semibold text-white">
-                  {totalItens}
-                </span>
+                <ShoppingBag className="h-[18px] w-[18px]" strokeWidth={1.75} />
+              </IconLink>
+
+              {!loading && (
+                <>
+                  <IconLink href={contaHref} label={contaLabel}>
+                    <UserRound className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                  </IconLink>
+                  {isAuthenticated && (
+                    <NavLink
+                      onClick={logout}
+                      className="hidden px-2.5 text-sm lg:inline-flex"
+                    >
+                      Sair
+                    </NavLink>
+                  )}
+                </>
               )}
-            </Link>
-          </li>
-          {!loading && (
-            <>
+
+              <Link
+                href={ROUTES.LOJA}
+                className="hidden items-center justify-center rounded-full bg-brand-navy px-5 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors duration-300 hover:bg-brand-navy-light sm:inline-flex"
+              >
+                Adquira já
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => setOpen((value) => !value)}
+                aria-label={open ? "Fechar menu" : "Abrir menu"}
+                aria-expanded={open}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-700 transition-colors duration-300 hover:bg-white/45 lg:hidden"
+              >
+                {open ? (
+                  <X className="h-5 w-5" strokeWidth={1.75} />
+                ) : (
+                  <Menu className="h-5 w-5" strokeWidth={1.75} />
+                )}
+              </button>
+            </div>
+          </div>
+
+          <nav
+            aria-label="Categorias de produtos"
+            className={cn(
+              "grid transition-[grid-template-rows] duration-300 ease-out lg:hidden motion-reduce:transition-none",
+              open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+            )}
+          >
+            <ul className="min-h-0 overflow-hidden px-3 pb-3">
+              {CATEGORY_LINKS.map((item) => (
+                <li key={item.label}>
+                  <Link
+                    href={item.href}
+                    onClick={() => setOpen(false)}
+                    className={cn(
+                      mobileLinkClass,
+                      isActive(item.href) && "bg-white/50 text-brand-navy",
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
               <li>
                 <Link
-                  href={contaHref}
+                  href={ROUTES.LOJA_CARRINHO}
                   onClick={() => setOpen(false)}
-                  className={mobileLinkClass}
+                  className={cn(mobileLinkClass, "justify-between")}
                 >
-                  {contaLabel}
+                  Carrinho
+                  {totalItens > 0 && (
+                    <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-navy px-1 text-[11px] font-semibold text-white">
+                      {totalItens}
+                    </span>
+                  )}
                 </Link>
               </li>
-              {isAuthenticated && (
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOpen(false);
-                      logout();
-                    }}
-                    className={cn(mobileLinkClass, "w-full text-left")}
-                  >
-                    Sair
-                  </button>
-                </li>
+              {!loading && (
+                <>
+                  <li>
+                    <Link
+                      href={contaHref}
+                      onClick={() => setOpen(false)}
+                      className={mobileLinkClass}
+                    >
+                      {contaLabel}
+                    </Link>
+                  </li>
+                  {isAuthenticated && (
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpen(false);
+                          logout();
+                        }}
+                        className={cn(mobileLinkClass, "w-full text-left")}
+                      >
+                        Sair
+                      </button>
+                    </li>
+                  )}
+                </>
               )}
-            </>
-          )}
-        </ul>
-      </nav>
+              <li className="pt-1 sm:hidden">
+                <Link
+                  href={ROUTES.LOJA}
+                  onClick={() => setOpen(false)}
+                  className="flex items-center justify-center rounded-full bg-brand-navy px-5 py-3 text-[13px] font-semibold uppercase tracking-[0.14em] text-white"
+                >
+                  Adquira já
+                </Link>
+              </li>
+            </ul>
+          </nav>
+        </div>
+      </div>
     </header>
   );
 }

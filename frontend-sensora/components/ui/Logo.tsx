@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 
 type LogoProps = {
   className?: string;
+  imageClassName?: string;
   showTagline?: boolean;
   /** `light` = white logo for dark backgrounds; `dark` = navy logo for bright backgrounds */
   variant?: "light" | "dark";
@@ -17,6 +18,7 @@ const LOGO_SOURCES = {
 
 export default function Logo({
   className = "",
+  imageClassName,
   showTagline = true,
   variant = "light",
   style,
@@ -32,6 +34,8 @@ export default function Logo({
         width={250}
         height={50}
         priority
+        className={imageClassName}
+        style={imageClassName ? { width: "auto" } : undefined}
       />
       {showTagline && (
         <span className="mt-4.5 mr-[-0.5em] text-[10px] font-medium tracking-[0.5em] text-brand-orange">
