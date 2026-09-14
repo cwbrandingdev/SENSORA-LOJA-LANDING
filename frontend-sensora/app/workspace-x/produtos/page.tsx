@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ProductTable from "@/components/tables/ProductTable";
 import ProductForm, { type ProductFormValues } from "@/components/forms/ProductForm";
 import FormButton from "@/components/ui/FormButton";
@@ -33,6 +33,71 @@ function toPayload(data: ProductFormValues): CreateProdutoPayload {
   };
 }
 
+// Organização visual (Admin → Produtos) — separa a lista em seções por
+// categoria, reaproveitando o ProductTable já existente (uma instância por
+// seção, cada uma só com a fatia de produtos daquela categoria). Nenhuma
+// chamada nova à API: `produtos` e `categorias` já estão carregados inteiros
+// no cliente (ver carregarProdutos/carregarCategorias acima).
+//
+// Ordem fixa pedida (por slug real, nunca por nome digitado — evita
+// depender de acento/maiúscula): Velas, Sprays, Difusores, Kits primeiro;
+// qualquer outra categoria cadastrada depois (ordem alfabética, sem
+// manutenção manual quando uma categoria nova surgir); "Sem categoria" por
+// último, sempre. Uma categoria da ordem fixa que ainda não existir na API
+// simplesmente não aparece — nunca inventamos uma seção pra categoria que
+// não existe de verdade.
+const ORDEM_SLUGS_PRINCIPAIS = [
+  "velas-aromaticas",
+  "sprays-de-ambientes",
+  "difusores-de-aroma",
+  "kits",
+];
+
+type GrupoProdutos = {
+  chave: string;
+  nome: string;
+  produtos: Produto[];
+};
+
+function agruparProdutosPorCategoria(
+  produtos: Produto[],
+  categorias: Categoria[],
+): GrupoProdutos[] {
+  const categoriasPorId = new Map(categorias.map((categoria) => [categoria.id, categoria]));
+
+  const principais = ORDEM_SLUGS_PRINCIPAIS.map((slug) =>
+    categorias.find((categoria) => categoria.slug === slug),
+  ).filter((categoria): categoria is Categoria => Boolean(categoria));
+
+  const idsPrincipais = new Set(principais.map((categoria) => categoria.id));
+
+  // "Outras categorias": qualquer categoria real que não esteja na ordem
+  // fixa acima (ex.: uma categoria nova, ou a categoria de teste já vista
+  // na vistoria) — mantém o próprio nome como título da seção (não junta
+  // tudo num balde anônimo, pra não perder identificação rápida do produto).
+  const outras = categorias
+    .filter((categoria) => !idsPrincipais.has(categoria.id))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
+  const gruposCategoria: GrupoProdutos[] = [...principais, ...outras].map((categoria) => ({
+    chave: `categoria-${categoria.id}`,
+    nome: categoria.nome,
+    produtos: produtos.filter((produto) => produto.categoriaId === categoria.id),
+  }));
+
+  // Produto sem categoriaId, ou com um categoriaId que não bate com nenhuma
+  // categoria carregada (categoria removida entretanto, ou falha ao
+  // carregar `categorias`) — nunca some da lista, sempre cai aqui.
+  const semCategoria = produtos.filter(
+    (produto) => produto.categoriaId == null || !categoriasPorId.has(produto.categoriaId),
+  );
+
+  return [
+    ...gruposCategoria,
+    { chave: "sem-categoria", nome: "Sem categoria", produtos: semCategoria },
+  ];
+}
+
 export default function ProdutosPage() {
   const toast = useToast();
   const [produtos, setProdutos] = useState<Produto[]>([]);
@@ -43,6 +108,11 @@ export default function ProdutosPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Produto | undefined>(undefined);
   const [showForm, setShowForm] = useState(false);
+
+  const grupos = useMemo(
+    () => agruparProdutosPorCategoria(produtos, categorias),
+    [produtos, categorias],
+  );
 
   async function carregarProdutos() {
     setLoading(true);
@@ -144,12 +214,25 @@ export default function ProdutosPage() {
       ) : erro ? (
         <InlineErrorState message={erro} onRetry={carregarProdutos} />
       ) : (
-        <ProductTable
-          produtos={produtos}
-          categorias={categorias}
-          onEdit={handleEdit}
-          onRemove={handleRemove}
-        />
+        <div className="flex flex-col gap-10">
+          {grupos.map((grupo) => (
+            <section key={grupo.chave} className="flex flex-col gap-3">
+              <div className="flex items-baseline gap-2 border-b border-slate-200 pb-2">
+                <h3 className="text-base font-semibold text-brand-navy">{grupo.nome}</h3>
+                <span className="text-xs font-medium text-slate-400">
+                  · {grupo.produtos.length}{" "}
+                  {grupo.produtos.length === 1 ? "produto" : "produtos"}
+                </span>
+              </div>
+              <ProductTable
+                produtos={grupo.produtos}
+                categorias={categorias}
+                onEdit={handleEdit}
+                onRemove={handleRemove}
+              />
+            </section>
+          ))}
+        </div>
       )}
     </div>
   );

@@ -57,6 +57,12 @@ export type ProductItem = {
   imageAlt: string;
   ctaLabel: string;
   ctaHref: string;
+  /** Slug do produto real na Loja (`/public/produtos`) — mapeamento
+   *  conferido manualmente contra o catálogo real, nunca inventado. Quando
+   *  presente, o card deste item vira um link para `/loja/produtos/{slug}`
+   *  (ver CollectionShowcase.tsx); ausente = item continua sem link, como
+   *  hoje. */
+  lojaSlug?: string;
 };
 
 export type Collection = {
@@ -158,6 +164,7 @@ const VELAS_4_ESTACOES: Collection = {
       imageAlt: "Vela aromática Frescor de Primavera da Sensora",
       ctaLabel: "Conhecer vela",
       ctaHref: LOJA_URL,
+      lojaSlug: "vela-frescor-da-primavera",
     },
     {
       slug: "verao",
@@ -170,6 +177,7 @@ const VELAS_4_ESTACOES: Collection = {
       imageAlt: "Vela aromática Luz de Verão da Sensora",
       ctaLabel: "Conhecer vela",
       ctaHref: LOJA_URL,
+      lojaSlug: "vela-luz-de-verao",
     },
     {
       slug: "outono",
@@ -182,6 +190,7 @@ const VELAS_4_ESTACOES: Collection = {
       imageAlt: "Vela aromática Manhã de Outono da Sensora",
       ctaLabel: "Conhecer vela",
       ctaHref: LOJA_URL,
+      lojaSlug: "vela-manha-de-outono",
     },
     {
       slug: "inverno",
@@ -194,6 +203,7 @@ const VELAS_4_ESTACOES: Collection = {
       imageAlt: "Vela aromática Brisa de Inverno da Sensora",
       ctaLabel: "Conhecer vela",
       ctaHref: LOJA_URL,
+      lojaSlug: "vela-brisa-de-inverno",
     },
   ],
 };
@@ -221,6 +231,7 @@ const SPRAYS_DE_AMBIENTE: Collection = {
       imageAlt: "Spray de ambiente Baunilha da Sensora",
       ctaLabel: "Conhecer spray",
       ctaHref: LOJA_URL,
+      lojaSlug: "spray-arroma-de-baunilha",
     },
     {
       slug: "especiarias",
@@ -232,6 +243,7 @@ const SPRAYS_DE_AMBIENTE: Collection = {
       imageAlt: "Spray de ambiente Especiarias da Sensora",
       ctaLabel: "Conhecer spray",
       ctaHref: LOJA_URL,
+      lojaSlug: "spray-especiarias",
     },
     {
       slug: "flor-de-laranjeira",
@@ -243,6 +255,7 @@ const SPRAYS_DE_AMBIENTE: Collection = {
       imageAlt: "Spray de ambiente Flor de Laranjeira da Sensora",
       ctaLabel: "Conhecer spray",
       ctaHref: LOJA_URL,
+      lojaSlug: "spray-flor-de-laranjeira",
     },
   ],
 };
@@ -270,6 +283,7 @@ const DIFUSORES_DE_AROMA: Collection = {
       imageAlt: "Difusor de aroma Baunilha da Sensora",
       ctaLabel: "Conhecer difusor",
       ctaHref: LOJA_URL,
+      lojaSlug: "difusor-de-baunilha",
     },
     {
       slug: "especiarias",
@@ -281,6 +295,7 @@ const DIFUSORES_DE_AROMA: Collection = {
       imageAlt: "Difusor de aroma Especiarias da Sensora",
       ctaLabel: "Conhecer difusor",
       ctaHref: LOJA_URL,
+      lojaSlug: "difusor-de-especiarias",
     },
     {
       slug: "flor-de-laranjeira",
@@ -292,6 +307,7 @@ const DIFUSORES_DE_AROMA: Collection = {
       imageAlt: "Difusor de aroma Flor de Laranjeira da Sensora",
       ctaLabel: "Conhecer difusor",
       ctaHref: LOJA_URL,
+      lojaSlug: "difusor-de-flor-de-laranjeira",
     },
   ],
 };
