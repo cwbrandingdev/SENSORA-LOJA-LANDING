@@ -89,6 +89,10 @@ export type KitShowcase = {
   name: string;
   eyebrow?: string;
   tagline?: string;
+  /** Rótulo curto de especificação (ex.: "4 × 200g"). Só renderizado quando definido. */
+  specs?: string;
+  /** Estações/aromas mostrados discretamente abaixo do texto principal. */
+  seasons?: string[];
   imageSrc: string;
   imageAlt: string;
   /** Slug do produto real do kit na Loja — ainda não existe (nenhum SKU de
@@ -238,10 +242,11 @@ const VELAS_4_ESTACOES: Collection = {
 // layout de imagem+texto lado a lado (não mais texto sobreposto na
 // imagem), então o recorte apertado deixou de ser um problema.
 export const KIT_4_ESTACOES_SHOWCASE: KitShowcase = {
-  name: "Kit 4 Estações",
-  eyebrow: "Kit",
-  tagline:
-    "Primavera, Verão, Outono e Inverno reunidas em um único conjunto.",
+  name: "As Quatro Estações",
+  eyebrow: "Kit de Velas Aromáticas",
+  tagline: "Quatro fragrâncias para acompanhar todos os momentos do ano.",
+  specs: "4 × 200g",
+  seasons: ["Primavera", "Verão", "Outono", "Inverno"],
   imageSrc:
     "https://ik.imagekit.io/phof1v4q8/sensora/products/kit-velas-1789408972184_kPMp7Nbik.png",
   imageAlt: "Kit Velas Sensora — as quatro velas aromáticas reunidas",
