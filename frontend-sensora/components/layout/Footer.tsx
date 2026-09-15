@@ -97,6 +97,9 @@ export default function Footer() {
           <p>© {year} Sensora. Todos os direitos reservados.</p>
           <p className="uppercase tracking-[0.2em]">Marketing Sensorial</p>
         </div>
+        <div className="mx-auto max-w-7xl px-6 pb-6 text-center text-[11px] text-white/40 lg:px-10">
+          <p>Loja feita por CWBranding</p>
+        </div>
       </div>
     </footer>
   );

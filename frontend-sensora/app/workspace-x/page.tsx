@@ -110,28 +110,36 @@ export default function AdminDashboardPage() {
   const produtosAtivos = produtos?.filter((produto) => produto.ativo).length ?? 0;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-10">
       <div className="flex flex-col gap-1">
         <h2 className="text-xl font-semibold text-brand-navy">Dashboard Sensora</h2>
         <p className="text-sm text-slate-600">Visão geral da loja.</p>
       </div>
 
-      <section className="flex flex-col gap-3">
+      <section className="flex flex-col gap-5">
         <h3 className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
           Visão geral
         </h3>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard
-            titulo="Faturamento"
-            icon={Wallet}
-            loading={pedidos === null && !pedidosErro}
-            erro={pedidosErro ?? undefined}
-            valor={faturamento !== null ? formatPrice.format(faturamento) : undefined}
-            descricao={pedidosPagos ? `${pedidosPagos.length} pedidos pagos` : undefined}
-          />
+        {/* lg:grid-cols-5 — Faturamento ocupa 2 colunas (destaque) e os 3
+            secundários ocupam 1 cada, somando 5, sem sobra na mesma linha.
+            No mobile (grid-cols-1) e tablet (sm:grid-cols-2) o col-span-2 do
+            destaque continua válido e empilha naturalmente. */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="sm:col-span-2">
+            <MetricCard
+              titulo="Faturamento"
+              icon={Wallet}
+              destaque
+              loading={pedidos === null && !pedidosErro}
+              erro={pedidosErro ?? undefined}
+              valor={faturamento !== null ? formatPrice.format(faturamento) : undefined}
+              descricao={pedidosPagos ? `${pedidosPagos.length} pedidos pagos` : undefined}
+            />
+          </div>
           <MetricCard
             titulo="Pedidos"
             icon={ClipboardList}
+            iconTone="navy"
             loading={pedidos === null && !pedidosErro}
             erro={pedidosErro ?? undefined}
             valor={pedidos ? String(pedidos.length) : undefined}
@@ -140,6 +148,7 @@ export default function AdminDashboardPage() {
           <MetricCard
             titulo="Produtos"
             icon={Package}
+            iconTone="orange-outline"
             loading={produtos === null && !produtosErro}
             erro={produtosErro ?? undefined}
             valor={produtos ? String(produtos.length) : undefined}
@@ -154,6 +163,7 @@ export default function AdminDashboardPage() {
           <MetricCard
             titulo="Categorias"
             icon={Tags}
+            iconTone="navy-outline"
             loading={categorias === null && !categoriasErro}
             erro={categoriasErro ?? undefined}
             valor={categorias ? String(categorias.length) : undefined}

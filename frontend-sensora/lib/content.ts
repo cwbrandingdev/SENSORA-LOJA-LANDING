@@ -488,7 +488,7 @@ export const FOOTER_CONTENT = {
   tagline: "Marcas sentidas, em cada detalhe.",
   contact: {
     email: "sensoramarketingsensorial@gmail.com",
-    phone: "[telefone de contato a definir]",
+    phone: "+55 41 8417-9181",
   },
   social: [
     {

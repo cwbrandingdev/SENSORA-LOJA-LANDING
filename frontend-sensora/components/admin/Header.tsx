@@ -18,6 +18,19 @@ const PERFIL_LABEL: Record<PerfilUsuario, string> = {
   [PerfilUsuario.CLIENTE]: "Cliente",
 };
 
+// Melhoria visual (revisão de UX) — iniciais derivadas só do e-mail (o JWT
+// não carrega `nome`, ver comentário acima). Sem upload/imagem: é só texto
+// dentro de um círculo, calculado no client, nenhuma chamada nova.
+function getIniciais(email: string | null): string {
+  if (!email) return "?";
+  const local = email.split("@")[0] ?? "";
+  const partes = local.split(/[._-]+/).filter(Boolean);
+  if (partes.length >= 2) {
+    return (partes[0][0] + partes[1][0]).toUpperCase();
+  }
+  return local.slice(0, 2).toUpperCase() || "?";
+}
+
 type HeaderProps = {
   onMenuClick?: () => void;
 };
@@ -51,15 +64,23 @@ export default function Header({ onMenuClick }: HeaderProps) {
         <Logo showTagline={false} className="scale-75" />
       </div>
 
-      <div className="flex flex-col items-end leading-tight">
-        <p className="max-w-[40vw] truncate text-sm text-white/90 sm:max-w-none">
-          {email ?? "Usuário autenticado."}
-        </p>
-        {perfil && (
-          <p className="text-xs uppercase tracking-[0.14em] text-brand-orange-light">
-            {PERFIL_LABEL[perfil]}
+      <div className="flex items-center gap-3">
+        <div className="flex flex-col items-end leading-tight">
+          <p className="max-w-[40vw] truncate text-sm text-white/90 sm:max-w-none">
+            {email ?? "Usuário autenticado."}
           </p>
-        )}
+          {perfil && (
+            <p className="text-xs uppercase tracking-[0.14em] text-brand-orange-light">
+              {PERFIL_LABEL[perfil]}
+            </p>
+          )}
+        </div>
+        <span
+          aria-hidden
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-orange text-sm font-semibold text-white"
+        >
+          {getIniciais(email)}
+        </span>
       </div>
     </header>
   );
