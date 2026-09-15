@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
 import CollectionShowcase from "@/components/collections/CollectionShowcase";
+import KitShowcaseCard from "@/components/collections/KitShowcaseCard";
 import CategoryProducts from "@/components/sections/CategoryProducts";
 import EmptyState from "@/components/ui/EmptyState";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import {
   CATEGORIES,
+  KIT_4_ESTACOES_SHOWCASE,
   getCategory,
   getCollectionsByCategory,
 } from "@/lib/content";
@@ -54,6 +56,13 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
           title="Novidades a caminho"
           message={`Em breve, novos kits de ${category.label.toLowerCase()} por aqui.`}
         />
+      )}
+
+      {/* Kit 4 Estações — só em /velas, logo depois das 4 velas avulsas
+          acima. Card único do kit físico (ver KitShowcaseCard.tsx), não uma
+          Collection — por isso não vem de `collections`/`COLLECTIONS`. */}
+      {category.slug === "velas" && (
+        <KitShowcaseCard kit={KIT_4_ESTACOES_SHOWCASE} />
       )}
     </>
   );

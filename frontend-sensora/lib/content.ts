@@ -81,6 +81,27 @@ export type Collection = {
   items: ProductItem[];
 };
 
+/** Card único representando um kit físico como UM produto (não uma lista de
+ *  itens avulsos) — diferente de `Collection`, que sempre renderiza uma
+ *  grade de `items`. Usado pelo Kit 4 Estações em `/velas` (ver
+ *  KitShowcaseCard.tsx): uma imagem só, mostrando as 4 velas juntas. */
+export type KitShowcase = {
+  name: string;
+  eyebrow?: string;
+  tagline?: string;
+  /** Rótulo curto de especificação (ex.: "4 × 200g"). Só renderizado quando definido. */
+  specs?: string;
+  /** Estações/aromas mostrados discretamente abaixo do texto principal. */
+  seasons?: string[];
+  imageSrc: string;
+  imageAlt: string;
+  /** Slug do produto real do kit na Loja — ainda não existe (nenhum SKU de
+   *  kit cadastrado no backend). Quando definido, o card vira link para
+   *  `/loja/produtos/{slug}`; ausente = card visual, sem link, sem apontar
+   *  para nenhuma das 4 velas avulsas. Nunca inventar este valor. */
+  lojaSlug?: string;
+};
+
 /** Item visual simples de uma categoria sem coleção temática própria (ex.: Sprays, Difusores). */
 export type CategoryProduct = {
   slug: string;
@@ -208,6 +229,30 @@ const VELAS_4_ESTACOES: Collection = {
   ],
 };
 
+// Card único do Kit 4 Estações — não é uma Collection (não tem items[], não
+// vira rota própria, não aparece em /colecoes nem em generateStaticParams).
+// Vive só em /velas, logo abaixo da apresentação das 4 velas avulsas (ver
+// [category]/page.tsx), como UMA apresentação do kit físico — nunca como
+// 4 cards repetidos.
+//
+// `lojaSlug`/`imageSrc` conferidos direto em `/public/produtos` de produção
+// (produto real "Kit velas", id 46, categoria Kits) — nunca inventados. A
+// imagem é a mesma já cadastrada no Admin para esse produto (ImageKit,
+// retrato/closeup das 4 velas) — o card mostra em `KitShowcaseCard.tsx` num
+// layout de imagem+texto lado a lado (não mais texto sobreposto na
+// imagem), então o recorte apertado deixou de ser um problema.
+export const KIT_4_ESTACOES_SHOWCASE: KitShowcase = {
+  name: "As Quatro Estações",
+  eyebrow: "Kit de Velas Aromáticas",
+  tagline: "Quatro fragrâncias para acompanhar todos os momentos do ano.",
+  specs: "4 × 200g",
+  seasons: ["Primavera", "Verão", "Outono", "Inverno"],
+  imageSrc:
+    "https://ik.imagekit.io/phof1v4q8/sensora/products/kit-velas-1789408972184_kPMp7Nbik.png",
+  imageAlt: "Kit Velas Sensora — as quatro velas aromáticas reunidas",
+  lojaSlug: "kit-velas",
+};
+
 const SPRAYS_DE_AMBIENTE: Collection = {
   slug: "sprays-de-ambiente",
   categorySlug: "sprays",
@@ -218,7 +263,7 @@ const SPRAYS_DE_AMBIENTE: Collection = {
   heroImageSrc: "/images/hero/banner-sprays-novos.png",
   heroImageAlt:
     "Coleção de sprays de ambiente Sensora, com os três frascos lado a lado sobre uma bancada",
-  eyebrow: "Coleção",
+  eyebrow: "Kit",
   ctaLabel: "Conhecer sprays",
   items: [
     {
@@ -270,7 +315,7 @@ const DIFUSORES_DE_AROMA: Collection = {
   heroImageSrc: "/images/hero/difusores-de-aroma-banner.jpg",
   heroImageAlt:
     "Coleção de difusores de aroma Sensora, com os três difusores lado a lado sobre uma bancada",
-  eyebrow: "Coleção",
+  eyebrow: "Kit",
   ctaLabel: "Conhecer difusores",
   items: [
     {
