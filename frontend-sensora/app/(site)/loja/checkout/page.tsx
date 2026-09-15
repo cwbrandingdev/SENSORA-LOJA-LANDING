@@ -440,7 +440,7 @@ export default function CheckoutPage() {
 
   return (
     <>
-      <section className="relative mx-auto max-w-3xl overflow-hidden px-6 py-8 pb-8 text-center lg:px-10">
+      <section className="relative mx-48 max-w-3xl overflow-hidden px-6 py-8 pb-8 text-center lg:px-10">
         <RevealOnScroll>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
             Loja
@@ -486,241 +486,245 @@ export default function CheckoutPage() {
               </RevealOnScroll>
 
               <RevealOnScroll>
-              <div
-                ref={enderecoSectionRef}
-                className={`rounded-sm transition-shadow duration-500 ${
-                  destacarEndereco
-                    ? "ring-2 ring-brand-orange ring-offset-4 ring-offset-background"
-                    : ""
-                }`}
-              >
-                <div className="border-b border-slate-200 pb-4">
-                  <h2 className="font-serif text-xl font-normal text-brand-navy">
-                    Endereço de entrega
-                  </h2>
-                </div>
-
-                <div className="mt-6">
-                  {carregando ? (
-                    <div
-                      className="flex flex-col gap-3"
-                      aria-busy="true"
-                      aria-live="polite"
-                    >
-                      <EnderecoCardSkeleton />
-                      <EnderecoCardSkeleton />
-                    </div>
-                  ) : erro ? (
-                    <div className="flex flex-col items-center gap-4 rounded-sm border border-red-200 bg-red-50 px-6 py-10 text-center">
-                      <p className="text-sm text-red-700">{erro}</p>
-                      <button
-                        type="button"
-                        onClick={carregarEnderecos}
-                        className="text-[13px] font-semibold uppercase tracking-[0.14em] text-red-700 underline underline-offset-4 hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
-                      >
-                        Tentar novamente
-                      </button>
-                    </div>
-                  ) : enderecos.length === 0 && !mostrarFormulario ? (
-                    <div>
-                      <EmptyState
-                        eyebrow="Endereços"
-                        title="Você ainda não tem nenhum endereço"
-                        message="Cadastre o primeiro endereço de entrega para continuar."
-                        compact
-                      />
-                      <div className="flex justify-center">
-                        <Button
-                          onClick={() => setMostrarFormulario(true)}
-                          variant="primary"
-                        >
-                          Cadastrar endereço
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-6">
-                      {enderecos.length > 0 && (
-                        <div
-                          className="flex flex-col gap-3"
-                          role="radiogroup"
-                          aria-label="Selecione um endereço"
-                        >
-                          {enderecos.map((endereco) => (
-                            <EnderecoCard
-                              key={endereco.id}
-                              endereco={endereco}
-                              selecionado={
-                                endereco.id === enderecoSelecionadoId
-                              }
-                              onSelecionar={() =>
-                                setEnderecoSelecionadoId(endereco.id)
-                              }
-                            />
-                          ))}
-                        </div>
-                      )}
-
-                      {mostrarFormulario ? (
-                        <EnderecoForm
-                          onSubmit={handleCadastrarEndereco}
-                          onCancel={
-                            enderecos.length > 0
-                              ? () => setMostrarFormulario(false)
-                              : undefined
-                          }
-                        />
-                      ) : (
-                        // Task 18: mesmo sublinhado-revelado do carrinho
-                        // (Task 17, "Esvaziar carrinho") em vez do
-                        // underline estático de antes.
-                        <button
-                          type="button"
-                          onClick={() => setMostrarFormulario(true)}
-                          className="group relative w-fit text-[13px] font-semibold uppercase tracking-[0.14em] text-brand-navy transition-colors hover:text-brand-orange focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
-                        >
-                          + Adicionar novo endereço
-                          <span
-                            aria-hidden
-                            className="absolute inset-x-0 -bottom-1 h-px origin-left scale-x-0 bg-brand-orange transition-transform duration-300 ease-out group-hover:scale-x-100 motion-reduce:transition-none"
-                          />
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Etapa 6.5 (Frete) — só aparece depois que um endereço está
-                  selecionado (é o CEP dele que define a cotação); enquanto
-                  isso, nenhuma seção de frete é exibida, evitando um estado
-                  "carregando" sem endereço nenhum para basear a cotação. */}
-              {enderecoSelecionadoId !== null && (
                 <div
-                  ref={freteSectionRef}
-                  className={`mt-10 rounded-sm transition-shadow duration-500 ${
-                    destacarFrete
+                  ref={enderecoSectionRef}
+                  className={`rounded-sm transition-shadow duration-500 ${
+                    destacarEndereco
                       ? "ring-2 ring-brand-orange ring-offset-4 ring-offset-background"
                       : ""
                   }`}
                 >
                   <div className="border-b border-slate-200 pb-4">
                     <h2 className="font-serif text-xl font-normal text-brand-navy">
-                      Entrega
+                      Endereço de entrega
                     </h2>
                   </div>
 
                   <div className="mt-6">
-                    <FreteOptions
-                      carregando={freteCarregando}
-                      erro={freteErro}
-                      opcoes={freteOpcoes}
-                      selecionadoId={freteSelecionadoId}
-                      onSelecionar={(opcao) => setFreteSelecionadoId(opcao.id)}
-                      onTentarNovamente={() =>
-                        carregarFrete(enderecoSelecionadoId)
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-              </RevealOnScroll>
-
-              <RevealOnScroll delayMs={90}>
-                <aside className="mt-10 rounded-sm border border-slate-200 p-6 lg:mt-12">
-                <div className="flex items-baseline justify-between">
-                  <h2 className="font-serif text-xl font-normal text-brand-navy">
-                    Resumo do pedido
-                  </h2>
-                  <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
-                    {totalItens} {totalItens === 1 ? "item" : "itens"}
-                  </p>
-                </div>
-
-                {/* Etapa 6.5 (Frete) — Total = subtotal + frete (só quando
-                    uma opção já foi escolhida; até lá, mostra um placeholder
-                    em vez de um valor incompleto/enganoso). Cupom/desconto
-                    continuam fora do escopo. */}
-                {(() => {
-                  const opcaoFreteEscolhida = freteOpcoes.find(
-                    (opcao) => opcao.id === freteSelecionadoId,
-                  );
-                  const total = subtotal + (opcaoFreteEscolhida?.preco ?? 0);
-                  return (
-                    <dl className="mt-4 space-y-3 border-t border-slate-200 pt-4 text-sm">
-                      <div className="flex items-center justify-between">
-                        <dt className="text-slate-500">Subtotal</dt>
-                        <dd className="font-medium tabular-nums text-brand-navy">
-                          {formatPrice.format(subtotal)}
-                        </dd>
+                    {carregando ? (
+                      <div
+                        className="flex flex-col gap-3"
+                        aria-busy="true"
+                        aria-live="polite"
+                      >
+                        <EnderecoCardSkeleton />
+                        <EnderecoCardSkeleton />
                       </div>
-                      <div className="flex items-center justify-between">
-                        <dt className="text-slate-500">Frete</dt>
-                        <dd className="font-medium tabular-nums text-brand-navy">
-                          {opcaoFreteEscolhida
-                            ? formatPrice.format(opcaoFreteEscolhida.preco)
-                            : "A calcular"}
-                        </dd>
+                    ) : erro ? (
+                      <div className="flex flex-col items-center gap-4 rounded-sm border border-red-200 bg-red-50 px-6 py-10 text-center">
+                        <p className="text-sm text-red-700">{erro}</p>
+                        <button
+                          type="button"
+                          onClick={carregarEnderecos}
+                          className="text-[13px] font-semibold uppercase tracking-[0.14em] text-red-700 underline underline-offset-4 hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
+                        >
+                          Tentar novamente
+                        </button>
                       </div>
-                      <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-base">
-                        <dt className="font-semibold text-brand-navy">Total</dt>
-                        <dd className="text-lg font-semibold tabular-nums text-brand-navy">
-                          {formatPrice.format(total)}
-                        </dd>
+                    ) : enderecos.length === 0 && !mostrarFormulario ? (
+                      <div>
+                        <EmptyState
+                          eyebrow="Endereços"
+                          title="Você ainda não tem nenhum endereço"
+                          message="Cadastre o primeiro endereço de entrega para continuar."
+                          compact
+                        />
+                        <div className="flex justify-center">
+                          <Button
+                            onClick={() => setMostrarFormulario(true)}
+                            variant="primary"
+                          >
+                            Cadastrar endereço
+                          </Button>
+                        </div>
                       </div>
-                    </dl>
-                  );
-                })()}
+                    ) : (
+                      <div className="flex flex-col gap-6">
+                        {enderecos.length > 0 && (
+                          <div
+                            className="flex flex-col gap-3"
+                            role="radiogroup"
+                            aria-label="Selecione um endereço"
+                          >
+                            {enderecos.map((endereco) => (
+                              <EnderecoCard
+                                key={endereco.id}
+                                endereco={endereco}
+                                selecionado={
+                                  endereco.id === enderecoSelecionadoId
+                                }
+                                onSelecionar={() =>
+                                  setEnderecoSelecionadoId(endereco.id)
+                                }
+                              />
+                            ))}
+                          </div>
+                        )}
 
-                <div className="mt-6 flex flex-col gap-3">
-                  {EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT &&
-                    emailNaoConfirmado && (
-                      <div className="flex flex-col gap-2 rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                        <p>Confirme seu e-mail para finalizar a compra.</p>
-                        {confirmacaoReenviada ? (
-                          <p className="text-red-600">
-                            Se ainda não estiver confirmado, você receberá um
-                            novo link em instantes.
-                          </p>
+                        {mostrarFormulario ? (
+                          <EnderecoForm
+                            onSubmit={handleCadastrarEndereco}
+                            onCancel={
+                              enderecos.length > 0
+                                ? () => setMostrarFormulario(false)
+                                : undefined
+                            }
+                          />
                         ) : (
+                          // Task 18: mesmo sublinhado-revelado do carrinho
+                          // (Task 17, "Esvaziar carrinho") em vez do
+                          // underline estático de antes.
                           <button
                             type="button"
-                            onClick={handleReenviarConfirmacao}
-                            disabled={reenviandoConfirmacao}
-                            className="w-fit text-[13px] font-semibold uppercase tracking-[0.14em] underline underline-offset-4 hover:text-red-800 disabled:opacity-60"
+                            onClick={() => setMostrarFormulario(true)}
+                            className="group relative w-fit text-[13px] font-semibold uppercase tracking-[0.14em] text-brand-navy transition-colors hover:text-brand-orange focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
                           >
-                            {reenviandoConfirmacao
-                              ? "Enviando..."
-                              : "Reenviar e-mail de confirmação"}
+                            + Adicionar novo endereço
+                            <span
+                              aria-hidden
+                              className="absolute inset-x-0 -bottom-1 h-px origin-left scale-x-0 bg-brand-orange transition-transform duration-300 ease-out group-hover:scale-x-100 motion-reduce:transition-none"
+                            />
                           </button>
                         )}
                       </div>
                     )}
-                  <Button
-                    onClick={handleContinuar}
-                    variant="primary"
-                    className="w-full"
-                    disabled={carregando || freteCarregando || criandoSessao}
-                  >
-                    {criandoSessao ? (
-                      <span className="inline-flex items-center justify-center gap-2">
-                        <span
-                          aria-hidden
-                          className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white"
-                        />
-                        Processando...
-                      </span>
-                    ) : (
-                      "Continuar para pagamento →"
-                    )}
-                  </Button>
-                  <Link
-                    href={ROUTES.LOJA_CARRINHO}
-                    className="text-center text-[13px] uppercase tracking-[0.14em] text-slate-500 transition-colors hover:text-brand-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
-                  >
-                    ← Voltar ao carrinho
-                  </Link>
+                  </div>
                 </div>
+
+                {/* Etapa 6.5 (Frete) — só aparece depois que um endereço está
+                  selecionado (é o CEP dele que define a cotação); enquanto
+                  isso, nenhuma seção de frete é exibida, evitando um estado
+                  "carregando" sem endereço nenhum para basear a cotação. */}
+                {enderecoSelecionadoId !== null && (
+                  <div
+                    ref={freteSectionRef}
+                    className={`mt-10 rounded-sm transition-shadow duration-500 ${
+                      destacarFrete
+                        ? "ring-2 ring-brand-orange ring-offset-4 ring-offset-background"
+                        : ""
+                    }`}
+                  >
+                    <div className="border-b border-slate-200 pb-4">
+                      <h2 className="font-serif text-xl font-normal text-brand-navy">
+                        Entrega
+                      </h2>
+                    </div>
+
+                    <div className="mt-6">
+                      <FreteOptions
+                        carregando={freteCarregando}
+                        erro={freteErro}
+                        opcoes={freteOpcoes}
+                        selecionadoId={freteSelecionadoId}
+                        onSelecionar={(opcao) =>
+                          setFreteSelecionadoId(opcao.id)
+                        }
+                        onTentarNovamente={() =>
+                          carregarFrete(enderecoSelecionadoId)
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
+              </RevealOnScroll>
+
+              <RevealOnScroll delayMs={90}>
+                <aside className="mt-10 rounded-sm border border-slate-200 p-6 lg:mt-12">
+                  <div className="flex items-baseline justify-between">
+                    <h2 className="font-serif text-xl font-normal text-brand-navy">
+                      Resumo do pedido
+                    </h2>
+                    <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                      {totalItens} {totalItens === 1 ? "item" : "itens"}
+                    </p>
+                  </div>
+
+                  {/* Etapa 6.5 (Frete) — Total = subtotal + frete (só quando
+                    uma opção já foi escolhida; até lá, mostra um placeholder
+                    em vez de um valor incompleto/enganoso). Cupom/desconto
+                    continuam fora do escopo. */}
+                  {(() => {
+                    const opcaoFreteEscolhida = freteOpcoes.find(
+                      (opcao) => opcao.id === freteSelecionadoId,
+                    );
+                    const total = subtotal + (opcaoFreteEscolhida?.preco ?? 0);
+                    return (
+                      <dl className="mt-4 space-y-3 border-t border-slate-200 pt-4 text-sm">
+                        <div className="flex items-center justify-between">
+                          <dt className="text-slate-500">Subtotal</dt>
+                          <dd className="font-medium tabular-nums text-brand-navy">
+                            {formatPrice.format(subtotal)}
+                          </dd>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <dt className="text-slate-500">Frete</dt>
+                          <dd className="font-medium tabular-nums text-brand-navy">
+                            {opcaoFreteEscolhida
+                              ? formatPrice.format(opcaoFreteEscolhida.preco)
+                              : "A calcular"}
+                          </dd>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-base">
+                          <dt className="font-semibold text-brand-navy">
+                            Total
+                          </dt>
+                          <dd className="text-lg font-semibold tabular-nums text-brand-navy">
+                            {formatPrice.format(total)}
+                          </dd>
+                        </div>
+                      </dl>
+                    );
+                  })()}
+
+                  <div className="mt-6 flex flex-col gap-3">
+                    {EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT &&
+                      emailNaoConfirmado && (
+                        <div className="flex flex-col gap-2 rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                          <p>Confirme seu e-mail para finalizar a compra.</p>
+                          {confirmacaoReenviada ? (
+                            <p className="text-red-600">
+                              Se ainda não estiver confirmado, você receberá um
+                              novo link em instantes.
+                            </p>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleReenviarConfirmacao}
+                              disabled={reenviandoConfirmacao}
+                              className="w-fit text-[13px] font-semibold uppercase tracking-[0.14em] underline underline-offset-4 hover:text-red-800 disabled:opacity-60"
+                            >
+                              {reenviandoConfirmacao
+                                ? "Enviando..."
+                                : "Reenviar e-mail de confirmação"}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    <Button
+                      onClick={handleContinuar}
+                      variant="primary"
+                      className="w-full"
+                      disabled={carregando || freteCarregando || criandoSessao}
+                    >
+                      {criandoSessao ? (
+                        <span className="inline-flex items-center justify-center gap-2">
+                          <span
+                            aria-hidden
+                            className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                          />
+                          Processando...
+                        </span>
+                      ) : (
+                        "Continuar para pagamento →"
+                      )}
+                    </Button>
+                    <Link
+                      href={ROUTES.LOJA_CARRINHO}
+                      className="text-center text-[13px] uppercase tracking-[0.14em] text-slate-500 transition-colors hover:text-brand-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
+                    >
+                      ← Voltar ao carrinho
+                    </Link>
+                  </div>
                 </aside>
               </RevealOnScroll>
             </div>
