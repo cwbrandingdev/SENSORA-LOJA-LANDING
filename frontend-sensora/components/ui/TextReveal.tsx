@@ -82,7 +82,11 @@ export default function TextReveal({ children, delayMs = 0, className = "" }: Te
   }, []);
 
   return (
-    <span ref={containerRef} className={`relative block ${className}`}>
+    // flow-root (não só `block`) — contém a margin-bottom negativa de cada
+    // linha (ver comentário abaixo) dentro desta própria caixa, para que
+    // ela nunca "escape" e reduza o espaçamento com o elemento seguinte a
+    // este heading (ex.: o parágrafo com mt-6 depois do título).
+    <span ref={containerRef} className={`relative flow-root ${className}`}>
       {/* Cópia invisível só para medir onde o texto quebra de linha nesta
           largura — nunca é vista nem lida por leitor de tela. */}
       <span aria-hidden className="invisible absolute inset-0">
@@ -99,9 +103,17 @@ export default function TextReveal({ children, delayMs = 0, className = "" }: Te
       </span>
 
       {/* Texto real e acessível, revelado linha a linha assim que medido
-          (antes disso, cai como bloco único — sem flash, sem duplicar texto). */}
+          (antes disso, cai como bloco único — sem flash, sem duplicar texto).
+          `pb-[0.3em] -mb-[0.3em]` — a máscara (overflow-hidden) só recorta
+          exatamente a altura da linha (line-height); em títulos com
+          leading apertado (ex.: leading-[1.05]) isso cortava a perna de
+          descendentes como g/q/p/j (ver "Perguntas que podem ajudar.", FAQ).
+          O padding dá espaço de sobra dentro da máscara para a perna
+          renderizar; a margin negativa do mesmo tamanho cancela esse
+          espaço por fora, então nenhum heading existente ganha espaçamento
+          extra visível — só para de cortar descendentes. */}
       {(lines ?? [children]).map((line, i) => (
-        <span key={i} className="block overflow-hidden">
+        <span key={i} className="-mb-[0.3em] block overflow-hidden pb-[0.3em]">
           <span
             style={{ transitionDelay: visible ? `${delayMs + i * LINE_STAGGER_MS}ms` : "0ms" }}
             className={`block transition-all duration-[850ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none motion-reduce:translate-y-0 motion-reduce:opacity-100 ${

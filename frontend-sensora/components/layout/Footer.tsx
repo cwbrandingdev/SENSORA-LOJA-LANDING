@@ -68,6 +68,18 @@ export default function Footer() {
             Contato
           </h3>
           <ul className="mt-4 space-y-2 text-sm text-white/80">
+            <li>
+              <Link
+                href="/faq"
+                className="group relative inline-block transition-colors duration-300 hover:text-white"
+              >
+                Perguntas frequentes
+                <span
+                  aria-hidden
+                  className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-brand-orange transition-transform duration-300 ease-out group-hover:scale-x-100 motion-reduce:transition-none"
+                />
+              </Link>
+            </li>
             <li>{FOOTER_CONTENT.contact.email}</li>
             <li>{FOOTER_CONTENT.contact.phone}</li>
           </ul>

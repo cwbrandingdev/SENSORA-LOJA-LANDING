@@ -484,6 +484,94 @@ export const MANIFESTO_CONTENT = {
   quote: "Onde marcas são sentidas.",
 };
 
+export type FaqItem = {
+  id: string;
+  question: string;
+  answer: string;
+};
+
+// FAQ da Landing — cada resposta é rastreável a um dado real do projeto
+// (catálogo/coleções em CATEGORIES/COLLECTIONS acima, fluxo de
+// checkout/frete em app/(site)/loja/checkout, contato em FOOTER_CONTENT
+// abaixo). Nenhuma política de troca/devolução, forma de pagamento
+// específica ou prazo foi incluída: nenhuma dessas informações está
+// confirmada em nenhum lugar do projeto.
+export const FAQ_CONTENT = {
+  eyebrow: "Dúvidas frequentes",
+  title: "Perguntas que podem ajudar.",
+  intro:
+    "Reunimos aqui as respostas mais úteis para quem está conhecendo a Sensora ou já navegando pela loja.",
+};
+
+export const FAQ_ITEMS: FaqItem[] = [
+  {
+    id: "produtos",
+    question: "Quais tipos de produtos a Sensora oferece?",
+    answer:
+      "Trabalhamos com velas aromáticas, sprays de ambiente e difusores de aroma — produtos de marketing sensorial pensados para perfumar e transformar a atmosfera de qualquer espaço.",
+  },
+  {
+    id: "colecoes",
+    question: "Quais coleções estão disponíveis?",
+    answer:
+      "Hoje temos três coleções: as Velas 4 Estações, os Sprays de Ambiente e os Difusores de Aroma. Você encontra todas elas na página de Coleções.",
+  },
+  {
+    id: "4-estacoes",
+    question: "O que é a coleção 4 Estações?",
+    answer:
+      "É o nosso kit de velas aromáticas inspirado nas quatro estações do ano — um kit criado para transformar cada momento em uma experiência de aconchego, beleza e sensações que permanecem.",
+  },
+  {
+    id: "velas-4-estacoes",
+    question: "Quais velas fazem parte da coleção 4 Estações?",
+    answer:
+      "O kit reúne quatro velas: Frescor de Primavera, Luz de Verão, Manhã de Outono e Brisa de Inverno.",
+  },
+  {
+    id: "peso-velas",
+    question: "Qual é o peso das velas da coleção 4 Estações?",
+    answer:
+      "Cada vela da coleção 4 Estações vem com 200g, totalizando 4 × 200g no kit completo.",
+  },
+  {
+    id: "aromas",
+    question: "Quais aromas estão disponíveis nos sprays e difusores?",
+    answer:
+      "Os sprays de ambiente e os difusores de aroma estão disponíveis nos aromas Baunilha, Especiarias e Flor de Laranjeira.",
+  },
+  {
+    id: "como-comprar",
+    question: "Como funciona a compra pelo site?",
+    answer:
+      "Basta escolher os produtos e adicioná-los à sacola. Para finalizar, é preciso estar logado (ou criar uma conta), informar o endereço de entrega e escolher a opção de frete — depois disso, você é direcionado a um ambiente seguro para concluir o pagamento.",
+  },
+  {
+    id: "pagamento",
+    question: "Como funciona o pagamento?",
+    answer:
+      "Depois de revisar o pedido e escolher o frete, você é redirecionado a um ambiente de pagamento seguro para concluir a compra.",
+  },
+  {
+    id: "frete",
+    question: "Como funciona o cálculo do frete?",
+    answer:
+      "O frete é calculado automaticamente no checkout, a partir do endereço de entrega escolhido. Você vê diferentes opções de transportadora, com prazo em dias úteis e valor, e escolhe a que preferir.",
+  },
+  {
+    id: "acompanhar-pedido",
+    question: "Como acompanho o status do meu pedido?",
+    answer:
+      "Em Minha Conta → Meus Pedidos você acompanha o histórico e o status de todos os seus pedidos.",
+  },
+  {
+    id: "contato",
+    question: "Como entro em contato com a Sensora?",
+    answer:
+      "Você pode falar com a gente por e-mail (sensoramarketingsensorial@gmail.com) ou pelo Instagram @sensoramarketingsensorial.",
+  },
+];
+
 export const FOOTER_CONTENT = {
   tagline: "Marcas sentidas, em cada detalhe.",
   contact: {
