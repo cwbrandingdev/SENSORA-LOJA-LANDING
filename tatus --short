@@ -1,0 +1,12 @@
+[1mdiff --git a/backend-sensora/package.json b/backend-sensora/package.json[m
+[1mindex b8062c5..95054e9 100644[m
+[1m--- a/backend-sensora/package.json[m
+[1m+++ b/backend-sensora/package.json[m
+[36m@@ -49,6 +49,7 @@[m
+   "devDependencies": {[m
+     "@eslint/eslintrc": "^3.2.0",[m
+     "@eslint/js": "^9.18.0",[m
+[32m+[m[32m    "@flydotio/dockerfile": "^0.7.10",[m
+     "@nestjs/cli": "^11.0.0",[m
+     "@nestjs/schematics": "^11.0.0",[m
+     "@nestjs/testing": "^11.0.1",[m

@@ -1,0 +1,23 @@
+# fly.toml app configuration file generated for backend-sensora-bright on 2026-09-15T10:18:08-03:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'backend-sensora-bright'
+primary_region = 'gru'
+
+[build]
+[deploy]
+  release_command = 'npx prisma migrate deploy'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+[[vm]]
+  memory = '1gb'
+  cpus = 1
+  memory_mb = 1024

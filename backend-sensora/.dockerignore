@@ -1,0 +1,37 @@
+# Reinstalados/gerados dentro da imagem — nunca copiar os do host (ABI
+# nativa errada para bcrypt fora do Alpine, e o Prisma Client precisa ser
+# gerado de novo dentro do container).
+node_modules
+dist
+generated
+
+# Secrets — nunca no contexto de build (DATABASE_URL etc. vêm do ambiente
+# do Fly em runtime).
+.env
+.env.*
+
+# Controle de versão / editor / CI
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# Não usados em runtime
+coverage
+.nyc_output
+test
+*.spec.ts
+*.log
+npm-debug.log*
+
+# Documentação e skills de desenvolvimento — não fazem parte do runtime
+README.md
+API_DOCUMENTATION.md
+skills
+skills-lock.json
+
+# Os próprios arquivos de configuração de deploy não precisam ir para dentro da imagem
+Dockerfile
+.dockerignore
+fly.toml
