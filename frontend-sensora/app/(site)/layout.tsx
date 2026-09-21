@@ -4,6 +4,7 @@ import "../globals.css";
 import Navbar from "@/components/layout/Navbar";
 import SiteMain from "@/components/layout/SiteMain";
 import SiteFooter from "@/components/layout/SiteFooter";
+import CookieConsentBanner from "@/components/layout/CookieConsentBanner";
 import PageFadeIn from "@/components/ui/PageFadeIn";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
@@ -66,6 +67,7 @@ export default function RootLayout({
               </AuthProvider>
               <SiteMain>{children}</SiteMain>
               <SiteFooter />
+              <CookieConsentBanner />
             </PageFadeIn>
           </ToastProvider>
         </CartProvider>
