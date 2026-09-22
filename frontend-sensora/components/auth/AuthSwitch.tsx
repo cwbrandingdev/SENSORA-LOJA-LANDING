@@ -280,7 +280,10 @@ function SignInForm({ active }: { active: boolean }) {
           Senha
         </label>
         <div
-          className={cn("authswitch-input-field", errors.senha && "has-error")}
+          className={cn(
+            "authswitch-input-field authswitch-input-field--has-toggle",
+            errors.senha && "has-error",
+          )}
         >
           <span className="authswitch-input-icon">
             <Lock className="h-[18px] w-[18px]" />
@@ -509,7 +512,10 @@ function SignUpForm({
           Senha
         </label>
         <div
-          className={cn("authswitch-input-field", errors.senha && "has-error")}
+          className={cn(
+            "authswitch-input-field authswitch-input-field--has-toggle",
+            errors.senha && "has-error",
+          )}
         >
           <span className="authswitch-input-icon">
             <Lock className="h-[18px] w-[18px]" />
@@ -551,7 +557,7 @@ function SignUpForm({
         </label>
         <div
           className={cn(
-            "authswitch-input-field",
+            "authswitch-input-field authswitch-input-field--has-toggle",
             errors.confirmarSenha && "has-error",
           )}
         >
@@ -763,6 +769,18 @@ const AUTH_SWITCH_CSS = `
   font-size: 1rem;
   color: var(--brand-navy);
   width: 100%;
+  padding-right: 0.75rem;
+  /* Sem isso, um valor mais longo que o pill (ex.: e-mail comprido no
+     mobile) era cortado bruscamente na borda arredondada do input. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Reserva espaço à direita só nos campos que de fato têm o botão de
+   mostrar/ocultar senha sobreposto (senha/repetir senha) — nos demais
+   (email/nome) o padding-right de 2rem era desperdiçado, empurrando o
+   texto visível para fora do pill sem necessidade. */
+.authswitch-input-field--has-toggle input {
   padding-right: 2rem;
 }
 
