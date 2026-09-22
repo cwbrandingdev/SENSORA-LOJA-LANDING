@@ -57,6 +57,8 @@ import { login, register as registerUser } from "@/services/auth";
 import { setToken } from "@/lib/storage";
 import { isDestinoInternoValido } from "@/lib/auth-redirect";
 import { ROUTES } from "@/lib/routes";
+import { cpfValido, formatarCpf, normalizarCpf } from "@/lib/cpf";
+import { getErrorMessage } from "@/lib/errors";
 import { useAuth } from "@/context/AuthContext";
 import { ToastProvider, useToast } from "@/context/ToastContext";
 import { cn } from "@/lib/utils";
@@ -368,6 +370,10 @@ const registerSchema = z
     // Etapa (Repetir senha) — mínimo elevado de 6 para 8 caracteres, para
     // ficar igual ao backend (RegisterDto.senha, ver
     // backend-sensora/src/auth/dto/register.dto.ts — @MinLength(8)).
+    cpf: z
+      .string()
+      .min(1, "CPF é obrigatório")
+      .refine((valor) => cpfValido(valor), { message: "CPF inválido" }),
     senha: z
       .string()
       .min(1, "Senha é obrigatória")
@@ -376,6 +382,9 @@ const registerSchema = z
     // backend) — mesmo padrão já usado em app/reset-password/page.tsx e
     // app/(site)/conta/seguranca/page.tsx.
     confirmarSenha: z.string().min(1, "Confirme a senha"),
+    aceiteTermos: z.boolean().refine((valor) => valor, {
+      message: "Aceite os termos para criar a conta",
+    }),
   })
   .refine((data) => data.senha === data.confirmarSenha, {
     message: "As senhas não coincidem",
@@ -398,16 +407,26 @@ function SignUpForm({
   // substituída pelo Toast (toast.success, ver onSubmit).
   const [success, setSuccess] = useState(false);
   const [senhaVisivel, setSenhaVisivel] = useState(false);
-  const [confirmarSenhaVisivel, setConfirmarSenhaVisivel] = useState(false);
   const toast = useToast();
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
+    defaultValues: { aceiteTermos: false, cpf: "", senha: "", confirmarSenha: "" },
   });
+
+  const aceiteTermos = watch("aceiteTermos");
+  const senhaValor = watch("senha");
+  const confirmarValor = watch("confirmarSenha");
+  const cpfValor = watch("cpf");
+  const cpfInvalidoAoVivo =
+    normalizarCpf(cpfValor).length === 11 && !cpfValido(cpfValor);
+  const mostrarComparacao = confirmarValor.length > 0;
+  const senhasIguais = senhaValor === confirmarValor;
 
   async function onSubmit(data: RegisterFormValues) {
     setServerError("");
@@ -421,6 +440,7 @@ function SignUpForm({
         nome: data.nome,
         email: data.email,
         senha: data.senha,
+        cpf: data.cpf,
       });
       setSuccess(true);
       // Etapa (Toast de cadastro) — substitui a antiga mensagem inline
@@ -434,8 +454,8 @@ function SignUpForm({
       // onSuccess continua responsável só pela troca de modo — o Toast já
       // foi disparado acima, não depende deste timeout.
       setTimeout(onSuccess, 2200);
-    } catch {
-      setServerError("Não foi possível criar a conta.");
+    } catch (err) {
+      setServerError(getErrorMessage(err, "Não foi possível criar a conta."));
     }
   }
 
@@ -508,6 +528,37 @@ function SignUpForm({
       </div>
 
       <div className="authswitch-field">
+        <label htmlFor="register-cpf" className="sr-only">
+          CPF
+        </label>
+        <div className={cn("authswitch-input-field", errors.cpf && "has-error")}>
+          <span className="authswitch-input-icon">
+            <User className="h-[18px] w-[18px]" />
+          </span>
+          <input
+            id="register-cpf"
+            type="text"
+            inputMode="numeric"
+            placeholder="CPF"
+            autoComplete="off"
+            tabIndex={active ? 0 : -1}
+            aria-invalid={!!errors.cpf}
+            aria-describedby={errors.cpf ? "register-cpf-error" : undefined}
+            {...register("cpf", {
+              onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
+                event.target.value = formatarCpf(event.target.value);
+              },
+            })}
+          />
+        </div>
+        {(cpfInvalidoAoVivo || errors.cpf) && (
+          <p id="register-cpf-error" className="authswitch-field-error">
+            {cpfInvalidoAoVivo ? "CPF inválido" : errors.cpf?.message}
+          </p>
+        )}
+      </div>
+
+      <div className="authswitch-field">
         <label htmlFor="register-senha" className="sr-only">
           Senha
         </label>
@@ -544,10 +595,16 @@ function SignUpForm({
             )}
           </button>
         </div>
-        {errors.senha && (
+        {senhaValor.length > 0 && senhaValor.length < 8 ? (
+          <p id="register-senha-error" className="authswitch-field-error">
+            A senha deve ter no mínimo 8 caracteres
+          </p>
+        ) : errors.senha ? (
           <p id="register-senha-error" className="authswitch-field-error">
             {errors.senha.message}
           </p>
+        ) : (
+          <p className="authswitch-field-hint">Mínimo de 8 caracteres.</p>
         )}
       </div>
 
@@ -566,7 +623,7 @@ function SignUpForm({
           </span>
           <input
             id="register-confirmar-senha"
-            type={confirmarSenhaVisivel ? "text" : "password"}
+            type={senhaVisivel ? "text" : "password"}
             placeholder="Repetir senha"
             autoComplete="new-password"
             tabIndex={active ? 0 : -1}
@@ -582,25 +639,34 @@ function SignUpForm({
             type="button"
             className="authswitch-toggle-visibility"
             tabIndex={active ? 0 : -1}
-            onClick={() => setConfirmarSenhaVisivel((v) => !v)}
-            aria-label={
-              confirmarSenhaVisivel ? "Ocultar senha" : "Mostrar senha"
-            }
+            onClick={() => setSenhaVisivel((v) => !v)}
+            aria-label={senhaVisivel ? "Ocultar senha" : "Mostrar senha"}
           >
-            {confirmarSenhaVisivel ? (
+            {senhaVisivel ? (
               <EyeOff className="h-[18px] w-[18px]" />
             ) : (
               <Eye className="h-[18px] w-[18px]" />
             )}
           </button>
         </div>
-        {errors.confirmarSenha && (
+        {mostrarComparacao ? (
           <p
-            id="register-confirmar-senha-error"
-            className="authswitch-field-error"
+            id="register-senhas-status"
+            className={
+              senhasIguais ? "authswitch-field-ok" : "authswitch-field-error"
+            }
           >
-            {errors.confirmarSenha.message}
+            {senhasIguais ? "As senhas coincidem" : "As senhas não coincidem"}
           </p>
+        ) : (
+          errors.confirmarSenha && (
+            <p
+              id="register-confirmar-senha-error"
+              className="authswitch-field-error"
+            >
+              {errors.confirmarSenha.message}
+            </p>
+          )
         )}
       </div>
 
@@ -610,10 +676,35 @@ function SignUpForm({
         </p>
       )}
 
+      <label className="authswitch-legal">
+        <input
+          id="register-aceite"
+          type="checkbox"
+          tabIndex={active ? 0 : -1}
+          {...register("aceiteTermos")}
+        />{" "}
+        Li e aceito os{" "}
+        <Link href="/termos-de-uso" target="_blank" rel="noopener noreferrer">
+          Termos de Uso
+        </Link>{" "}
+        e a{" "}
+        <Link
+          href="/politica-de-privacidade"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Política de Privacidade
+        </Link>
+        .
+      </label>
+      {errors.aceiteTermos && (
+        <p className="authswitch-field-error">{errors.aceiteTermos.message}</p>
+      )}
+
       <button
         type="submit"
         className="authswitch-btn"
-        disabled={isSubmitting || success}
+        disabled={!aceiteTermos || isSubmitting || success}
         tabIndex={active ? 0 : -1}
       >
         {isSubmitting ? (
@@ -625,11 +716,6 @@ function SignUpForm({
           "Criar conta"
         )}
       </button>
-      <p className="authswitch-legal">
-        Ao criar a conta, você concorda com os{" "}
-        <Link href="/termos-de-uso">Termos de Uso</Link> e a{" "}
-        <Link href="/politica-de-privacidade">Política de Privacidade</Link>.
-      </p>
     </form>
   );
 }
@@ -642,6 +728,17 @@ function SignUpForm({
 // 570px) mantidos como no original — só cores, textos e o que está listado
 // no comentário do topo do arquivo foram adaptados.
 // ---------------------------------------------------------------------------
+
+function texturaSvg(conteudo: string, largura: number, altura: number) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${largura}" height="${altura}">${conteudo}</svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+const AUTH_GRAIN = texturaSvg(
+  `<filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(#n)" opacity="0.5"/>`,
+  240,
+  240,
+);
 
 const AUTH_SWITCH_CSS = `
 .authswitch-page {
@@ -662,8 +759,15 @@ const AUTH_SWITCH_CSS = `
   position: relative;
   width: 100%;
   height: 100%;
-  background: #fff;
   overflow: hidden;
+  background-color: #f6f3ec;
+  background-image:
+    radial-gradient(ellipse 90% 28% at 15% 35%, rgba(196, 90, 49, 0.22), transparent 55%),
+    radial-gradient(ellipse 28% 80% at 72% 18%, rgba(2, 24, 61, 0.1), transparent 52%),
+    radial-gradient(ellipse 70% 22% at 48% 78%, rgba(196, 90, 49, 0.14), transparent 50%),
+    radial-gradient(ellipse 40% 55% at 88% 62%, rgba(255, 255, 255, 0.9), transparent 46%),
+    url("${AUTH_GRAIN}");
+  background-size: auto, auto, auto, auto, 320px 320px;
 }
 
 .authswitch-forms-container {
@@ -709,6 +813,13 @@ const AUTH_SWITCH_CSS = `
      do formulário de login (que por padrão já fica perto do azul do lado
      dele) para "Criar conta" ficar igual, perto do azul, no lado dele. */
   align-items: flex-end;
+  /* CPF + aceite aumentam a altura. O painel continua na mesma transição
+     (left 75%↔25%); o formulário só passa a rolar dentro da tela. */
+  max-height: 100vh;
+  overflow-y: auto;
+  justify-content: safe center;
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
 }
 
 .authswitch-sign-in-form {
@@ -841,6 +952,18 @@ const AUTH_SWITCH_CSS = `
 .authswitch-field-error {
   font-size: 0.75rem;
   color: #dc2626;
+  margin-top: 0.3rem;
+  margin-left: 0.85rem;
+}
+.authswitch-field-ok {
+  font-size: 0.75rem;
+  color: #15803d;
+  margin-top: 0.3rem;
+  margin-left: 0.85rem;
+}
+.authswitch-field-hint {
+  font-size: 0.75rem;
+  color: #6b7280;
   margin-top: 0.3rem;
   margin-left: 0.85rem;
 }
@@ -1064,7 +1187,13 @@ const AUTH_SWITCH_CSS = `
   top: -10%;
   right: 48%;
   transform: translateY(-50%);
-  background: linear-gradient(-45deg, var(--brand-navy) 0%, var(--brand-navy-light) 100%);
+  background-color: var(--brand-navy);
+  background-image:
+    radial-gradient(ellipse 80% 24% at 22% 38%, rgba(255, 255, 255, 0.28), transparent 52%),
+    radial-gradient(ellipse 26% 78% at 68% 24%, rgba(196, 90, 49, 0.42), transparent 50%),
+    radial-gradient(ellipse 64% 20% at 46% 74%, rgba(255, 255, 255, 0.16), transparent 48%),
+    linear-gradient(155deg, #02183d 0%, #1c4a7a 48%, #02183d 100%);
+  background-blend-mode: screen, soft-light, screen, normal;
   transition: 1.8s ease-in-out;
   border-radius: 50%;
   z-index: 6;
@@ -1091,6 +1220,7 @@ const AUTH_SWITCH_CSS = `
      resto dos formulários do Sensora. */
   .authswitch-sign-up-form {
     align-items: flex-start;
+    max-height: 58vh;
   }
   .authswitch-signin-signup,
   .authswitch-container.sign-up-mode .authswitch-signin-signup {

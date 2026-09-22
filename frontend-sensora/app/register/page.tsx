@@ -1,10 +1,7 @@
 "use client";
 
-// Etapa 6.2 (correção — Auth Switch) — mesma experiência integrada do
-// Login, só que iniciando no modo "register". Quem acessa /register
-// diretamente (link salvo, digitado, etc.) cai na mesma interface animada
-// de app/login/page.tsx em vez de uma página visualmente desconectada.
-// Lógica/campos de cadastro inalterados — ver components/auth/AuthSwitch.tsx.
+// Mesma transição do login: o AuthSwitch começa já no modo "Criar conta".
+// CPF e o aceite dos termos ficam nesse formulário, não numa página separada.
 import { Suspense } from "react";
 import AuthSwitch from "@/components/auth/AuthSwitch";
 
