@@ -210,6 +210,17 @@ model Pedido {
   // Pedido existente/futuro continua sem nota até uma etapa posterior ligar
   // os dois. Ver comentário completo em NotaFiscal, abaixo.
   notaFiscal NotaFiscal?
+
+  // Vistoria do Dashboard operacional (Admin) — DashboardService agora
+  // agrega Pedido por status (contagem/soma de total) e ordena/filtra por
+  // data para as métricas do painel, além do uso já existente de `status`
+  // (PedidosService.garantirMutavel/cancelar/etc.) e `data` (ordenação de
+  // GET /pedidos). Sem estes índices, cada agregação faria um full scan de
+  // Pedido — aceitável hoje pelo volume baixo, mas seria o próximo gargalo
+  // assim que o histórico de pedidos crescer. Não altera nenhuma query
+  // existente, só acelera o plano de execução do Postgres.
+  @@index([status])
+  @@index([data])
 }
 
 model ItemPedido {

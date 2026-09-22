@@ -17,13 +17,47 @@ import EmptyState from "@/components/ui/EmptyState";
 import TableSkeleton from "@/components/ui/TableSkeleton";
 import InlineErrorState from "@/components/ui/InlineErrorState";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
+import FormButton from "@/components/ui/FormButton";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
-import { buscarPedidoComItens, atualizarPedido } from "@/services/pedidos";
+import {
+  buscarPedidoComItens,
+  atualizarPedido,
+  solicitarReembolsoMeuPedido,
+} from "@/services/pedidos";
 import { atualizarItemPedido, removerItemPedido } from "@/services/itensPedido";
 import { listarProdutos } from "@/services/produtos";
 import { ROUTES } from "@/lib/routes";
-import { StatusPedido, type Pedido, type ItemPedido, type Produto } from "@/lib/types/loja";
+import {
+  PerfilUsuario,
+  StatusEnvio,
+  StatusPedido,
+  type Pedido,
+  type ItemPedido,
+  type Produto,
+} from "@/lib/types/loja";
+
+const formatPrice = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+// Fase A (Admin/Pedidos) — mesmo critério já usado em
+// app/(site)/conta/pedidos/[id]/page.tsx#possuiEnderecoCompleto: só
+// considera o snapshot de endereço "completo" quando os campos essenciais
+// vieram preenchidos, nunca renderiza um endereço pela metade. Pedidos
+// anteriores à Etapa 6.5 (Frete) não têm nenhum desses campos.
+function possuiEnderecoCompleto(pedido: Pedido): boolean {
+  return Boolean(
+    pedido.enderecoCep &&
+      pedido.enderecoRua &&
+      pedido.enderecoNumero &&
+      pedido.enderecoBairro &&
+      pedido.enderecoCidade &&
+      pedido.enderecoEstado,
+  );
+}
 
 // Mesmos tons de PedidoTable.tsx (Admin) — só o nome do status muda, a
 // receita visual é a mesma em toda a aba Pedidos.
@@ -47,6 +81,7 @@ export default function PedidoDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const pedidoId = Number(id);
   const toast = useToast();
+  const { perfil } = useAuth();
 
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [itens, setItens] = useState<ItemPedido[]>([]);
@@ -56,6 +91,10 @@ export default function PedidoDetalhePage() {
   const [erro, setErro] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<ItemPedido | undefined>(undefined);
   const [showForm, setShowForm] = useState(false);
+  // Fase A (Reembolso no Admin) — desabilita só o botão durante a chamada,
+  // evita clique duplicado disparando duas solicitações (mesmo padrão de
+  // `marcandoEnviadoId` em app/workspace-x/pedidos/page.tsx).
+  const [solicitandoReembolso, setSolicitandoReembolso] = useState(false);
 
   async function carregarPedido() {
     setLoading(true);
@@ -151,6 +190,36 @@ export default function PedidoDetalhePage() {
     setEditingItem(undefined);
   }
 
+  // Fase A (Reembolso no Admin) — reutiliza exatamente o mesmo serviço/
+  // endpoint já usado por app/(site)/conta/pedidos/[id]/page.tsx
+  // (POST /pedidos/meus/:id/cancelar-pago): nenhuma lógica de negócio nova,
+  // nenhum endpoint novo. Validação de estado (só PAGO), idempotência e
+  // claim atômico continuam inteiramente resolvidos em
+  // PedidosService.solicitarReembolso — esta função só confirma com o
+  // admin, chama o serviço existente e recarrega o pedido.
+  async function handleSolicitarReembolso() {
+    if (!pedido || solicitandoReembolso) return;
+
+    if (
+      !window.confirm(
+        `Solicitar reembolso do pedido "${pedido.numero}"? Esta ação inicia o processo de estorno junto ao Asaas.`,
+      )
+    ) {
+      return;
+    }
+
+    setSolicitandoReembolso(true);
+    try {
+      await solicitarReembolsoMeuPedido(pedido.id);
+      toast.success("Reembolso solicitado com sucesso.");
+      await carregarPedido();
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Não foi possível solicitar o reembolso."));
+    } finally {
+      setSolicitandoReembolso(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <p>
@@ -175,12 +244,112 @@ export default function PedidoDetalhePage() {
       ) : (
         <>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xl font-semibold text-brand-navy">
-              Pedido {pedido.numero}
-            </h2>
+            <div>
+              <h2 className="text-xl font-semibold text-brand-navy">
+                Pedido {pedido.numero}
+              </h2>
+              <p className="text-sm text-slate-500">
+                {new Date(pedido.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+              </p>
+            </div>
             <div className="flex items-center gap-3 text-sm text-slate-600">
               <Badge tone={STATUS_TONE[pedido.status]}>{STATUS_LABEL[pedido.status]}</Badge>
-              <span>Total: {pedido.total}</span>
+              <span>Total: {formatPrice.format(pedido.total)}</span>
+            </div>
+          </div>
+
+          {/* Fase A (Reembolso no Admin) — exclusivo de ADMIN no painel (o
+              Sensora não opera com perfil VENDEDOR); só visível quando o
+              status financeiro é PAGO, mesma condição já usada pelo cliente
+              em app/(site)/conta/pedidos/[id]/page.tsx. Nenhuma checagem de
+              permissão nova no backend: RolesGuard/podeAcessar continuam
+              sendo a autoridade real, isto é só a UI que decide oferecer o
+              botão. */}
+          {perfil === PerfilUsuario.ADMIN && pedido.status === StatusPedido.PAGO && (
+            <div>
+              <FormButton
+                variant="danger"
+                disabled={solicitandoReembolso}
+                onClick={handleSolicitarReembolso}
+              >
+                {solicitandoReembolso ? "Solicitando..." : "Solicitar reembolso"}
+              </FormButton>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Cliente
+              </p>
+              <p className="mt-1 text-sm text-slate-700">
+                {pedido.clienteNome ?? "Não informado"}
+              </p>
+              <p className="text-sm text-slate-500">{pedido.clienteEmail ?? "—"}</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Envio
+              </p>
+              <div className="mt-1 flex items-center gap-2">
+                <Badge tone={pedido.statusEnvio === StatusEnvio.ENVIADO ? "info" : "warning"}>
+                  {pedido.statusEnvio === StatusEnvio.ENVIADO ? "Enviado" : "Aguardando envio"}
+                </Badge>
+                {pedido.statusEnvio === StatusEnvio.ENVIADO && pedido.enviadoEm && (
+                  <span className="text-xs text-slate-500">
+                    {new Date(pedido.enviadoEm).toLocaleDateString("pt-BR", {
+                      timeZone: "America/Sao_Paulo",
+                    })}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Endereço de entrega
+              </p>
+              {possuiEnderecoCompleto(pedido) ? (
+                <address className="mt-1 text-sm leading-relaxed text-slate-700 not-italic">
+                  <p>
+                    {pedido.enderecoRua}, {pedido.enderecoNumero}
+                  </p>
+                  {pedido.enderecoComplemento && <p>{pedido.enderecoComplemento}</p>}
+                  <p>{pedido.enderecoBairro}</p>
+                  <p>
+                    {pedido.enderecoCidade} / {pedido.enderecoEstado}
+                  </p>
+                  <p>CEP {pedido.enderecoCep}</p>
+                </address>
+              ) : (
+                <p className="mt-1 text-sm text-slate-500">
+                  Endereço não disponível para este pedido.
+                </p>
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Frete
+              </p>
+              {pedido.freteTransportadora || pedido.freteServico || pedido.freteValor != null ? (
+                <div className="mt-1 text-sm leading-relaxed text-slate-700">
+                  <p>
+                    {[pedido.freteTransportadora, pedido.freteServico]
+                      .filter(Boolean)
+                      .join(" · ") || "—"}
+                  </p>
+                  {pedido.freteValor != null && <p>{formatPrice.format(pedido.freteValor)}</p>}
+                  {pedido.fretePrazoDias != null && (
+                    <p>Prazo: {pedido.fretePrazoDias} dia(s)</p>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-1 text-sm text-slate-500">
+                  Frete não disponível para este pedido.
+                </p>
+              )}
             </div>
           </div>
 

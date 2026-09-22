@@ -636,6 +636,20 @@ export class PedidosService {
       data: pedido.data,
       status: pedido.status as StatusPedido,
       total: Number(pedido.total),
+      // Fase A (Admin/Pedidos, achado da vistoria) — clienteNome/clienteEmail
+      // já existiam na coluna do banco desde o checkout, mas nunca saíam
+      // por aqui; é por isso que o filtro "Cliente" da listagem do Admin
+      // (PedidosFiltros.tsx) nunca encontrava nada. Sempre presentes no
+      // objeto Prisma bruto (nenhuma query deste arquivo usa `select` para
+      // restringir colunas), então, diferente de `notaFiscal` (que depende
+      // de `include`), não há undefined-vs-null a distinguir aqui: os 6
+      // chamadores de paraPedido() passam a devolver os mesmos dois campos
+      // de forma consistente.
+      clienteNome: pedido.clienteNome ?? undefined,
+      clienteEmail: pedido.clienteEmail ?? undefined,
+      // Fase B (Admin/Clientes reais) — mesmo raciocínio de clienteNome/
+      // clienteEmail acima: coluna já existente, nunca exposta antes.
+      usuarioId: pedido.usuarioId ?? undefined,
       enderecoCep: pedido.enderecoCep ?? undefined,
       enderecoRua: pedido.enderecoRua ?? undefined,
       enderecoNumero: pedido.enderecoNumero ?? undefined,

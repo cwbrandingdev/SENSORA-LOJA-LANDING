@@ -1,9 +1,21 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma } from '../../generated/prisma/client';
+import { EnderecosService } from '../enderecos/enderecos.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PerfilUsuario } from './enums/perfil-usuario.enum';
 import { UsuariosService } from './usuarios.service';
+
+// Fase B (Admin/Clientes reais) — UsuariosService passou a depender de
+// EnderecosService (só usado por buscarDetalheCliente, nunca pelos métodos
+// cobertos nesta suíte). Stub vazio, reaproveitado em todo `describe` deste
+// arquivo só para satisfazer a resolução de dependências do Nest — nenhum
+// destes testes chama buscarDetalheCliente nem precisa de comportamento
+// real aqui.
+const ENDERECOS_SERVICE_STUB = {
+  provide: EnderecosService,
+  useValue: {},
+};
 
 // Etapa 6.4 (Confirmação de e-mail) — cobre especificamente o parâmetro novo
 // de create() (opcoes.emailVerificado). Não duplica a suíte de
@@ -24,6 +36,7 @@ describe('UsuariosService — create (Etapa 6.4: estado inicial de emailVerifica
       providers: [
         UsuariosService,
         { provide: PrismaService, useValue: { usuario: { create: prismaCreate } } },
+        ENDERECOS_SERVICE_STUB,
       ],
     }).compile();
 
@@ -164,6 +177,7 @@ describe('UsuariosService — atualizarMeusDados: CPF/telefone', () => {
           provide: PrismaService,
           useValue: { usuario: { findUnique, update } },
         },
+        ENDERECOS_SERVICE_STUB,
       ],
     }).compile();
 
@@ -436,6 +450,7 @@ describe('UsuariosService — create/update administrativo: CPF/telefone', () =>
           provide: PrismaService,
           useValue: { usuario: { findUnique, create, update } },
         },
+        ENDERECOS_SERVICE_STUB,
       ],
     }).compile();
 
@@ -656,6 +671,7 @@ describe('UsuariosService — salvarTokenReset/buscarPorResetToken/redefinirSenh
       providers: [
         UsuariosService,
         { provide: PrismaService, useValue: prisma },
+        ENDERECOS_SERVICE_STUB,
       ],
     }).compile();
 
@@ -732,6 +748,7 @@ describe('UsuariosService — revogarTodosRefreshTokensAtivos (Etapa 10 / AUTH-0
       providers: [
         UsuariosService,
         { provide: PrismaService, useValue: prisma },
+        ENDERECOS_SERVICE_STUB,
       ],
     }).compile();
 

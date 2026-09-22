@@ -48,6 +48,31 @@ export enum StatusEnvio {
   ENVIADO = "ENVIADO",
 }
 
+// Infraestrutura Fiscal (preparação arquitetural, backend-sensora/src/fiscal/) —
+// espelha backend/src/fiscal/enums/status-fiscal.enum.ts só para alinhar o
+// tipo `Pedido` abaixo com o que GET /pedidos/:id já devolve
+// (PedidosService.findOne inclui `notaFiscal`). Nenhuma tela usa este tipo
+// ainda — nenhuma UI fiscal foi criada nesta etapa.
+export enum StatusFiscal {
+  NAO_EMITIDA = "NAO_EMITIDA",
+  PROCESSANDO = "PROCESSANDO",
+  EMITIDA = "EMITIDA",
+  REJEITADA = "REJEITADA",
+  ERRO = "ERRO",
+  CANCELADA = "CANCELADA",
+}
+
+// Espelha backend/src/fiscal/entities/nota-fiscal.entity.ts#NotaFiscalResumo
+// — subconjunto mínimo que acompanha o Pedido no detalhe.
+export type NotaFiscalResumo = {
+  id: number;
+  status: StatusFiscal;
+  numero?: string | null;
+  serie?: string | null;
+  chaveAcesso?: string | null;
+  emitidoEm?: string | null;
+};
+
 // Resposta de GET /imagekit/auth (backend, Etapa 2) — token/expire/signature
 // gerados sob demanda a cada chamada; nunca inclui a privateKey.
 export type ImagekitAuthParams = {
@@ -219,6 +244,12 @@ export type Pedido = {
   // para envios marcados à noite no horário de Brasília.
   statusEnvio: StatusEnvio;
   enviadoEm?: string | null;
+
+  // Infraestrutura Fiscal (preparação arquitetural) — só para alinhar com o
+  // que GET /pedidos/:id já devolve (PedidosService.findOne); sempre `null`
+  // hoje, já que nenhum código cria NotaFiscal automaticamente ainda.
+  // Nenhuma tela lê este campo nesta etapa.
+  notaFiscal?: NotaFiscalResumo | null;
 };
 
 // Payload de POST /checkout/session (Task 10) — espelha exatamente
@@ -399,6 +430,78 @@ export type Usuario = {
   // preenchido.
   cpf: string | null;
   telefone: string | null;
+};
+
+// Fase B (Admin/Clientes reais) — espelha backend/src/usuarios/entities/
+// cliente-detalhado.entity.ts (GET /usuarios/:id/detalhes). `pedidos` é um
+// resumo (id/numero/data/status/total), não o Pedido completo — a tela de
+// detalhe do cliente só precisa do suficiente para listar e linkar para
+// /workspace-x/pedidos/[id], que já mostra tudo o mais.
+export type PedidoResumoCliente = {
+  id: number;
+  numero: string;
+  data: string;
+  status: StatusPedido;
+  total: number;
+};
+
+export type ResumoPedidosCliente = {
+  quantidadePedidos: number;
+  totalComprado: number;
+  ultimoPedidoEm: string | null;
+};
+
+export type ClienteDetalhado = {
+  id: number;
+  nome: string;
+  email: string;
+  cpf: string | null;
+  telefone: string | null;
+  ativo: boolean;
+  emailVerificado: boolean;
+  enderecos: Endereco[];
+  pedidos: PedidoResumoCliente[];
+  resumo: ResumoPedidosCliente;
+};
+
+// Vistoria do Dashboard operacional (Admin) — espelha
+// backend/src/dashboard/entities/dashboard-resumo.entity.ts (GET
+// /dashboard/resumo). Substitui o que app/workspace-x/page.tsx antes
+// calculava sozinho a partir de listarPedidos()/listarProdutos()/
+// listarCategorias() completos — o backend agora agrega (count/groupBy) e
+// devolve só os números prontos, nenhuma linha crua de Pedido/Produto sai
+// por aqui.
+export type ResumoPedidosDashboard = {
+  total: number;
+  pagos: number;
+  porStatus: Record<StatusPedido, number>;
+};
+
+export type ResumoProdutosDashboard = {
+  total: number;
+  ativos: number;
+  semEstoque: number;
+  estoqueBaixo: number;
+};
+
+export type ResumoCategoriasDashboard = {
+  total: number;
+};
+
+// Clientes reais (Usuario com perfil CLIENTE) — nunca o model `Cliente`
+// legado (ver type Cliente/services/clientes.ts, CRUD desconectado de
+// Pedido/Usuario).
+export type ResumoClientesDashboard = {
+  total: number;
+  ativos: number;
+};
+
+export type DashboardResumo = {
+  faturamento: number;
+  pedidos: ResumoPedidosDashboard;
+  produtos: ResumoProdutosDashboard;
+  categorias: ResumoCategoriasDashboard;
+  clientes: ResumoClientesDashboard;
 };
 
 // Etapa 6.4 (Confirmação de e-mail) — espelha VerifyEmailDto/

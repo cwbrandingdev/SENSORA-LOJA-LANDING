@@ -10,6 +10,7 @@ import { CloudflareAwareThrottlerGuard } from './auth/guards/render-throttler.gu
 import { CategoriasModule } from './categorias/categorias.module';
 import { CheckoutModule } from './checkout/checkout.module';
 import { ClientesModule } from './clientes/clientes.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { EnderecosModule } from './enderecos/enderecos.module';
 import { FiscalModule } from './fiscal/fiscal.module';
 import { ImagekitModule } from './imagekit/imagekit.module';
@@ -129,6 +130,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     CategoriasModule,
     CheckoutModule,
     ClientesModule,
+    DashboardModule,
     EnderecosModule,
     FiscalModule,
     MelhorEnvioModule,

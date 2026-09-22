@@ -9,6 +9,21 @@ export class Pedido {
   status: StatusPedido;
   total: number;
 
+  // Fase A (Admin/Pedidos) — snapshot de nome/e-mail do cliente no momento
+  // do checkout (ver CheckoutService.createSession), já persistido em
+  // Pedido desde a Etapa "Dados do Cliente/Cadastro" mas nunca antes
+  // devolvido por nenhuma resposta da API. Opcionais pelo mesmo motivo de
+  // qualquer outro snapshot deste model: nunca garantido para todo pedido
+  // histórico.
+  clienteNome?: string;
+  clienteEmail?: string;
+  // Fase B (Admin/Clientes reais) — id do Usuario dono do pedido, para
+  // permitir linkar pedido -> cliente (ex.: UsuariosService.
+  // buscarDetalheCliente). `null`/ausente é um caso real (pedido cujo
+  // Usuario foi excluído depois — ver onDelete: SetNull no schema), nunca
+  // tratado como erro.
+  usuarioId?: number;
+
   // Etapa 6.5 (Frete) — snapshot do endereço de entrega e do frete
   // escolhido/validado nesta compra (ver CheckoutService.createSession).
   // Opcionais: pedidos criados antes desta etapa não têm esses dados.
