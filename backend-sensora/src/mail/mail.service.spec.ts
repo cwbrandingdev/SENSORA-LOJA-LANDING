@@ -71,6 +71,27 @@ describe('MailService', () => {
     });
   });
 
+  // Central de Integrações (Admin) — `remetenteConfigurado` só espelha
+  // EMAIL_FROM (não é secreto, ao contrário de RESEND_API_KEY, que nunca é
+  // exposta por nenhum getter deste service).
+  describe('remetenteConfigurado', () => {
+    it('devolve o EMAIL_FROM configurado', () => {
+      expect(service.remetenteConfigurado).toBe('contato@sensora.dev');
+    });
+
+    it('undefined quando EMAIL_FROM não está configurado', async () => {
+      delete configValues.EMAIL_FROM;
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MailService,
+          { provide: ConfigService, useValue: { get: (key: string) => configValues[key] } },
+        ],
+      }).compile();
+
+      expect(module.get(MailService).remetenteConfigurado).toBeUndefined();
+    });
+  });
+
   describe('enviarEmail', () => {
     it('não configurado: não chama o Resend, registra warning, nunca lança', async () => {
       delete configValues.RESEND_API_KEY;

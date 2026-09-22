@@ -61,7 +61,11 @@ async function mockStatusDemaisIntegracoes(page: Page) {
   });
 }
 
-async function mockStatus(page: Page, conectado: boolean, opts?: { status?: number }) {
+async function mockStatus(
+  page: Page,
+  conectado: boolean,
+  opts?: { status?: number; configured?: boolean },
+) {
   await page.route("**/admin/melhor-envio/status", async (route) => {
     if (route.request().method() !== "GET") {
       await route.continue();
@@ -71,8 +75,42 @@ async function mockStatus(page: Page, conectado: boolean, opts?: { status?: numb
       await route.fulfill({ status: opts.status, body: "" });
       return;
     }
-    await route.fulfill({ json: { conectado } });
+    await route.fulfill({
+      json: {
+        // `configured` (credenciais OAuth2 presentes) e `conectado` (token
+        // salvo) são conceitos diferentes desde a vistoria de Integrações —
+        // default true aqui porque a maioria destes testes já assumia
+        // credenciais configuradas (só variando se o token existe ou não).
+        configured: opts?.configured ?? true,
+        conectado,
+        ambiente: "sandbox",
+        expiresAt: conectado ? new Date(Date.now() + 3600_000).toISOString() : null,
+      },
+    });
   });
+}
+
+async function mockVerificar(
+  page: Page,
+  resposta: { operational: boolean; mensagem?: string },
+) {
+  await page.route("**/admin/melhor-envio/verificar", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: resposta });
+      return;
+    }
+    await route.continue();
+  });
+}
+
+// Vistoria das Integrações — Asaas e ImageKit agora também têm um botão
+// "Verificar agora" (IntegracaoStatusCard.tsx), então o rótulo deixou de
+// ser exclusivo do card do Melhor Envio nesta página. Escopa pela heading
+// do próprio card (h3 "Melhor Envio") subindo para o container que
+// também contém o botão — mesma estrutura em MelhorEnvioIntegracaoCard.tsx
+// e IntegracaoStatusCard.tsx (header row -> card root -> resto do card).
+function cardMelhorEnvio(page: Page) {
+  return page.getByRole("heading", { name: "Melhor Envio", exact: true }).locator("../..");
 }
 
 function capturarChamadasConectar(page: Page) {
@@ -125,7 +163,7 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5 + Central de Integ
 
     await expect(page.getByText("Não conectado", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Conectar Melhor Envio" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Verificar conexão" })).toHaveCount(0);
+    await expect(cardMelhorEnvio(page).getByRole("button", { name: "Verificar agora" })).toHaveCount(0);
   });
 
   test("B/C/D: clicar em Conectar chama /conectar com o Bearer do interceptor e redireciona para a URL do Melhor Envio", async ({
@@ -170,38 +208,59 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5 + Central de Integ
   // no Dashboard, acessível a todo STAFF). A página /workspace-x/integracoes
   // (Etapa 8.12, antes /admin/integracoes) agora é ADMIN-only (ver
   // e2e/admin-integracoes.spec.ts), então o mesmo
-  // comportamento do card (status conectado + "Verificar conexão") passa a
+  // comportamento do card (status conectado + "Verificar agora") passa a
   // ser verificado com ADMIN — o endpoint em si
   // (GET /admin/melhor-envio/status) continua STAFF_ROLES, intocado.
-  test("E: status conectado mostra 'Conectado' e o botão Verificar conexão, que só reconsulta /status", async ({
+  //
+  // Vistoria das Integrações — "Verificar conexão" virou "Verificar agora"
+  // e passou a chamar GET /admin/melhor-envio/verificar (verificação real
+  // via GET /api/v2/me no backend), nunca mais só reconsultando /status.
+  test("E: status conectado mostra 'Conectado'; Verificar agora chama /verificar (não /status de novo) e reflete o resultado", async ({
     page,
   }) => {
     await seedSession(page, "ADMIN");
     await mockStatusDemaisIntegracoes(page);
+    await mockStatus(page, true);
 
-    let chamadasStatus = 0;
-    await page.route("**/admin/melhor-envio/status", async (route) => {
-      if (route.request().method() === "GET") {
-        chamadasStatus += 1;
-        await route.fulfill({ json: { conectado: true } });
-        return;
-      }
-      await route.continue();
+    let chamadasVerificar = 0;
+    await page.route("**/admin/melhor-envio/verificar", async (route) => {
+      chamadasVerificar += 1;
+      await route.fulfill({ json: { operational: true } });
     });
 
     await page.goto(INTEGRACOES_URL);
 
     await expect(page.getByText("Conectado", { exact: true })).toBeVisible();
-    const botaoVerificar = page.getByRole("button", { name: "Verificar conexão" });
+    const botaoVerificar = cardMelhorEnvio(page).getByRole("button", { name: "Verificar agora" });
     await expect(botaoVerificar).toBeVisible();
     await expect(page.getByRole("button", { name: "Conectar Melhor Envio" })).toHaveCount(0);
 
-    const chamadasAntes = chamadasStatus;
     await botaoVerificar.click();
 
-    await expect.poll(() => chamadasStatus).toBeGreaterThan(chamadasAntes);
-    // Continua mostrando "Conectado" — o botão nunca chama /conectar.
-    await expect(page.getByText("Conectado", { exact: true })).toBeVisible();
+    await expect.poll(() => chamadasVerificar).toBeGreaterThan(0);
+    // Verificação real bem-sucedida: o badge sobe de "Conectado" (nunca
+    // verificado) para "Operacional".
+    await expect(page.getByText("Operacional", { exact: true })).toBeVisible();
+  });
+
+  test("E2: Verificar agora com falha na verificação mostra 'Instável' e a mensagem segura do backend", async ({
+    page,
+  }) => {
+    await seedSession(page, "ADMIN");
+    await mockStatusDemaisIntegracoes(page);
+    await mockStatus(page, true);
+    await mockVerificar(page, {
+      operational: false,
+      mensagem: "O Melhor Envio recusou a verificação da conexão.",
+    });
+
+    await page.goto(INTEGRACOES_URL);
+    await cardMelhorEnvio(page).getByRole("button", { name: "Verificar agora" }).click();
+
+    await expect(page.getByText("Instável", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("O Melhor Envio recusou a verificação da conexão."),
+    ).toBeVisible();
   });
 
   test("F: usuário CLIENTE não acessa /workspace-x/integracoes (e portanto nunca vê a integração)", async ({

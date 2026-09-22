@@ -9,6 +9,7 @@ import api from "./api";
 import type {
   MelhorEnvioConectarResponse,
   MelhorEnvioStatusResponse,
+  VerificacaoOperacionalResponse,
 } from "@/lib/types/loja";
 
 export async function buscarStatusMelhorEnvio(): Promise<MelhorEnvioStatusResponse> {
@@ -18,5 +19,14 @@ export async function buscarStatusMelhorEnvio(): Promise<MelhorEnvioStatusRespon
 
 export async function obterUrlConexaoMelhorEnvio(): Promise<MelhorEnvioConectarResponse> {
   const response = await api.get<MelhorEnvioConectarResponse>("/admin/melhor-envio/conectar");
+  return response.data;
+}
+
+// Vistoria das Integrações (Admin) — verificação real sob demanda (botão
+// "Verificar agora"), GET .../verificar, DIFERENTE de buscarStatusMelhorEnvio
+// (que só reflete configuração/token salvo, nunca chama o Melhor Envio de
+// verdade). Read-only, sem nenhum efeito colateral — nunca cota frete.
+export async function verificarMelhorEnvio(): Promise<VerificacaoOperacionalResponse> {
+  const response = await api.get<VerificacaoOperacionalResponse>("/admin/melhor-envio/verificar");
   return response.data;
 }

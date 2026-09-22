@@ -21,6 +21,8 @@ import {
   buscarStatusAsaas,
   buscarStatusImagekit,
   buscarStatusResend,
+  verificarAsaas,
+  verificarImagekit,
 } from "@/services/integracoes";
 
 export default function IntegracoesPage() {
@@ -54,15 +56,31 @@ export default function IntegracoesPage() {
           descricaoConfigurado="Gateway de pagamento ativo — Checkout, cobrança e reembolsos passam por aqui."
           descricaoNaoConfigurado="Gateway de pagamento não configurado neste ambiente."
           buscarStatus={buscarStatusAsaas}
+          verificarOperacional={verificarAsaas}
+          detalhes={(status) => {
+            const linhas: Array<{ label: string; valor: string }> = [];
+            if (status.baseUrl) linhas.push({ label: "Base URL", valor: status.baseUrl });
+            if (status.gatewayAtivo) {
+              linhas.push({ label: "Gateway ativo", valor: status.gatewayAtivo });
+            }
+            return linhas;
+          }}
         />
 
         <MelhorEnvioIntegracaoCard />
 
+        {/* Resend já foi validado em produção com envio real — continua sem
+            botão "Verificar agora" (nenhuma chamada nova é disparada aqui),
+            só o card de configuração de sempre, agora também mostrando o
+            remetente configurado (EMAIL_FROM, não secreto). */}
         <IntegracaoStatusCard
           titulo="Resend"
           descricaoConfigurado="Envio de e-mail ativo — confirmação de cadastro e recuperação de senha."
           descricaoNaoConfigurado="Envio de e-mail não configurado neste ambiente."
           buscarStatus={buscarStatusResend}
+          detalhes={(status) =>
+            status.from ? [{ label: "Remetente", valor: status.from }] : []
+          }
         />
 
         <IntegracaoStatusCard
@@ -70,6 +88,10 @@ export default function IntegracoesPage() {
           descricaoConfigurado="Upload e CDN de imagens de produto ativos."
           descricaoNaoConfigurado="Upload e CDN de imagens de produto não configurados neste ambiente."
           buscarStatus={buscarStatusImagekit}
+          verificarOperacional={verificarImagekit}
+          detalhes={(status) =>
+            status.urlEndpoint ? [{ label: "URL Endpoint", valor: status.urlEndpoint }] : []
+          }
         />
       </div>
     </div>

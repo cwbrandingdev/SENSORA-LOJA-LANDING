@@ -14,8 +14,11 @@ import { ImagekitService } from './imagekit.service';
 // sobrescreve o STAFF_ROLES da classe só para `status`, sem afetar `auth`
 // (upload de imagem de produto continua ADMIN+VENDEDOR, intocado).
 describe('ImagekitController — status (Central de Integrações)', () => {
-  it('delega para ImagekitService.isConfigured() e devolve só { configured }', () => {
-    const imagekitService = { isConfigured: jest.fn().mockReturnValue(true) };
+  it('delega para ImagekitService.isConfigured()/urlEndpointConfigurado e devolve os campos seguros', () => {
+    const imagekitService = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      urlEndpointConfigurado: 'https://ik.imagekit.io/sensora',
+    };
     const controller = new ImagekitController(
       imagekitService as unknown as ImagekitService,
     );
@@ -23,17 +26,41 @@ describe('ImagekitController — status (Central de Integrações)', () => {
     const resultado = controller.status();
 
     expect(imagekitService.isConfigured).toHaveBeenCalledTimes(1);
-    expect(resultado).toEqual({ configured: true });
-    expect(Object.keys(resultado)).toEqual(['configured']);
+    expect(resultado).toEqual({
+      configured: true,
+      urlEndpoint: 'https://ik.imagekit.io/sensora',
+    });
+    expect(Object.keys(resultado)).toEqual(['configured', 'urlEndpoint']);
   });
 
-  it('não configurado: configured=false', () => {
-    const imagekitService = { isConfigured: jest.fn().mockReturnValue(false) };
+  it('não configurado: configured=false, urlEndpoint undefined', () => {
+    const imagekitService = {
+      isConfigured: jest.fn().mockReturnValue(false),
+      urlEndpointConfigurado: undefined,
+    };
     const controller = new ImagekitController(
       imagekitService as unknown as ImagekitService,
     );
 
-    expect(controller.status()).toEqual({ configured: false });
+    expect(controller.status()).toEqual({ configured: false, urlEndpoint: undefined });
+  });
+
+  it('verificar() delega para ImagekitService.verificarOperacional() e também é ADMIN-only', async () => {
+    const imagekitService = {
+      verificarOperacional: jest.fn().mockResolvedValue({ operational: true }),
+    };
+    const controller = new ImagekitController(
+      imagekitService as unknown as ImagekitService,
+    );
+
+    await expect(controller.verificar()).resolves.toEqual({ operational: true });
+    expect(imagekitService.verificarOperacional).toHaveBeenCalledTimes(1);
+
+    const rolesDoMetodoVerificar = Reflect.getMetadata(
+      ROLES_KEY,
+      ImagekitController.prototype.verificar,
+    ) as unknown[];
+    expect(rolesDoMetodoVerificar).toEqual(ADMIN_ONLY_ROLES);
   });
 
   it('classe continua sob JwtAuthGuard + RolesGuard (upload de imagem intocado)', () => {
