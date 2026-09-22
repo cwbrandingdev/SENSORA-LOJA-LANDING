@@ -37,7 +37,9 @@ import AccountPageHeader from "@/components/conta/AccountPageHeader";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import { atualizarMeuPerfil, buscarMeuPerfil } from "@/services/conta";
+import Link from "next/link";
 import { ROUTES } from "@/lib/routes";
+import { EMPRESA, ROTAS_LEGAIS, mailtoAssunto } from "@/lib/empresa";
 import { cpfValido, formatarCpf } from "@/lib/cpf";
 import { formatarTelefone, telefoneValido } from "@/lib/telefone";
 import type { Usuario } from "@/lib/types/loja";
@@ -365,6 +367,34 @@ export default function DadosPessoaisPage() {
             </div>
           </form>
         )}
+
+        <div className="mt-8 space-y-3 text-sm leading-relaxed text-slate-600">
+          <p>
+            O CPF desta página é o usado na nota fiscal. Se ficar em branco,
+            pedimos por e-mail antes de emitir.
+          </p>
+          <p>
+            Para pedir exclusão da conta ou outra solicitação da LGPD, escreva
+            para{" "}
+            <a
+              href={mailtoAssunto(
+                "Privacidade — pedido de titular (LGPD)",
+                "Olá,\n\nQuero exercer um direito sobre os meus dados.\n\nNome:\nE-mail da conta:\n",
+              )}
+              className="text-brand-navy underline underline-offset-4"
+            >
+              {EMPRESA.email}
+            </a>
+            . Os detalhes estão na{" "}
+            <Link
+              href={ROTAS_LEGAIS.privacidade}
+              className="text-brand-navy underline underline-offset-4"
+            >
+              Política de Privacidade
+            </Link>
+            .
+          </p>
+        </div>
       </RevealOnScroll>
     </div>
   );

@@ -1,8 +1,10 @@
+import Link from "next/link";
 import ImageReveal from "@/components/ui/ImageReveal";
 import PlaceholderImage from "@/components/ui/PlaceholderImage";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import TextReveal from "@/components/ui/TextReveal";
 import { ABOUT_CONTENT } from "@/lib/content";
+import { ROTAS_LEGAIS } from "@/lib/empresa";
 
 export default function AboutSection() {
   return (
@@ -53,6 +55,12 @@ export default function AboutSection() {
               <p key={paragraph}>{paragraph}</p>
             ))}
           </div>
+          <Link
+            href={ROTAS_LEGAIS.quemSomos}
+            className="mt-8 inline-block text-[13px] uppercase tracking-[0.14em] text-brand-navy underline underline-offset-4"
+          >
+            Quem somos e CNPJ
+          </Link>
         </RevealOnScroll>
       </div>
     </section>

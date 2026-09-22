@@ -40,6 +40,7 @@ import { useCart } from "@/context/CartContext";
 import { buscarStatusSessao } from "@/services/checkout";
 import { getCheckoutPendente, removeCheckoutPendente } from "@/lib/storage";
 import { ROUTES } from "@/lib/routes";
+import { ROTAS_LEGAIS } from "@/lib/empresa";
 import { StatusPedido } from "@/lib/types/loja";
 
 export default function CheckoutSucessoPage() {
@@ -102,9 +103,16 @@ export default function CheckoutSucessoPage() {
 
       <RevealOnScroll delayMs={90}>
         <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-slate-600">
-          Seu pagamento foi concluído com sucesso. Em breve você poderá
-          acompanhar os detalhes do seu pedido — por enquanto, aproveite para
-          continuar explorando a Sensora.
+          Seu pagamento foi concluído com sucesso. Acompanhe o pedido em
+          Minha Conta. O prazo de 7 dias para desistir começa quando você
+          receber o produto.{" "}
+          <Link
+            href={ROTAS_LEGAIS.trocas}
+            className="text-brand-navy underline underline-offset-4"
+          >
+            Trocas e devoluções
+          </Link>
+          .
         </p>
       </RevealOnScroll>
 

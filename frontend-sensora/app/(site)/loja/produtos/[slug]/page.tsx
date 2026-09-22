@@ -10,6 +10,7 @@ import PlaceholderImage from "@/components/ui/PlaceholderImage";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import ImageReveal from "@/components/ui/ImageReveal";
 import AddToCartControls from "@/components/loja/AddToCartControls";
+import AvisosProduto from "@/components/loja/AvisosProduto";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -143,6 +144,12 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
               }}
             />
           </div>
+
+          <AvisosProduto
+            categoriaSlug={produto.categoria?.slug}
+            categoriaNome={produto.categoria?.nome}
+            quantidade={produto.quantidade}
+          />
 
           <div className="mt-8">
             <Link

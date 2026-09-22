@@ -21,6 +21,8 @@ import EnderecoForm, {
 } from "@/components/loja/EnderecoForm";
 import CheckoutItemsShowcase from "@/components/loja/CheckoutItemsShowcase";
 import FreteOptions from "@/components/loja/FreteOptions";
+import IdentificacaoFornecedor from "@/components/legal/IdentificacaoFornecedor";
+import { EMPRESA, ROTAS_LEGAIS } from "@/lib/empresa";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
@@ -96,6 +98,7 @@ export default function CheckoutPage() {
   // está saindo para a página de pagamento, então o botão nunca volta a
   // ficar clicável.
   const [criandoSessao, setCriandoSessao] = useState(false);
+  const [aceiteTermos, setAceiteTermos] = useState(false);
 
   // Etapa 6.4 (Confirmação de e-mail) — backend responde 403 (não 401: a
   // sessão continua válida, é o estado da conta que bloqueia) quando o
@@ -271,6 +274,13 @@ export default function CheckoutPage() {
         behavior: "smooth",
         block: "start",
       });
+      return;
+    }
+
+    if (!aceiteTermos) {
+      toast.error(
+        "Aceite os Termos de Uso e a Política de Privacidade para continuar.",
+      );
       return;
     }
 
@@ -468,6 +478,7 @@ export default function CheckoutPage() {
                 Voltar para a loja →
               </Button>
             </div>
+            <IdentificacaoFornecedor className="mx-auto mt-10 max-w-md space-y-1 text-center text-xs leading-relaxed text-slate-500" />
           </RevealOnScroll>
         </div>
       ) : (
@@ -676,6 +687,51 @@ export default function CheckoutPage() {
                     );
                   })()}
 
+                  <div className="mt-6 rounded-sm border border-brand-orange/40 bg-brand-orange/5 px-4 py-3 text-sm leading-relaxed text-slate-700">
+                    <p>
+                      Você pode desistir da compra em até 7 dias depois de
+                      receber o produto, sem precisar justificar.{" "}
+                      <Link
+                        href={ROTAS_LEGAIS.trocas}
+                        className="text-brand-navy underline underline-offset-4"
+                      >
+                        Como pedir o arrependimento
+                      </Link>
+                      .
+                    </p>
+                  </div>
+
+                  <label className="mt-4 flex items-start gap-3 text-sm leading-relaxed text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={aceiteTermos}
+                      onChange={(event) => setAceiteTermos(event.target.checked)}
+                      className="mt-1 h-4 w-4 shrink-0 accent-brand-navy"
+                    />
+                    <span>
+                      Li e aceito os{" "}
+                      <Link
+                        href={ROTAS_LEGAIS.termos}
+                        className="text-brand-navy underline underline-offset-4"
+                      >
+                        Termos de Uso
+                      </Link>{" "}
+                      e a{" "}
+                      <Link
+                        href={ROTAS_LEGAIS.privacidade}
+                        className="text-brand-navy underline underline-offset-4"
+                      >
+                        Política de Privacidade
+                      </Link>
+                      .
+                    </span>
+                  </label>
+                  <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                    A nota fiscal sai no CPF cadastrado em Dados pessoais. Se
+                    estiver em branco, pedimos por e-mail ({EMPRESA.email})
+                    antes de emitir.
+                  </p>
+
                   <div className="mt-6 flex flex-col gap-3">
                     {EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT &&
                       emailNaoConfirmado && (
@@ -726,6 +782,7 @@ export default function CheckoutPage() {
                     </Link>
                   </div>
                 </aside>
+                <IdentificacaoFornecedor className="mt-8 space-y-1 text-xs leading-relaxed text-slate-500" />
               </RevealOnScroll>
             </div>
           </div>

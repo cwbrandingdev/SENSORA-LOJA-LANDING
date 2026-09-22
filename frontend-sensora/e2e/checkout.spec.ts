@@ -24,6 +24,12 @@ const CART_STORAGE_KEY = "sensora_carrinho";
 // (seedSession + seedCart, quase todos os deste arquivo) precisam ler.
 const CART_STORAGE_KEY_CONTA = `${CART_STORAGE_KEY}_1`;
 
+async function aceitarTermosDeCompra(page: Page) {
+  const aceite = page.getByRole("checkbox", { name: /Termos de Uso/ });
+  if ((await aceite.count()) === 0) return;
+  if (!(await aceite.isChecked())) await aceite.check();
+}
+
 function base64Url(payload: Record<string, unknown>): string {
   return Buffer.from(JSON.stringify(payload))
     .toString("base64")
@@ -583,6 +589,7 @@ test.describe("Checkout — CTA de continuar", () => {
     const chamadasProibidas = trackPaymentCalls(page);
 
     await page.goto(CHECKOUT_URL);
+    await aceitarTermosDeCompra(page);
     await page.getByRole("button", { name: "Continuar para pagamento →" }).click();
 
     await expect(page.getByText("Selecione um endereço de entrega para continuar.")).toBeVisible();
@@ -630,6 +637,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
     // "Processando..." assim que clicado, então um locator preso ao nome
     // original quebraria na segunda verificação.
     const button = page.locator("aside").getByRole("button");
+    await aceitarTermosDeCompra(page);
     await button.click();
 
     // Enquanto aguarda a resposta: desabilitado, com o spinner/rótulo de
@@ -698,6 +706,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
 
     await page.goto(CHECKOUT_URL);
     await page.getByRole("radio").filter({ hasText: "Avenida Brasil" }).click();
+    await aceitarTermosDeCompra(page);
     await page.locator("aside").getByRole("button").click();
     await page.waitForURL(URL_PAGAMENTO);
 
@@ -736,6 +745,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
     // Dois cliques disparados o mais próximo possível um do outro — o
     // segundo usa force porque o botão já pode estar `disabled` (o que, por
     // si só, já impede o evento de clique nativo de chegar ao handler).
+    await aceitarTermosDeCompra(page);
     await button.click();
     await button.click({ force: true }).catch(() => {});
 
@@ -759,6 +769,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
     // logout em outra aba, expiração) — antes do clique em continuar.
     await page.evaluate((key) => window.localStorage.removeItem(key), TOKEN_KEY);
 
+    await aceitarTermosDeCompra(page);
     await page.getByRole("button", { name: "Continuar para pagamento →" }).click();
 
     await expect(page).toHaveURL(/\/login\?redirect=%2Floja%2Fcheckout/);
@@ -810,6 +821,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
 
     await page.goto(CHECKOUT_URL);
     const button = page.getByRole("button", { name: "Continuar para pagamento →" });
+    await aceitarTermosDeCompra(page);
     await button.click();
 
     await expect(
@@ -832,6 +844,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
 
     await page.goto(CHECKOUT_URL);
     const button = page.getByRole("button", { name: "Continuar para pagamento →" });
+    await aceitarTermosDeCompra(page);
     await button.click();
 
     await expect(
@@ -861,6 +874,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
 
     await page.goto(CHECKOUT_URL);
     const button = page.getByRole("button", { name: "Continuar para pagamento →" });
+    await aceitarTermosDeCompra(page);
     await button.click();
 
     await expect(
@@ -943,6 +957,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
 
     await page.goto(CHECKOUT_URL);
     const button = page.getByRole("button", { name: "Continuar para pagamento →" });
+    await aceitarTermosDeCompra(page);
     await button.click();
 
     await expect(
@@ -971,6 +986,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
 
     await page.goto(CHECKOUT_URL);
     const button = page.getByRole("button", { name: "Continuar para pagamento →" });
+    await aceitarTermosDeCompra(page);
     await button.click();
 
     await expect(
@@ -1000,6 +1016,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
     const chamadasAntes = enderecosGetCalls.count;
 
     const button = page.getByRole("button", { name: "Continuar para pagamento →" });
+    await aceitarTermosDeCompra(page);
     await button.click();
 
     await expect(
@@ -1025,6 +1042,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
     const sessionRequests = captureCheckoutSessionRequests(page);
 
     await page.goto(CHECKOUT_URL);
+    await aceitarTermosDeCompra(page);
     await page.getByRole("button", { name: "Continuar para pagamento →" }).click();
 
     await expect(page).toHaveURL(/\/login\?redirect=%2Floja%2Fcheckout/);
@@ -1072,6 +1090,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
 
     await page.goto(CHECKOUT_URL);
     const button = page.getByRole("button", { name: "Continuar para pagamento →" });
+    await aceitarTermosDeCompra(page);
     await button.click();
 
     await expect(
@@ -1102,6 +1121,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
 
     await page.goto(CHECKOUT_URL);
     const button = page.getByRole("button", { name: "Continuar para pagamento →" });
+    await aceitarTermosDeCompra(page);
     await button.click();
 
     await expect(
@@ -1121,6 +1141,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
 
     await page.goto(CHECKOUT_URL);
     const button = page.getByRole("button", { name: "Continuar para pagamento →" });
+    await aceitarTermosDeCompra(page);
     await button.click();
 
     await expect(
@@ -1141,6 +1162,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
 
     await page.goto(CHECKOUT_URL);
     const button = page.getByRole("button", { name: "Continuar para pagamento →" });
+    await aceitarTermosDeCompra(page);
     await button.click();
 
     await expect(
@@ -1162,6 +1184,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
 
     await page.goto(CHECKOUT_URL);
     const button = page.getByRole("button", { name: "Continuar para pagamento →" });
+    await aceitarTermosDeCompra(page);
     await button.click();
     await expect(
       page.getByText("Não foi possível iniciar o pagamento. Tente novamente."),
@@ -1178,6 +1201,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
     });
     await mockAsaasCheckoutPage(page, URL_PAGAMENTO);
 
+    await aceitarTermosDeCompra(page);
     await page.locator("aside").getByRole("button").click();
     await page.waitForURL(URL_PAGAMENTO);
 
@@ -1192,6 +1216,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
     const sessionRequests = captureCheckoutSessionRequests(page);
 
     await page.goto(CHECKOUT_URL);
+    await aceitarTermosDeCompra(page);
     await page.getByRole("button", { name: "Continuar para pagamento →" }).click();
     await expect(
       page.getByText("Não foi possível iniciar o pagamento. Tente novamente."),
@@ -1219,6 +1244,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
     );
 
     await page.goto(CHECKOUT_URL);
+    await aceitarTermosDeCompra(page);
     await page.getByRole("button", { name: "Continuar para pagamento →" }).click();
     await expect(
       page.getByText("Não foi possível iniciar o pagamento. Tente novamente."),
@@ -1494,6 +1520,7 @@ test.describe("Checkout — Etapa 6.5: frete", () => {
       page.getByText("Nenhuma opção de frete disponível para este endereço no momento."),
     ).toBeVisible();
 
+    await aceitarTermosDeCompra(page);
     await page.getByRole("button", { name: "Continuar para pagamento →" }).click();
 
     await expect(

@@ -8,6 +8,7 @@
 // idêntica — nunca tenta adivinhar qual dos dois aconteceu (evita
 // enumeração de IDs).
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { isAxiosError } from "axios";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
@@ -26,6 +27,7 @@ import {
   solicitarReembolsoMeuPedido,
 } from "@/services/pedidos";
 import { ROUTES } from "@/lib/routes";
+import { ROTAS_LEGAIS } from "@/lib/empresa";
 import { StatusPedido, type Pedido, type PedidoComItensDetalhado } from "@/lib/types/loja";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
@@ -340,6 +342,18 @@ export default function MeuPedidoDetalhePage() {
               </p>
             )}
           </div>
+
+          <p className="mt-10 text-sm leading-relaxed text-slate-600">
+            Você pode desistir em 7 dias após o recebimento, ou acionar a
+            garantia de 30 dias se o produto vier com defeito.{" "}
+            <Link
+              href={ROTAS_LEGAIS.trocas}
+              className="text-brand-navy underline underline-offset-4"
+            >
+              Trocas e devoluções
+            </Link>
+            .
+          </p>
         </RevealOnScroll>
       )}
 

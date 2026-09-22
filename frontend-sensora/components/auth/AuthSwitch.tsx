@@ -625,6 +625,11 @@ function SignUpForm({
           "Criar conta"
         )}
       </button>
+      <p className="authswitch-legal">
+        Ao criar a conta, você concorda com os{" "}
+        <Link href="/termos-de-uso">Termos de Uso</Link> e a{" "}
+        <Link href="/politica-de-privacidade">Política de Privacidade</Link>.
+      </p>
     </form>
   );
 }
@@ -854,6 +859,20 @@ const AUTH_SWITCH_CSS = `
 .authswitch-forgot a:hover {
   color: var(--brand-orange);
   text-decoration: underline;
+}
+
+.authswitch-legal {
+  width: 100%;
+  max-width: 420px;
+  margin-top: 0.85rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #6b7280;
+}
+.authswitch-legal a {
+  color: var(--brand-navy);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .authswitch-btn {

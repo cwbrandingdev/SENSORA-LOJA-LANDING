@@ -8,6 +8,7 @@
 // — nunca hardcoded soltos aqui — para que este texto nunca se desalinhe
 // silenciosamente do nome real usado pelo código.
 import type { Metadata } from "next";
+import Link from "next/link";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import {
   CART_STORAGE_KEY,
@@ -91,7 +92,12 @@ export default function PoliticaDeCookiesPage() {
             login, carrinho e checkout. Cookies de <strong>medição e
             marketing</strong> são opcionais e dependem do seu consentimento,
             gerenciado pelo aviso na primeira visita e pelo link{" "}
-            <strong>Preferências de cookies</strong> no rodapé.
+            <strong>Preferências de cookies</strong> no rodapé. O tratamento
+            dos demais dados pessoais está na{" "}
+            <Link href="/politica-de-privacidade" className="text-brand-navy underline underline-offset-4">
+              Política de Privacidade
+            </Link>
+            .
           </p>
         </Secao>
 

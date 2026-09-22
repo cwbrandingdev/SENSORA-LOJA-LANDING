@@ -490,12 +490,9 @@ export type FaqItem = {
   answer: string;
 };
 
-// FAQ da Landing — cada resposta é rastreável a um dado real do projeto
-// (catálogo/coleções em CATEGORIES/COLLECTIONS acima, fluxo de
-// checkout/frete em app/(site)/loja/checkout, contato em FOOTER_CONTENT
-// abaixo). Nenhuma política de troca/devolução, forma de pagamento
-// específica ou prazo foi incluída: nenhuma dessas informações está
-// confirmada em nenhum lugar do projeto.
+// FAQ da Landing — respostas de catálogo e checkout vêm do próprio site.
+// Arrependimento, garantia e nota fiscal seguem o mínimo legal publicado
+// em /trocas-e-devolucoes e /termos-de-uso (não há troca comercial extra).
 export const FAQ_CONTENT = {
   eyebrow: "Dúvidas frequentes",
   title: "Perguntas que podem ajudar.",
@@ -568,7 +565,25 @@ export const FAQ_ITEMS: FaqItem[] = [
     id: "contato",
     question: "Como entro em contato com a Sensora?",
     answer:
-      "Você pode falar com a gente por e-mail (sensoramarketingsensorial@gmail.com) ou pelo Instagram @sensoramarketingsensorial.",
+      "Por e-mail, em sensoramarketingsensorial@gmail.com, ou pelo Instagram @sensoramarketingsensorial. Razão social, CNPJ e endereço estão na página Quem somos.",
+  },
+  {
+    id: "arrependimento",
+    question: "Posso desistir da compra?",
+    answer:
+      "Sim. Em compra feita pelo site, você tem 7 dias contados do recebimento para desistir, sem precisar justificar. O pedido é feito por e-mail (sensoramarketingsensorial@gmail.com), com o número do pedido. O valor pago, inclusive o frete da ida, é devolvido, e o frete da volta fica por conta da loja. O passo a passo está em Trocas e devoluções.",
+  },
+  {
+    id: "defeito",
+    question: "E se o produto chegar com defeito?",
+    answer:
+      "Vela, spray e difusor têm garantia legal de 30 dias após o recebimento. Escreva para sensoramarketingsensorial@gmail.com descrevendo o problema. Se não for resolvido em 30 dias, você escolhe troca, abatimento do preço ou dinheiro de volta. Não há troca só porque o aroma ou a cor não agradou, fora do prazo de arrependimento.",
+  },
+  {
+    id: "nota-fiscal",
+    question: "Vocês emitem nota fiscal?",
+    answer:
+      "Sim. A Cazarim & Souza Ltda emite nota fiscal eletrônica da venda, no CPF cadastrado em Dados pessoais. O documento segue por e-mail ou pode ser pedido em sensoramarketingsensorial@gmail.com. Se o CPF estiver em branco, pedimos antes de emitir.",
   },
 ];
 
