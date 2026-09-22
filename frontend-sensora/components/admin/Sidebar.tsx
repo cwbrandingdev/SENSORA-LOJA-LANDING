@@ -28,6 +28,7 @@ import {
   ClipboardList,
   UserCog,
   Plug,
+  Home,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -174,9 +175,22 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
           ))}
         </div>
 
-        <FormButton variant="danger" onClick={logout} className="w-full">
-          Sair
-        </FormButton>
+        {/* Saída do admin — junto do "Sair", não no Header: as duas são
+            formas de deixar o painel (uma para o site público, outra para o
+            login), e ficar aqui evita disputar espaço com e-mail/perfil no
+            Header mobile. */}
+        <div className="flex flex-col gap-2">
+          <Link
+            href="/"
+            className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-brand-navy-light hover:text-white"
+          >
+            <Home className="h-4 w-4 shrink-0" aria-hidden />
+            Voltar para a home
+          </Link>
+          <FormButton variant="danger" onClick={logout} className="w-full">
+            Sair
+          </FormButton>
+        </div>
       </nav>
     </>
   );

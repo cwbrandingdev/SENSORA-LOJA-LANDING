@@ -6,10 +6,15 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import type { Pedido as PedidoPrisma } from '../../generated/prisma/client';
+import type {
+  NotaFiscal as NotaFiscalPrisma,
+  Pedido as PedidoPrisma,
+} from '../../generated/prisma/client';
 import { Prisma } from '../../generated/prisma/client';
 import { AsaasErroHttpError, AsaasService } from '../asaas/asaas.service';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
+import { NotaFiscalResumo } from '../fiscal/entities/nota-fiscal.entity';
+import { StatusFiscal } from '../fiscal/enums/status-fiscal.enum';
 import { ItemPedido } from '../itens-pedido/entities/item-pedido.entity';
 import { ItensPedidoService } from '../itens-pedido/itens-pedido.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -77,14 +82,32 @@ export class PedidosService {
     return pedidos.map((pedido) => this.paraPedido(pedido));
   }
 
+  // Infraestrutura Fiscal (preparação arquitetural) — `include: { notaFiscal:
+  // true }` é a única mudança feita aqui para o ponto 10 da tarefa: expor a
+  // relação no DETALHE do pedido (esta é a query usada por GET /pedidos/:id,
+  // GET /pedidos/meus/:id e, por consequência, por buscarPedidoComItens/
+  // buscarPedidoComItensDetalhado abaixo, que chamam findOne). Nenhuma
+  // lógica fiscal nova, nenhuma chamada a FiscalService — só um join a mais
+  // na leitura já existente, mesmo padrão de enriquecimento direto via
+  // Prisma já usado em buscarPedidoComItensDetalhado (join com Produto sem
+  // passar por ProdutosService). `paraPedido` (usado por 5 outros métodos
+  // deste service) permanece intocado de propósito — anexa-se `notaFiscal`
+  // por fora, só aqui, para não arriscar introduzir undefined-vs-null
+  // ambíguo nos outros retornos que nunca fizeram esse include.
   async findOne(id: number, user: UsuarioAutenticado): Promise<Pedido> {
-    const pedido = await this.prisma.pedido.findUnique({ where: { id } });
+    const pedido = await this.prisma.pedido.findUnique({
+      where: { id },
+      include: { notaFiscal: true },
+    });
     // Mesma mensagem/status para "não existe" e "existe mas não é seu" —
     // não confirma a existência de um pedido fora do escopo do VENDEDOR.
     if (!pedido || !this.podeAcessar(pedido, user)) {
       throw new NotFoundException(`Pedido com id ${id} não encontrado`);
     }
-    return this.paraPedido(pedido);
+    return {
+      ...this.paraPedido(pedido),
+      notaFiscal: this.paraNotaFiscalResumo(pedido.notaFiscal),
+    };
   }
 
   // Etapa 8.1 (complemento — eliminação da venda manual) — create() foi
@@ -627,6 +650,28 @@ export class PedidosService {
       fretePrazoDias: pedido.fretePrazoDias ?? undefined,
       statusEnvio: pedido.statusEnvio as StatusEnvio,
       enviadoEm: pedido.enviadoEm ?? undefined,
+    };
+  }
+
+  // Infraestrutura Fiscal (preparação arquitetural) — mapeia o resultado do
+  // `include: { notaFiscal: true }` feito só por findOne() para o
+  // subconjunto público (NotaFiscalResumo). `null` cobre tanto "pedido sem
+  // NotaFiscal ainda" (o único caso possível hoje) quanto uma relação
+  // ausente por acaso — nenhuma emissão, nenhuma lógica fiscal acontece
+  // aqui, é só formatação de leitura.
+  private paraNotaFiscalResumo(
+    notaFiscal: NotaFiscalPrisma | null,
+  ): NotaFiscalResumo | null {
+    if (!notaFiscal) {
+      return null;
+    }
+    return {
+      id: notaFiscal.id,
+      status: notaFiscal.status as StatusFiscal,
+      numero: notaFiscal.numero,
+      serie: notaFiscal.serie,
+      chaveAcesso: notaFiscal.chaveAcesso,
+      emitidoEm: notaFiscal.emitidoEm,
     };
   }
 }

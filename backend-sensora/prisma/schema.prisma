@@ -202,6 +202,14 @@ model Pedido {
   // histórico do pedido mesmo se o Usuario dono for excluído, em vez de
   // deixar a coluna apontando para um id que não existe mais.
   usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  // Infraestrutura Fiscal (preparação arquitetural, ver vistoria "infra
+  // neutra para futura emissão de notas fiscais") — relação opcional 1:1:
+  // nenhum código cria NotaFiscal automaticamente ainda (FiscalService não é
+  // chamado por CheckoutService.confirmarPagamento nesta etapa), então todo
+  // Pedido existente/futuro continua sem nota até uma etapa posterior ligar
+  // os dois. Ver comentário completo em NotaFiscal, abaixo.
+  notaFiscal NotaFiscal?
 }
 
 model ItemPedido {
@@ -236,6 +244,84 @@ model ItemPedido {
   estoqueRestaurado Boolean  @default(false)
   pedido            Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
   produto           Produto  @relation(fields: [produtoId], references: [id])
+}
+
+// Infraestrutura Fiscal (preparação arquitetural) — modelo intencionalmente
+// "neutro": guarda o RESULTADO de uma futura emissão (identificadores,
+// arquivos, erro, tentativas) e um SNAPSHOT próprio dos dados do
+// destinatário, mas não define NF-e vs NFC-e, não modela NCM/CFOP/CST/
+// CSOSN/impostos, e não amarra a nenhum provedor específico — isso fica para
+// uma etapa futura, quando FiscalProvider ganhar uma implementação real (ver
+// src/fiscal/). Nenhum código cria linhas aqui automaticamente nesta etapa:
+// FiscalService existe, mas não é chamado por CheckoutService.
+// confirmarPagamento nem por nenhum outro fluxo de pagamento — ver
+// FiscalService para o raciocínio completo.
+//
+// Cardinalidade 1:1 com Pedido (pedidoId @unique): tentativas de emissão são
+// rastreadas pelo contador `tentativas` numa ÚNICA linha por pedido, nunca
+// por uma linha nova a cada tentativa — mesmo princípio de "estado atual",
+// não histórico, já usado em Pedido.status (uma transição sobrescreve, não
+// acumula).
+model NotaFiscal {
+  id       Int          @id @default(autoincrement())
+  pedidoId Int          @unique
+  status   StatusFiscal @default(NAO_EMITIDA)
+
+  // Identificadores do documento fiscal emitido pelo provedor — todos
+  // opcionais porque só existem DEPOIS de uma emissão bem-sucedida (nenhum
+  // código os preenche nesta etapa). Deliberadamente sem formato/tamanho
+  // assumido (ex.: chaveAcesso não é fixada em 44 dígitos): não é papel
+  // desta etapa decidir o formato de documento fiscal.
+  numero      String?
+  serie       String?
+  chaveAcesso String?
+  protocolo   String?
+
+  // Referência/localização dos arquivos gerados pelo provedor (XML e
+  // PDF/DANFE) — nunca o conteúdo binário em si, e nunca assumido como URL
+  // pública: pode ser um path de storage interno, uma URL assinada, etc.,
+  // a decidir na etapa que implementar a emissão real.
+  xmlUrl String?
+  pdfUrl String?
+
+  // Diagnóstico da tentativa mais recente — sempre sobrescrito pela última
+  // tentativa (não é log acumulado; observabilidade histórica, se necessária
+  // no futuro, fica fora do escopo desta preparação). `tentativas` existe
+  // para uma futura política de retry decidir quando desistir — nenhuma
+  // lógica de retry é implementada aqui.
+  mensagemErro String?
+  tentativas   Int     @default(0)
+
+  // Snapshot fiscal — cópia própria dos dados do destinatário no momento em
+  // que uma futura emissão (ou tentativa) capturar esses dados, para nunca
+  // mais depender de Usuario/Endereco depois disso (mesmo princípio já
+  // usado no snapshot de endereço/frete de Pedido, acima: um documento já
+  // emitido não pode mudar retroativamente porque o cliente editou o
+  // cadastro). `destinatarioDocumento` é neutro de propósito (não distingue
+  // CPF de CNPJ nem exige preenchimento) — Usuario.cpf continua opcional no
+  // cadastro/checkout, isso não muda aqui. Todos opcionais porque nenhum
+  // código ainda os preenche nesta etapa.
+  destinatarioNome      String?
+  destinatarioDocumento String?
+  destinatarioEmail     String?
+  enderecoCep           String?
+  enderecoRua           String?
+  enderecoNumero        String?
+  enderecoComplemento   String?
+  enderecoBairro        String?
+  enderecoCidade        String?
+  enderecoEstado        String?
+
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  emitidoEm    DateTime?
+
+  // onDelete: Cascade — mesmo padrão de ItemPedido acima: NotaFiscal é um
+  // registro satélite de Pedido, sem valor próprio se o pedido deixar de
+  // existir. Na prática, hoje só Pedido PENDENTE pode ser excluído
+  // (PedidosService.remove), estado em que uma nota ainda não faria
+  // sentido existir — a constraint só formaliza a garantia para o futuro.
+  pedido Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 }
 
 // Etapa 6.5 (Frete) — par access_token/refresh_token OAuth2 da conta da loja
@@ -292,4 +378,35 @@ enum StatusPedido {
 enum StatusEnvio {
   NAO_ENVIADO
   ENVIADO
+}
+
+// Infraestrutura Fiscal (preparação arquitetural) — terceiro eixo
+// independente, mesmo raciocínio já usado para separar StatusEnvio de
+// StatusPedido acima: um pedido PAGO pode estar em qualquer estado fiscal
+// (inclusive NAO_EMITIDA, o único valor possível hoje, já que nenhum código
+// ainda transiciona este campo) sem que isso influencie o status financeiro
+// ou logístico do pedido. Valores pensados só como ciclo de vida de
+// PROCESSAMENTO de um documento (enviado ao provedor / aceito / rejeitado /
+// cancelado / erro de comunicação) — nenhum deles define NF-e vs NFC-e nem
+// carrega significado tributário.
+enum StatusFiscal {
+  // Nenhuma tentativa de emissão foi feita ainda — valor inicial de toda
+  // NotaFiscal (@default, ver model acima).
+  NAO_EMITIDA
+  // Emissão em andamento junto ao provedor (aguardando confirmação).
+  PROCESSANDO
+  // Provedor confirmou a emissão — numero/serie/chaveAcesso/protocolo
+  // preenchidos.
+  EMITIDA
+  // Provedor recusou a emissão (ver mensagemErro para o motivo).
+  REJEITADA
+  // Falha de comunicação/infraestrutura ao tentar emitir (distinto de
+  // REJEITADA — aqui não há confirmação de que o provedor sequer processou
+  // a tentativa; mesma distinção que AsaasIndisponivelError/AsaasErroHttpError
+  // já fazem para pagamento, ver asaas.service.ts).
+  ERRO
+  // Nota já emitida e depois cancelada (ex.: pedido cancelado/reembolsado
+  // após a emissão) — nenhuma regra de quando isso é permitido é definida
+  // nesta etapa.
+  CANCELADA
 }

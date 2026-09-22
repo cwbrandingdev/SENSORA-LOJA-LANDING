@@ -11,6 +11,7 @@ import { CategoriasModule } from './categorias/categorias.module';
 import { CheckoutModule } from './checkout/checkout.module';
 import { ClientesModule } from './clientes/clientes.module';
 import { EnderecosModule } from './enderecos/enderecos.module';
+import { FiscalModule } from './fiscal/fiscal.module';
 import { ImagekitModule } from './imagekit/imagekit.module';
 import { ItensPedidoModule } from './itens-pedido/itens-pedido.module';
 import { MelhorEnvioModule } from './melhor-envio/melhor-envio.module';
@@ -129,6 +130,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     CheckoutModule,
     ClientesModule,
     EnderecosModule,
+    FiscalModule,
     MelhorEnvioModule,
     PedidosModule,
     ItensPedidoModule,

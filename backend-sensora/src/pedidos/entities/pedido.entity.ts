@@ -1,3 +1,4 @@
+import { NotaFiscalResumo } from '../../fiscal/entities/nota-fiscal.entity';
 import { StatusEnvio } from '../enums/status-envio.enum';
 import { StatusPedido } from '../enums/status-pedido.enum';
 
@@ -28,4 +29,14 @@ export class Pedido {
   // no schema); `enviadoEm` só é preenchido quando `statusEnvio === ENVIADO`.
   statusEnvio: StatusEnvio;
   enviadoEm?: Date;
+
+  // Infraestrutura Fiscal (preparação arquitetural) — só populado por
+  // PedidosService.findOne (a única query que faz `include: { notaFiscal:
+  // true }` hoje, ver comentário lá). `undefined` nos demais métodos deste
+  // service (cancelar/solicitarReembolso/marcarComoEnviado/update) não
+  // significa "sem nota fiscal", só que aquela chamada específica não
+  // carregou a relação — `null` é o valor real de "pedido sem nota fiscal
+  // ainda" (o único caso possível hoje, já que nenhum código cria
+  // NotaFiscal automaticamente nesta etapa).
+  notaFiscal?: NotaFiscalResumo | null;
 }
