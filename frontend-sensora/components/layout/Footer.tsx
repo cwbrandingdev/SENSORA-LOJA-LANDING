@@ -1,4 +1,5 @@
 import Link from "next/link";
+import CookiePreferencesTrigger from "@/components/layout/CookiePreferencesTrigger";
 import Logo from "@/components/ui/Logo";
 import {
   FOOTER_CONTENT,
@@ -91,6 +92,9 @@ export default function Footer() {
                   className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-brand-orange transition-transform duration-300 ease-out group-hover:scale-x-100 motion-reduce:transition-none"
                 />
               </Link>
+            </li>
+            <li>
+              <CookiePreferencesTrigger />
             </li>
             <li>{FOOTER_CONTENT.contact.email}</li>
             <li>{FOOTER_CONTENT.contact.phone}</li>

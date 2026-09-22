@@ -10,9 +10,6 @@ export const CART_STORAGE_KEY = "sensora_carrinho";
 // (get/set/removeCheckoutPendente) e app/(site)/checkout/sucesso/page.tsx.
 export const CHECKOUT_PENDENTE_KEY = "sensora_checkout_pendente";
 
-// Aviso de cookies/armazenamento local — chave PRÓPRIA, deliberadamente
-// separada de TOKEN_KEY: guarda só a decisão de "ciente do aviso" (ver
-// lib/cookieConsent.ts), nunca a sessão/autenticação em si. Nunca reutilizar
-// TOKEN_KEY para isso (limpar a sessão no logout não deve fazer o aviso
-// reaparecer, e vice-versa).
+// Aviso de cookies — chave PRÓPRIA (lib/cookieConsent.ts): guarda a decisão
+// LGPD (essencial + opcionais analytics/marketing). Nunca reutilizar TOKEN_KEY.
 export const COOKIE_CONSENT_KEY = "sensora_cookie_consent";

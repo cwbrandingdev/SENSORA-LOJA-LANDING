@@ -41,9 +41,37 @@ const IMAGEKIT_DELIVERY_ORIGIN = "https://ik.imagekit.io";
 // a rede/CORS do ViaCEP funcionando normalmente.
 const VIACEP_ORIGIN = "https://viacep.com.br";
 
-const connectSrc = ["'self'", origemApi, IMAGEKIT_UPLOAD_ORIGIN, VIACEP_ORIGIN]
+// Google Analytics 4 — só carrega no cliente após consentimento; a CSP precisa
+// permitir os hosts caso NEXT_PUBLIC_GA_MEASUREMENT_ID esteja definido no build.
+const GA_SCRIPT_ORIGINS = "https://www.googletagmanager.com";
+const GA_CONNECT_ORIGINS = [
+  "https://www.googletagmanager.com",
+  "https://www.google-analytics.com",
+  "https://region1.google-analytics.com",
+  "https://region1.analytics.google.com",
+  "https://analytics.google.com",
+  "https://stats.g.doubleclick.net",
+];
+const gaEnabled = Boolean(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID);
+
+const connectSrcParts = [
+  "'self'",
+  origemApi,
+  IMAGEKIT_UPLOAD_ORIGIN,
+  VIACEP_ORIGIN,
+  ...(gaEnabled ? GA_CONNECT_ORIGINS : []),
+];
+const connectSrc = connectSrcParts
   .filter((origem): origem is string => Boolean(origem))
   .join(" ");
+
+const scriptSrcParts = [
+  "'self'",
+  "'unsafe-inline'",
+  ...(process.env.NODE_ENV !== "production" ? ["'unsafe-eval'"] : []),
+  ...(gaEnabled ? [GA_SCRIPT_ORIGINS] : []),
+];
+const scriptSrc = `script-src ${scriptSrcParts.join(" ")}`;
 
 // script-src/style-src precisam de 'unsafe-inline':
 // - script-src: o App Router do Next.js (RSC streaming) injeta, no HTML de
@@ -65,11 +93,15 @@ const connectSrc = ["'self'", origemApi, IMAGEKIT_UPLOAD_ORIGIN, VIACEP_ORIGIN]
 // produção (`next build`/`next start`, testado via `npx next build` +
 // `next start`) nunca chama eval() — mantido de fora do bundle de produção
 // para não abrigar essa exceção onde ela não é necessária.
+const gaImgOrigins = gaEnabled
+  ? " https://www.google-analytics.com https://www.googletagmanager.com"
+  : "";
+
 const CSP = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== "production" ? " 'unsafe-eval'" : ""}`,
+  scriptSrc,
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: ${IMAGEKIT_DELIVERY_ORIGIN}`,
+  `img-src 'self' data: blob: ${IMAGEKIT_DELIVERY_ORIGIN}${gaImgOrigins}`,
   "font-src 'self'",
   `connect-src ${connectSrc}`,
   "object-src 'none'",

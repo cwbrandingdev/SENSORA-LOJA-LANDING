@@ -87,11 +87,11 @@ export default function PoliticaDeCookiesPage() {
       <div className="mx-auto flex max-w-3xl flex-col gap-10 px-6 lg:px-10">
         <Secao title="Resumo">
           <p>
-            Hoje a Sensora usa <strong>só tecnologias essenciais</strong>,
-            necessárias para o site funcionar: manter você logado, lembrar
-            os itens do seu carrinho e confirmar o retorno do pagamento
-            depois do checkout. Não usamos cookies de analytics, marketing,
-            publicidade ou rastreamento próprios.
+            Hoje a Sensora usa tecnologias <strong>essenciais</strong> para
+            login, carrinho e checkout. Cookies de <strong>medição e
+            marketing</strong> são opcionais e dependem do seu consentimento,
+            gerenciado pelo aviso na primeira visita e pelo link{" "}
+            <strong>Preferências de cookies</strong> no rodapé.
           </p>
         </Secao>
 
@@ -126,20 +126,47 @@ export default function PoliticaDeCookiesPage() {
             />
             <ChaveItem
               chave={COOKIE_CONSENT_KEY}
-              tipo="localStorage · Preferência deste aviso"
-              finalidade="Lembra que você já viu e fechou este aviso de cookies, para ele não aparecer de novo a cada visita."
+              tipo="localStorage · Preferência de consentimento"
+              finalidade="Registra sua escolha sobre cookies opcionais (analytics/marketing), a data da decisão e evita reexibir o aviso a cada visita. Base legal: consentimento (LGPD, art. 7º, I) para opcionais; execução do contrato/interesse legítimo para essenciais."
             />
           </div>
         </Secao>
 
+        <Secao title="Base legal (LGPD)">
+          <p>
+            Cookies <strong>essenciais</strong> são necessários para o
+            funcionamento da loja (login, carrinho, pagamento) e seguem as
+            bases legais de execução de contrato e legítimo interesse, sem
+            exigir consentimento — mas você sempre será informado aqui e no
+            aviso do site.
+          </p>
+          <p>
+            Cookies <strong>opcionais</strong> (analytics e marketing) só são
+            ativados depois de um consentimento livre, informado e
+            inequívoco. Você pode recusá-los sem perder acesso à loja, alterar
+            a escolha pelo link <strong>Preferências de cookies</strong> no
+            rodapé ou revogar o consentimento a qualquer momento pelas
+            configurações do navegador.
+          </p>
+        </Secao>
+
         <Secao title="Cookies de analytics e marketing">
           <p>
-            No momento, a Sensora <strong>não usa</strong> cookies ou
-            scripts de analytics, marketing, publicidade ou pixels de
-            rastreamento (como Google Analytics ou Meta Pixel) neste site.
-            Se isso mudar no futuro, esta política será atualizada antes
-            de qualquer cookie opcional entrar em uso, com a opção de você
-            aceitar ou recusar.
+            <strong>Analytics:</strong> se configurarmos uma ferramenta como
+            Google Analytics (variável{" "}
+            <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[12px]">
+              NEXT_PUBLIC_GA_MEASUREMENT_ID
+            </code>
+            ), ela só é carregada após você aceitar a categoria Analytics no
+            aviso de cookies. Mede visitas e desempenho de forma agregada;
+            pedimos anonimização de IP quando suportado pelo provedor.
+          </p>
+          <p>
+            <strong>Marketing:</strong> hoje não utilizamos pixels de
+            remarketing neste site. A categoria existe no painel de
+            preferências para que, se passarmos a usar essas ferramentas, você
+            já possa consentir ou recusar de forma granular — sempre antes de
+            qualquer script opcional ser executado.
           </p>
         </Secao>
 
@@ -158,12 +185,11 @@ export default function PoliticaDeCookiesPage() {
 
         <Secao title="Como gerenciar">
           <p>
-            Você pode apagar cookies e dados de sites a qualquer momento
-            pelas configurações do seu navegador. Como os itens acima são
-            essenciais para o funcionamento do site, apagá-los vai
-            encerrar sua sessão e/ou esvaziar seu carrinho — o site
-            continua funcionando normalmente depois, só pede para você
-            entrar novamente e refazer a seleção de produtos.
+            Use <strong>Preferências de cookies</strong> no rodapé para abrir o
+            painel e aceitar, recusar ou alterar categorias opcionais. Você
+            também pode apagar cookies e dados de sites pelas configurações do
+            navegador — isso encerra sua sessão e/ou esvazia o carrinho quando
+            envolve dados essenciais.
           </p>
         </Secao>
       </div>
