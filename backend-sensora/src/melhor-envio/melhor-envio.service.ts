@@ -69,6 +69,7 @@ const MARGEM_EXPIRACAO_MS = 60_000;
 export class MelhorEnvioService {
   private readonly logger = new Logger(MelhorEnvioService.name);
   private readonly baseUrl: string;
+  private readonly ambiente: 'sandbox' | 'production';
   private readonly clientId?: string;
   private readonly clientSecret?: string;
   private readonly redirectUri?: string;
@@ -90,12 +91,17 @@ export class MelhorEnvioService {
     private readonly prisma: PrismaService,
     private readonly tokenCrypto: MelhorEnvioTokenCryptoService,
   ) {
-    const ambiente =
-      this.configService.get<string>('MELHOR_ENVIO_ENV') ?? 'sandbox';
-    // Nunca hardcoded fora deste ponto único — todo o resto do serviço só
-    // usa `this.baseUrl`.
+    // Central de Integrações (Admin) — guardado como campo (antes só uma
+    // variável local do construtor) para ser exposto por `ambiente`
+    // abaixo, sem duplicar a leitura de MELHOR_ENVIO_ENV. Nunca hardcoded
+    // fora deste ponto único — todo o resto do serviço só usa
+    // `this.baseUrl`.
+    this.ambiente =
+      this.configService.get<string>('MELHOR_ENVIO_ENV') === 'production'
+        ? 'production'
+        : 'sandbox';
     this.baseUrl =
-      ambiente === 'production'
+      this.ambiente === 'production'
         ? 'https://melhorenvio.com.br'
         : 'https://sandbox.melhorenvio.com.br';
     this.clientId = this.configService.get<string>('MELHOR_ENVIO_CLIENT_ID');
@@ -137,6 +143,104 @@ export class MelhorEnvioService {
 
   get pacotePadraoConfigurado(): MelhorEnvioPacote {
     return this.pacotePadrao;
+  }
+
+  // Central de Integrações (Admin) — credenciais OAuth2 presentes neste
+  // ambiente. Distinto de `estaConectado()`: aqui só confirma que
+  // CLIENT_ID/CLIENT_SECRET/REDIRECT_URI existem (o mesmo que
+  // `garantirCredenciaisConfiguradas()` valida antes de iniciar o fluxo),
+  // nunca se a loja já concluiu a autorização de verdade.
+  get configured(): boolean {
+    return Boolean(this.clientId && this.clientSecret && this.redirectUri);
+  }
+
+  // `ambiente` não é secreto (só diz sandbox vs. produção, mesmo raciocínio
+  // de AsaasService.gatewayAtivo) — seguro de expor na tela de status.
+  get ambienteConfigurado(): 'sandbox' | 'production' {
+    return this.ambiente;
+  }
+
+  // Central de Integrações (Admin) — status completo para a tela de
+  // Integrações: `configured` (credenciais presentes) e `conectado` (token
+  // salvo — mesma condição de estaConectado(), mas resolvida numa única
+  // query aqui para também devolver `expiresAt` sem uma segunda ida ao
+  // banco) são conceitos DIFERENTES — configurado sem nunca ter conectado é
+  // um estado real e comum (credenciais cadastradas, ADMIN ainda não clicou
+  // em "Conectar"). `expiresAt` é a validade do access token atual, nunca o
+  // token em si — `null` quando não conectado.
+  async obterStatusConexao(): Promise<{
+    configured: boolean;
+    conectado: boolean;
+    ambiente: 'sandbox' | 'production';
+    expiresAt: string | null;
+  }> {
+    const token = await this.prisma.melhorEnvioToken.findUnique({
+      where: { id: 1 },
+    });
+    return {
+      configured: this.configured,
+      conectado: token !== null,
+      ambiente: this.ambiente,
+      expiresAt: token ? token.expiresAt.toISOString() : null,
+    };
+  }
+
+  // Central de Integrações (Admin) — verificação real sob demanda (botão
+  // "Verificar agora"), nunca automática. GET /api/v2/me é a leitura
+  // autenticada mais barata da API do Melhor Envio (confirma que o access
+  // token armazenado ainda autentica de verdade, distinto de `conectado`
+  // acima, que só prova que existe uma linha salva no banco) — nunca cota
+  // frete nem gera nenhum efeito colateral. Reaproveita
+  // garantirAccessToken() (mesma renovação automática já usada por
+  // cotar()), nenhuma lógica de token duplicada. Nunca lança: qualquer
+  // falha (não conectado, rede, recusa do Melhor Envio) vira
+  // `{ operational: false, mensagem }` com a mesma mensagem segura já usada
+  // pelas exceções deste serviço — nunca client_secret/token/corpo cru da
+  // resposta do Melhor Envio.
+  async verificarOperacional(): Promise<{
+    operational: boolean;
+    mensagem?: string;
+  }> {
+    try {
+      const accessToken = await this.garantirAccessToken();
+
+      let response: Response;
+      try {
+        response = await fetch(`${this.baseUrl}/api/v2/me`, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+            ...(this.userAgent ? { 'User-Agent': this.userAgent } : {}),
+          },
+        });
+      } catch {
+        return {
+          operational: false,
+          mensagem: 'Não foi possível se comunicar com o Melhor Envio.',
+        };
+      }
+
+      if (!response.ok) {
+        // Mesmo padrão de log de executarCotacao: status/statusText no log
+        // do servidor, nunca no que volta para o chamador.
+        this.logger.error(
+          `Melhor Envio recusou GET /api/v2/me -> ${response.status} ${response.statusText}`,
+        );
+        return {
+          operational: false,
+          mensagem: 'O Melhor Envio recusou a verificação da conexão.',
+        };
+      }
+
+      return { operational: true };
+    } catch (erro) {
+      const mensagem =
+        erro instanceof HttpException
+          ? this.extrairMensagem(erro)
+          : 'Não foi possível verificar a integração com o Melhor Envio.';
+      return { operational: false, mensagem };
+    }
   }
 
   // ---- OAuth2 (Parte 2) ---------------------------------------------------

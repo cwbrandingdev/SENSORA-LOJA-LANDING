@@ -4,7 +4,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { ADMIN_ONLY_ROLES, STAFF_ROLES } from '../common/constants/roles.constants';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { ImagekitAuthParams } from './entities/imagekit-auth.entity';
-import { ImagekitService } from './imagekit.service';
+import { ImagekitService, ImagekitVerificacaoOperacional } from './imagekit.service';
 
 // Etapa 7: a checagem manual de perfil que existia aqui foi substituída pelo
 // RolesGuard reutilizável (mesmo mecanismo agora usado em /produtos,
@@ -31,7 +31,22 @@ export class ImagekitController {
   // igual à página /admin/integracoes.
   @Get('status')
   @Roles(...ADMIN_ONLY_ROLES)
-  status(): { configured: boolean } {
-    return { configured: this.imagekitService.isConfigured() };
+  status(): { configured: boolean; urlEndpoint?: string } {
+    return {
+      configured: this.imagekitService.isConfigured(),
+      urlEndpoint: this.imagekitService.urlEndpointConfigurado,
+    };
+  }
+
+  // Verificação real sob demanda (botão "Verificar agora" na Central de
+  // Integrações) — GET, nunca POST: é uma leitura sem efeito colateral
+  // (ver ImagekitService.verificarOperacional), disparada só quando o
+  // ADMIN clica, nunca automaticamente. ADMIN_ONLY_ROLES (sobrescreve o
+  // STAFF_ROLES da classe, mesmo padrão de `status` acima) — upload de
+  // imagem de produto (`auth`) continua intocado.
+  @Get('verificar')
+  @Roles(...ADMIN_ONLY_ROLES)
+  verificar(): Promise<ImagekitVerificacaoOperacional> {
+    return this.imagekitService.verificarOperacional();
   }
 }

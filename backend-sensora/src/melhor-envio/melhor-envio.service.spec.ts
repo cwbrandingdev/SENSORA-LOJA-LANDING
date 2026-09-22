@@ -584,3 +584,146 @@ describe('MelhorEnvioService — cotar (Etapa 6.5, Parte 3)', () => {
     expect(JSON.stringify(resultado)).not.toContain('segredo-nao-pode-vazar');
   });
 });
+
+// Central de Integrações (Admin) — configured/ambienteConfigurado/
+// obterStatusConexao/verificarOperacional. Mesmo padrão de mock de
+// fetch/prisma já usado nos blocos acima; verificarOperacional reaproveita
+// garantirAccessToken (testado à exaustão em "cotar" acima), então aqui só
+// se prova que GET /api/v2/me é chamado com o token certo e que qualquer
+// falha vira `{ operational: false, mensagem }` seguro, nunca uma exceção.
+describe('MelhorEnvioService — Central de Integrações (Admin)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('configured reflete a presença de CLIENT_ID/CLIENT_SECRET/REDIRECT_URI', async () => {
+    const { service } = await criarService();
+    expect(service.configured).toBe(true);
+
+    const { service: semCredenciais } = await criarService({
+      MELHOR_ENVIO_ENV: 'sandbox',
+    });
+    expect(semCredenciais.configured).toBe(false);
+  });
+
+  it('ambienteConfigurado reflete MELHOR_ENVIO_ENV (default sandbox)', async () => {
+    const { service } = await criarService();
+    expect(service.ambienteConfigurado).toBe('sandbox');
+
+    const { service: producao } = await criarService({
+      ...CONFIG_VALORES,
+      MELHOR_ENVIO_ENV: 'production',
+    });
+    expect(producao.ambienteConfigurado).toBe('production');
+  });
+
+  describe('obterStatusConexao', () => {
+    it('não conectado: conectado=false, expiresAt=null', async () => {
+      const { service, prisma } = await criarService();
+      prisma.melhorEnvioToken.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.obterStatusConexao()).resolves.toEqual({
+        configured: true,
+        conectado: false,
+        ambiente: 'sandbox',
+        expiresAt: null,
+      });
+    });
+
+    it('conectado: conectado=true, expiresAt reflete o token salvo — nunca o valor do token', async () => {
+      const { service, prisma, tokenCrypto } = await criarService();
+      const expiresAt = new Date('2026-12-31T23:59:59.000Z');
+      prisma.melhorEnvioToken.findUnique.mockResolvedValueOnce({
+        accessToken: tokenCrypto.encrypt('access-nao-deve-aparecer'),
+        refreshToken: tokenCrypto.encrypt('refresh-nao-deve-aparecer'),
+        expiresAt,
+      });
+
+      const resultado = await service.obterStatusConexao();
+
+      expect(resultado).toEqual({
+        configured: true,
+        conectado: true,
+        ambiente: 'sandbox',
+        expiresAt: expiresAt.toISOString(),
+      });
+      expect(JSON.stringify(resultado)).not.toContain('nao-deve-aparecer');
+    });
+  });
+
+  describe('verificarOperacional', () => {
+    it('não conectado: operational=false com a mesma mensagem de MelhorEnvioNaoConectadoError, nunca chama fetch', async () => {
+      const { service, prisma } = await criarService();
+      prisma.melhorEnvioToken.findUnique.mockResolvedValueOnce(null);
+      const fetchMock = jest.fn();
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      await expect(service.verificarOperacional()).resolves.toEqual({
+        operational: false,
+        mensagem: 'A loja ainda não está conectada ao Melhor Envio.',
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('conectado, token válido: GET /api/v2/me com o access token certo -> operational=true', async () => {
+      const { service, prisma, tokenCrypto } = await criarService();
+      prisma.melhorEnvioToken.findUnique.mockResolvedValue({
+        accessToken: tokenCrypto.encrypt('access-valido'),
+        refreshToken: tokenCrypto.encrypt('refresh-valido'),
+        expiresAt: new Date(Date.now() + 60 * 60_000),
+      });
+      const fetchMock = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+      } as unknown as Response);
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      await expect(service.verificarOperacional()).resolves.toEqual({
+        operational: true,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('https://sandbox.melhorenvio.com.br/api/v2/me');
+      expect(init.method).toBe('GET');
+      expect((init.headers as Record<string, string>).Authorization).toBe(
+        'Bearer access-valido',
+      );
+    });
+
+    it('Melhor Envio recusa a verificação (não-OK): operational=false com mensagem segura, nunca o corpo cru', async () => {
+      const { service, prisma, tokenCrypto } = await criarService();
+      prisma.melhorEnvioToken.findUnique.mockResolvedValue({
+        accessToken: tokenCrypto.encrypt('access-valido'),
+        refreshToken: tokenCrypto.encrypt('refresh-valido'),
+        expiresAt: new Date(Date.now() + 60 * 60_000),
+      });
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+      } as unknown as Response) as unknown as typeof fetch;
+
+      await expect(service.verificarOperacional()).resolves.toEqual({
+        operational: false,
+        mensagem: 'O Melhor Envio recusou a verificação da conexão.',
+      });
+    });
+
+    it('falha de rede: operational=false, nunca lança', async () => {
+      const { service, prisma, tokenCrypto } = await criarService();
+      prisma.melhorEnvioToken.findUnique.mockResolvedValue({
+        accessToken: tokenCrypto.encrypt('access-valido'),
+        refreshToken: tokenCrypto.encrypt('refresh-valido'),
+        expiresAt: new Date(Date.now() + 60 * 60_000),
+      });
+      global.fetch = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('ECONNREFUSED')) as unknown as typeof fetch;
+
+      await expect(service.verificarOperacional()).resolves.toEqual({
+        operational: false,
+        mensagem: 'Não foi possível se comunicar com o Melhor Envio.',
+      });
+    });
+  });
+});

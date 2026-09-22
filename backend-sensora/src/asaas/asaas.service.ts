@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   ConflictException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -89,6 +90,17 @@ export type ResolverPaymentResult =
   | { encontrado: true; payment: AsaasPayment }
   | { encontrado: false };
 
+// Central de Integrações (Admin) — resultado de uma verificação real sob
+// demanda (botão "Verificar agora"). Nunca lançado como exceção: o
+// controller sempre devolve 200 com este shape, mesmo quando `operational`
+// é false — a falha É o resultado esperado da verificação, não um erro de
+// requisição. `mensagem` é sempre texto seguro (nunca o corpo cru de erro
+// do Asaas nem a API key).
+export interface AsaasVerificacaoOperacional {
+  operational: boolean;
+  mensagem?: string;
+}
+
 // Etapa 5B.3 — erros específicos do AsaasService, para que a camada de
 // negócio futura (PedidosService) consiga distinguir os casos do item 7 do
 // pedido da etapa por `instanceof`, sem depender de parsear mensagem. Todos
@@ -159,6 +171,65 @@ export class AsaasService {
   // seguro de expor na tela de status, ao contrário de `apiKey`.
   get baseUrlConfigurado(): string | undefined {
     return this.baseUrl;
+  }
+
+  // Central de Integrações (Admin) — CHECKOUT_GATEWAY não é secreto (mesmo
+  // valor já lido por CheckoutService, ver checkout.service.ts) e não está
+  // no ConfigModule.validationSchema como obrigatório sem default (Joi já
+  // aplica 'asaas' — ver app.module.ts). Exposto aqui para o card de Asaas
+  // nunca aparecer "Configurado" de forma enganosa quando o checkout real
+  // está em modo de rollback (CHECKOUT_GATEWAY="stripe") — a credencial pode
+  // estar presente e válida sem que o gateway esteja de fato em uso.
+  get gatewayAtivo(): 'asaas' | 'stripe' {
+    return (
+      (this.configService.get<string>('CHECKOUT_GATEWAY') as
+        | 'asaas'
+        | 'stripe'
+        | undefined) ?? 'asaas'
+    );
+  }
+
+  // Central de Integrações (Admin) — verificação real sob demanda (botão
+  // "Verificar agora"), nunca automática. GET /customers?limit=1 é a
+  // leitura autenticada mais barata disponível na API do Asaas: confirma
+  // que ASAAS_API_KEY realmente autentica, sem tocar em
+  // checkout/pagamento/reembolso (reaproveita o mesmo `request()` privado
+  // usado por eles, só muda path/método — nenhuma lógica de HTTP
+  // duplicada). Nunca lança: qualquer falha (rede, recusa do Asaas,
+  // resposta inválida) vira `{ operational: false, mensagem }` com uma das
+  // mensagens fixas já produzidas por `request()` — nunca o corpo cru da
+  // resposta do Asaas nem a API key.
+  async verificarOperacional(): Promise<AsaasVerificacaoOperacional> {
+    if (!this.isConfigured()) {
+      return {
+        operational: false,
+        mensagem: 'Asaas não está configurado neste ambiente.',
+      };
+    }
+
+    try {
+      await this.request('GET', '/customers?limit=1');
+      return { operational: true };
+    } catch (erro) {
+      return {
+        operational: false,
+        mensagem: this.mensagemOperacionalSegura(erro),
+      };
+    }
+  }
+
+  private mensagemOperacionalSegura(erro: unknown): string {
+    if (erro instanceof HttpException) {
+      const resposta = erro.getResponse();
+      const mensagem =
+        typeof resposta === 'string'
+          ? resposta
+          : (resposta as { message?: string }).message;
+      if (typeof mensagem === 'string' && mensagem.trim().length > 0) {
+        return mensagem;
+      }
+    }
+    return 'Não foi possível verificar a integração com o Asaas.';
   }
 
   async criarCheckout(payload: CriarCheckoutPayload): Promise<AsaasCheckout> {

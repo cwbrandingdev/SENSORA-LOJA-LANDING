@@ -1,7 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
-import { STAFF_ROLES } from '../common/constants/roles.constants';
+import { ADMIN_ONLY_ROLES, STAFF_ROLES } from '../common/constants/roles.constants';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { MelhorEnvioService } from './melhor-envio.service';
 
@@ -13,11 +13,35 @@ import { MelhorEnvioService } from './melhor-envio.service';
 export class MelhorEnvioController {
   constructor(private readonly melhorEnvioService: MelhorEnvioService) {}
 
+  // Central de Integrações (Admin) — status agora expõe `configured`
+  // (credenciais presentes) e `conectado` (token salvo) como conceitos
+  // separados, além de `ambiente`/`expiresAt` (nenhum dos dois é secreto —
+  // ver MelhorEnvioService.obterStatusConexao). ADMIN_ONLY_ROLES (não mais
+  // STAFF_ROLES): a página /admin/integracoes é ADMIN-only — este endpoint
+  // agora segue o mesmo padrão de AsaasController/MailController/
+  // ImagekitController.status(). `conectar`/`callback` abaixo continuam
+  // STAFF_ROLES, intocados — só a leitura de status muda de escopo.
   @Get('status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(...STAFF_ROLES)
-  async status(): Promise<{ conectado: boolean }> {
-    return { conectado: await this.melhorEnvioService.estaConectado() };
+  @Roles(...ADMIN_ONLY_ROLES)
+  async status(): Promise<{
+    configured: boolean;
+    conectado: boolean;
+    ambiente: 'sandbox' | 'production';
+    expiresAt: string | null;
+  }> {
+    return this.melhorEnvioService.obterStatusConexao();
+  }
+
+  // Verificação real sob demanda (botão "Verificar agora" na Central de
+  // Integrações) — GET, nunca POST: é uma leitura sem efeito colateral
+  // (ver MelhorEnvioService.verificarOperacional), disparada só quando o
+  // ADMIN clica, nunca automaticamente.
+  @Get('verificar')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...ADMIN_ONLY_ROLES)
+  verificar(): Promise<{ operational: boolean; mensagem?: string }> {
+    return this.melhorEnvioService.verificarOperacional();
   }
 
   // Devolve a URL de autorização do Melhor Envio para o admin abrir

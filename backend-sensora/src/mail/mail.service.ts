@@ -30,6 +30,16 @@ export class MailService {
     return Boolean(this.apiKey && this.from);
   }
 
+  // Central de Integrações (Admin) — `from` (EMAIL_FROM) não é secreto: é o
+  // endereço que já aparece para qualquer destinatário de um e-mail da
+  // Sensora, diferente de RESEND_API_KEY (nunca exposta). Resend já foi
+  // validado em produção com envio real — esta etapa não adiciona
+  // verificação ao vivo (não dispara e-mail nenhum), só mais contexto sobre
+  // a configuração existente.
+  get remetenteConfigurado(): string | undefined {
+    return this.from;
+  }
+
   // Nunca lança: uma falha de e-mail (provedor indisponível, timeout,
   // credencial ausente/errada) não deve derrubar o fluxo que chamou este
   // método — quem chama já deve ter concluído sua operação principal antes

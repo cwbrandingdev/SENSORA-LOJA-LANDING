@@ -56,6 +56,8 @@ async function bootstrap() {
   const DEFAULT_CORS_ORIGINS = [
     'http://localhost:3001',
     'http://localhost:3002',
+    'https://sensorahome.com.br',
+    'https://sensora-loja-landing.vercel.app',
   ];
   const corsOriginEnv = configService.get<string>('CORS_ORIGIN');
   const corsOriginsFromEnv = corsOriginEnv

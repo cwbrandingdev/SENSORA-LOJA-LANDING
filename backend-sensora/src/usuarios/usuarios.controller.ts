@@ -23,6 +23,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { AtualizarMeusDadosDto } from './dto/atualizar-meus-dados.dto';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
+import { ClienteDetalhado } from './entities/cliente-detalhado.entity';
 import { UsuarioPublico } from './entities/usuario.entity';
 import { UsuariosService } from './usuarios.service';
 
@@ -65,6 +66,20 @@ export class UsuariosController {
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number): Promise<UsuarioPublico> {
     return this.usuariosService.findOne(id);
+  }
+
+  // Fase B (Admin/Clientes reais) — detalhe administrativo de um cliente
+  // (Usuario com perfil CLIENTE), usado por /workspace-x/clientes/[id] no
+  // frontend. Herda @Roles(...ADMIN_ONLY_ROLES) da classe — nenhum
+  // override, mesmo padrão de autorização de findOne/create/update/remove
+  // acima. `:id/detalhes` não colide com `:id` (segmento extra, Nest
+  // distingue pela quantidade de segmentos do path, não pela ordem de
+  // declaração).
+  @Get(':id/detalhes')
+  buscarDetalheCliente(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ClienteDetalhado> {
+    return this.usuariosService.buscarDetalheCliente(id);
   }
 
   @Post()

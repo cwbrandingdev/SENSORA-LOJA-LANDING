@@ -65,7 +65,7 @@ async function mockDashboardApisVazias(page: Page) {
 async function mockTodosOsStatus(
   page: Page,
   opts?: {
-    asaas?: { configured: boolean; baseUrl?: string };
+    asaas?: { configured: boolean; baseUrl?: string; gatewayAtivo?: "asaas" | "stripe" };
     melhorEnvio?: boolean;
     resend?: boolean;
     imagekit?: boolean;
@@ -73,11 +73,28 @@ async function mockTodosOsStatus(
 ) {
   await page.route("**/admin/asaas/status", async (route) => {
     await route.fulfill({
-      json: opts?.asaas ?? { configured: true, baseUrl: "https://api.asaas.com/v3" },
+      json: opts?.asaas ?? {
+        configured: true,
+        baseUrl: "https://api.asaas.com/v3",
+        gatewayAtivo: "asaas",
+      },
     });
   });
   await page.route("**/admin/melhor-envio/status", async (route) => {
-    await route.fulfill({ json: { conectado: opts?.melhorEnvio ?? true } });
+    // `configured` (credenciais presentes) fica sempre true aqui — esta
+    // suíte testa a distinção "configurado"/"não configurado" de forma
+    // genérica pelos outros 3 cards; o equivalente do Melhor Envio para
+    // "não configurado" é "não conectado" (`melhorEnvio: false`), coberto
+    // em detalhe por e2e/admin-melhor-envio.spec.ts.
+    const conectado = opts?.melhorEnvio ?? true;
+    await route.fulfill({
+      json: {
+        configured: true,
+        conectado,
+        ambiente: "sandbox",
+        expiresAt: conectado ? new Date(Date.now() + 3600_000).toISOString() : null,
+      },
+    });
   });
   await page.route("**/admin/mail/status", async (route) => {
     await route.fulfill({ json: { configured: opts?.resend ?? true } });

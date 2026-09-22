@@ -305,4 +305,83 @@ describe('AsaasService', () => {
       );
     });
   });
+
+  // Central de Integrações (Admin) — verificarOperacional nunca lança
+  // (sempre resolve para { operational, mensagem? }, mesmo em falha), e
+  // gatewayAtivo só espelha CHECKOUT_GATEWAY (nunca decide qual gateway
+  // usar de verdade — isso continua em CheckoutService).
+  describe('verificarOperacional (Central de Integrações)', () => {
+    it('não configurado: operational=false, sem chamar o Asaas', async () => {
+      const semConfig = new AsaasService({
+        get: () => undefined,
+      } as unknown as ConfigService);
+
+      const resultado = await semConfig.verificarOperacional();
+
+      expect(resultado).toEqual({
+        operational: false,
+        mensagem: 'Asaas não está configurado neste ambiente.',
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('Asaas responde OK: operational=true, GET /customers?limit=1 (leitura, nunca escreve nada)', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ data: [] }),
+      });
+
+      const resultado = await service.verificarOperacional();
+
+      expect(resultado).toEqual({ operational: true });
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe(`${BASE_URL}/customers?limit=1`);
+      expect(init.method).toBe('GET');
+    });
+
+    it('Asaas recusa a requisição: operational=false com mensagem segura, nunca o corpo cru do erro', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        text: () => Promise.resolve('{"errors":[{"description":"API key inválida: asaas_xyz"}]}'),
+      });
+
+      const resultado = await service.verificarOperacional();
+
+      expect(resultado.operational).toBe(false);
+      expect(resultado.mensagem).toBe('O Asaas recusou a requisição');
+      expect(resultado.mensagem).not.toContain('asaas_xyz');
+    });
+
+    it('falha de rede: operational=false, nunca lança', async () => {
+      fetchMock.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+
+      await expect(service.verificarOperacional()).resolves.toEqual({
+        operational: false,
+        mensagem: 'Não foi possível se comunicar com o Asaas',
+      });
+    });
+  });
+
+  describe('gatewayAtivo', () => {
+    it('default "asaas" quando CHECKOUT_GATEWAY não está definida', () => {
+      const semGateway = new AsaasService({
+        get: (key: string) =>
+          ({ ASAAS_API_KEY: API_KEY, ASAAS_BASE_URL: BASE_URL })[key],
+      } as unknown as ConfigService);
+
+      expect(semGateway.gatewayAtivo).toBe('asaas');
+    });
+
+    it('reflete CHECKOUT_GATEWAY="stripe" (modo de rollback)', () => {
+      const modoStripe = new AsaasService({
+        get: (key: string) =>
+          ({ CHECKOUT_GATEWAY: 'stripe' })[key],
+      } as unknown as ConfigService);
+
+      expect(modoStripe.gatewayAtivo).toBe('stripe');
+    });
+  });
 });

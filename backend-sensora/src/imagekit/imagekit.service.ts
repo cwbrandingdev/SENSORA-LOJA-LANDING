@@ -3,6 +3,16 @@ import { ConfigService } from '@nestjs/config';
 import ImageKit from 'imagekit';
 import { ImagekitAuthParams } from './entities/imagekit-auth.entity';
 
+// Central de Integrações (Admin) — resultado de uma verificação real sob
+// demanda (botão "Verificar agora"). Nunca lançado como exceção: o
+// controller sempre devolve 200 com este shape, mesmo quando `operational`
+// é false. `mensagem` é sempre texto genérico (nunca o corpo de erro do SDK
+// ImageKit, que pode ecoar detalhes internos da conta).
+export interface ImagekitVerificacaoOperacional {
+  operational: boolean;
+  mensagem?: string;
+}
+
 // IMAGEKIT_PUBLIC_KEY/IMAGEKIT_PRIVATE_KEY/IMAGEKIT_URL_ENDPOINT não estão no
 // ConfigModule.validationSchema (app.module.ts) de propósito: são opcionais
 // para o boot da aplicação (assim como as demais rotas continuam de pé sem
@@ -30,6 +40,40 @@ export class ImagekitService {
 
   isConfigured(): boolean {
     return this.client !== null;
+  }
+
+  // `urlEndpoint` não é secreto — é literalmente a URL pública do CDN, já
+  // usada para montar a URL de qualquer imagem de produto em páginas
+  // públicas da loja. Seguro de expor na tela de status, ao contrário de
+  // `publicKey`/`privateKey`.
+  get urlEndpointConfigurado(): string | undefined {
+    return this.urlEndpoint;
+  }
+
+  // Central de Integrações (Admin) — verificação real sob demanda (botão
+  // "Verificar agora"), nunca automática. `listFiles({ limit: 1 })` é a
+  // leitura mais barata do SDK oficial (GET /v1/files): confirma que
+  // IMAGEKIT_PRIVATE_KEY realmente autentica contra a API, sem fazer
+  // upload nem alterar nada. Nunca lança: qualquer falha vira
+  // `{ operational: false, mensagem }` com texto genérico — o erro do SDK
+  // nunca é repassado ao chamador.
+  async verificarOperacional(): Promise<ImagekitVerificacaoOperacional> {
+    if (!this.client) {
+      return {
+        operational: false,
+        mensagem: 'ImageKit não está configurado neste ambiente.',
+      };
+    }
+
+    try {
+      await this.client.listFiles({ limit: 1 });
+      return { operational: true };
+    } catch {
+      return {
+        operational: false,
+        mensagem: 'Não foi possível verificar a integração com o ImageKit.',
+      };
+    }
   }
 
   // Gera token/expire/signature sob demanda a cada chamada (nunca persiste

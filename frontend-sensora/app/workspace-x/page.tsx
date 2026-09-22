@@ -9,22 +9,24 @@
 // página do admin cujo conteúdo (ainda que só texto estático) chegava no
 // payload de uma requisição não autenticada.
 //
-// Etapa 6.6 (Dashboard Admin, Lote 2) — os 4 cards de "Visão geral" passam a
-// consumir dados reais de GET /pedidos, GET /produtos e GET /categorias (as
-// únicas APIs autorizadas neste lote — nenhum endpoint novo). As três
-// chamadas disparam juntas via Promise.allSettled (nenhuma espera a outra
-// terminar) e cada card tem seu próprio estado de loading/erro: uma falhar
-// nunca apaga os outros que carregaram com sucesso. Faturamento/Pedidos/
-// Produtos/Categorias vazios (listas vazias, sem PAGO nenhum) são estados
-// legítimos, distintos de erro — nunca tratados como falha.
+// Vistoria do Dashboard operacional (Admin) — os 6 cards passam a consumir
+// UM ÚNICO GET /dashboard/resumo (backend/src/dashboard/), já agregado no
+// banco (count/groupBy), em vez das 3 chamadas anteriores (GET /pedidos,
+// /produtos, /categorias) somadas em memória aqui no cliente. Os 4 cards de
+// "Visão geral" continuam mostrando exatamente os mesmos números de antes —
+// só a origem do dado mudou. `resumo === null && !erro` é o único estado de
+// loading agora (uma única requisição, não 3 independentes): todo card
+// compartilha o mesmo loading/erro, o que já reflete a realidade (não há
+// mais como um card carregar e outro falhar). Faturamento/Pedidos/Produtos/
+// Categorias/Estoque/Clientes vazios (nenhum registro) são estados
+// legítimos, distintos de erro — nunca tratados como falha (ver
+// DashboardService.obterResumo, backend).
 import { useEffect, useState } from "react";
-import { Wallet, ClipboardList, Package, Tags } from "lucide-react";
+import { Wallet, ClipboardList, Package, Tags, PackageX, Users } from "lucide-react";
 import MetricCard from "@/components/admin/MetricCard";
 import { getErrorMessage } from "@/lib/errors";
-import { listarCategorias } from "@/services/categorias";
-import { listarPedidos } from "@/services/pedidos";
-import { listarProdutos } from "@/services/produtos";
-import { StatusPedido, type Categoria, type Pedido, type Produto } from "@/lib/types/loja";
+import { buscarResumoDashboard } from "@/services/dashboard";
+import { StatusPedido, type DashboardResumo } from "@/lib/types/loja";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -42,72 +44,38 @@ const STATUS_LABEL: Record<StatusPedido, string> = {
 };
 
 // Distribuição por status (card "Pedidos") — só os status com pelo menos 1
-// pedido aparecem, na mesma ordem de StatusPedido. Lista vazia é um estado
-// legítimo ("Nenhum pedido registrado"), não um erro.
-function descricaoPorStatus(pedidos: Pedido[]): string {
-  if (pedidos.length === 0) return "Nenhum pedido registrado";
+// pedido aparecem, na mesma ordem de StatusPedido. `porStatus` já vem do
+// backend com as 5 chaves sempre presentes (0 quando vazio) — nenhum pedido
+// registrado é um estado legítimo ("Nenhum pedido registrado"), não um erro.
+function descricaoPorStatus(porStatus: Record<StatusPedido, number>): string {
+  const partes = Object.values(StatusPedido)
+    .filter((status) => porStatus[status] > 0)
+    .map((status) => `${porStatus[status]} ${STATUS_LABEL[status]}`);
 
-  const contagem = new Map<StatusPedido, number>();
-  for (const pedido of pedidos) {
-    contagem.set(pedido.status, (contagem.get(pedido.status) ?? 0) + 1);
-  }
-
-  return Object.values(StatusPedido)
-    .filter((status) => (contagem.get(status) ?? 0) > 0)
-    .map((status) => `${contagem.get(status)} ${STATUS_LABEL[status]}`)
-    .join(" · ");
+  return partes.length > 0 ? partes.join(" · ") : "Nenhum pedido registrado";
 }
 
 export default function AdminDashboardPage() {
-  const [pedidos, setPedidos] = useState<Pedido[] | null>(null);
-  const [pedidosErro, setPedidosErro] = useState<string | null>(null);
-  const [produtos, setProdutos] = useState<Produto[] | null>(null);
-  const [produtosErro, setProdutosErro] = useState<string | null>(null);
-  const [categorias, setCategorias] = useState<Categoria[] | null>(null);
-  const [categoriasErro, setCategoriasErro] = useState<string | null>(null);
+  const [resumo, setResumo] = useState<DashboardResumo | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelado = false;
 
-    Promise.allSettled([listarPedidos(), listarProdutos(), listarCategorias()]).then(
-      ([resPedidos, resProdutos, resCategorias]) => {
-        if (cancelado) return;
-
-        if (resPedidos.status === "fulfilled") {
-          setPedidos(resPedidos.value);
-        } else {
-          setPedidosErro(getErrorMessage(resPedidos.reason, "Não foi possível carregar."));
-        }
-
-        if (resProdutos.status === "fulfilled") {
-          setProdutos(resProdutos.value);
-        } else {
-          setProdutosErro(getErrorMessage(resProdutos.reason, "Não foi possível carregar."));
-        }
-
-        if (resCategorias.status === "fulfilled") {
-          setCategorias(resCategorias.value);
-        } else {
-          setCategoriasErro(getErrorMessage(resCategorias.reason, "Não foi possível carregar."));
-        }
-      },
-    );
+    buscarResumoDashboard()
+      .then((dados) => {
+        if (!cancelado) setResumo(dados);
+      })
+      .catch((motivo) => {
+        if (!cancelado) setErro(getErrorMessage(motivo, "Não foi possível carregar."));
+      });
 
     return () => {
       cancelado = true;
     };
   }, []);
 
-  // Faturamento — soma de pedido.total só entre os pagos (PENDENTE/
-  // CANCELADO/REEMBOLSO_SOLICITADO/REEMBOLSADO ficam de fora de propósito,
-  // ver Etapa 6.6). `null` só enquanto pedidos ainda não chegou (loading/
-  // erro) — lista vazia (ou sem nenhum PAGO) já é `[]`, então a soma dá 0
-  // (R$ 0,00), nunca null.
-  const pedidosPagos = pedidos?.filter((pedido) => pedido.status === StatusPedido.PAGO) ?? null;
-  const faturamento = pedidosPagos
-    ? pedidosPagos.reduce((soma, pedido) => soma + pedido.total, 0)
-    : null;
-  const produtosAtivos = produtos?.filter((produto) => produto.ativo).length ?? 0;
+  const loading = resumo === null && !erro;
 
   return (
     <div className="flex flex-col gap-10">
@@ -130,33 +98,33 @@ export default function AdminDashboardPage() {
               titulo="Faturamento"
               icon={Wallet}
               destaque
-              loading={pedidos === null && !pedidosErro}
-              erro={pedidosErro ?? undefined}
-              valor={faturamento !== null ? formatPrice.format(faturamento) : undefined}
-              descricao={pedidosPagos ? `${pedidosPagos.length} pedidos pagos` : undefined}
+              loading={loading}
+              erro={erro ?? undefined}
+              valor={resumo ? formatPrice.format(resumo.faturamento) : undefined}
+              descricao={resumo ? `${resumo.pedidos.pagos} pedidos pagos` : undefined}
             />
           </div>
           <MetricCard
             titulo="Pedidos"
             icon={ClipboardList}
             iconTone="navy"
-            loading={pedidos === null && !pedidosErro}
-            erro={pedidosErro ?? undefined}
-            valor={pedidos ? String(pedidos.length) : undefined}
-            descricao={pedidos ? descricaoPorStatus(pedidos) : undefined}
+            loading={loading}
+            erro={erro ?? undefined}
+            valor={resumo ? String(resumo.pedidos.total) : undefined}
+            descricao={resumo ? descricaoPorStatus(resumo.pedidos.porStatus) : undefined}
           />
           <MetricCard
             titulo="Produtos"
             icon={Package}
             iconTone="orange-outline"
-            loading={produtos === null && !produtosErro}
-            erro={produtosErro ?? undefined}
-            valor={produtos ? String(produtos.length) : undefined}
+            loading={loading}
+            erro={erro ?? undefined}
+            valor={resumo ? String(resumo.produtos.total) : undefined}
             descricao={
-              produtos
-                ? produtos.length === 0
+              resumo
+                ? resumo.produtos.total === 0
                   ? "Nenhum produto cadastrado"
-                  : `${produtosAtivos} ativos`
+                  : `${resumo.produtos.ativos} ativos`
                 : undefined
             }
           />
@@ -164,10 +132,59 @@ export default function AdminDashboardPage() {
             titulo="Categorias"
             icon={Tags}
             iconTone="navy-outline"
-            loading={categorias === null && !categoriasErro}
-            erro={categoriasErro ?? undefined}
-            valor={categorias ? String(categorias.length) : undefined}
-            descricao={categorias?.length === 0 ? "Nenhuma categoria cadastrada" : undefined}
+            loading={loading}
+            erro={erro ?? undefined}
+            valor={resumo ? String(resumo.categorias.total) : undefined}
+            descricao={resumo?.categorias.total === 0 ? "Nenhuma categoria cadastrada" : undefined}
+          />
+        </div>
+      </section>
+
+      {/* Vistoria do Dashboard operacional (Admin) — segunda seção, separada
+          de "Visão geral" de propósito: os 4 cards originais continuam
+          exatamente como estavam (mesmo grid, mesma ordem, mesmo destaque),
+          esta é uma adição, não uma reorganização. Estoque baixo/zerado
+          (Produto.quantidade, ver LIMIAR_ESTOQUE_BAIXO no backend) e
+          Clientes reais (Usuario perfil CLIENTE — nunca o model `Cliente`
+          legado) são as duas métricas pedidas na vistoria. */}
+      <section className="flex flex-col gap-5">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
+          Operacional
+        </h3>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <MetricCard
+            titulo="Estoque baixo"
+            icon={PackageX}
+            iconTone="orange-outline"
+            loading={loading}
+            erro={erro ?? undefined}
+            valor={
+              resumo
+                ? String(resumo.produtos.estoqueBaixo + resumo.produtos.semEstoque)
+                : undefined
+            }
+            descricao={
+              resumo
+                ? resumo.produtos.semEstoque > 0
+                  ? `${resumo.produtos.semEstoque} sem estoque`
+                  : "Nenhum produto sem estoque"
+                : undefined
+            }
+          />
+          <MetricCard
+            titulo="Clientes"
+            icon={Users}
+            iconTone="navy-outline"
+            loading={loading}
+            erro={erro ?? undefined}
+            valor={resumo ? String(resumo.clientes.total) : undefined}
+            descricao={
+              resumo
+                ? resumo.clientes.total === 0
+                  ? "Nenhum cliente cadastrado"
+                  : `${resumo.clientes.ativos} ativos`
+                : undefined
+            }
           />
         </div>
       </section>

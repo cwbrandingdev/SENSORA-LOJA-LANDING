@@ -7,27 +7,37 @@ import { MailController } from './mail.controller';
 import { MailService } from './mail.service';
 
 // Central de Integrações (Admin) — mesmo raciocínio de
-// asaas.controller.spec.ts: thin wrapper sobre MailService.isConfigured()
-// (já existente e usado internamente por enviarEmail(), nunca duplicado
-// aqui), resposta restrita a `{ configured }` — nunca RESEND_API_KEY nem
-// EMAIL_FROM.
+// asaas.controller.spec.ts: thin wrapper sobre MailService.isConfigured()/
+// remetenteConfigurado (já existentes e usados internamente por
+// enviarEmail(), nunca duplicado aqui), resposta restrita a
+// `{ configured, from }` — `from` é o EMAIL_FROM (não secreto), nunca
+// RESEND_API_KEY.
 describe('MailController — status (Central de Integrações)', () => {
-  it('delega para MailService.isConfigured() e devolve só { configured }', () => {
-    const mailService = { isConfigured: jest.fn().mockReturnValue(true) };
+  it('delega para MailService.isConfigured()/remetenteConfigurado e devolve os campos seguros', () => {
+    const mailService = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      remetenteConfigurado: 'contato@sensorahome.com.br',
+    };
     const controller = new MailController(mailService as unknown as MailService);
 
     const resultado = controller.status();
 
     expect(mailService.isConfigured).toHaveBeenCalledTimes(1);
-    expect(resultado).toEqual({ configured: true });
-    expect(Object.keys(resultado)).toEqual(['configured']);
+    expect(resultado).toEqual({
+      configured: true,
+      from: 'contato@sensorahome.com.br',
+    });
+    expect(Object.keys(resultado)).toEqual(['configured', 'from']);
   });
 
-  it('não configurado: configured=false', () => {
-    const mailService = { isConfigured: jest.fn().mockReturnValue(false) };
+  it('não configurado: configured=false, from undefined', () => {
+    const mailService = {
+      isConfigured: jest.fn().mockReturnValue(false),
+      remetenteConfigurado: undefined,
+    };
     const controller = new MailController(mailService as unknown as MailService);
 
-    expect(controller.status()).toEqual({ configured: false });
+    expect(controller.status()).toEqual({ configured: false, from: undefined });
   });
 
   it('rota protegida por JwtAuthGuard + RolesGuard, restrita a ADMIN_ONLY_ROLES', () => {

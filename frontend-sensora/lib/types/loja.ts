@@ -48,6 +48,31 @@ export enum StatusEnvio {
   ENVIADO = "ENVIADO",
 }
 
+// Infraestrutura Fiscal (preparação arquitetural, backend-sensora/src/fiscal/) —
+// espelha backend/src/fiscal/enums/status-fiscal.enum.ts só para alinhar o
+// tipo `Pedido` abaixo com o que GET /pedidos/:id já devolve
+// (PedidosService.findOne inclui `notaFiscal`). Nenhuma tela usa este tipo
+// ainda — nenhuma UI fiscal foi criada nesta etapa.
+export enum StatusFiscal {
+  NAO_EMITIDA = "NAO_EMITIDA",
+  PROCESSANDO = "PROCESSANDO",
+  EMITIDA = "EMITIDA",
+  REJEITADA = "REJEITADA",
+  ERRO = "ERRO",
+  CANCELADA = "CANCELADA",
+}
+
+// Espelha backend/src/fiscal/entities/nota-fiscal.entity.ts#NotaFiscalResumo
+// — subconjunto mínimo que acompanha o Pedido no detalhe.
+export type NotaFiscalResumo = {
+  id: number;
+  status: StatusFiscal;
+  numero?: string | null;
+  serie?: string | null;
+  chaveAcesso?: string | null;
+  emitidoEm?: string | null;
+};
+
 // Resposta de GET /imagekit/auth (backend, Etapa 2) — token/expire/signature
 // gerados sob demanda a cada chamada; nunca inclui a privateKey.
 export type ImagekitAuthParams = {
@@ -220,6 +245,12 @@ export type Pedido = {
   // para envios marcados à noite no horário de Brasília.
   statusEnvio: StatusEnvio;
   enviadoEm?: string | null;
+
+  // Infraestrutura Fiscal (preparação arquitetural) — só para alinhar com o
+  // que GET /pedidos/:id já devolve (PedidosService.findOne); sempre `null`
+  // hoje, já que nenhum código cria NotaFiscal automaticamente ainda.
+  // Nenhuma tela lê este campo nesta etapa.
+  notaFiscal?: NotaFiscalResumo | null;
 };
 
 // Payload de POST /checkout/session (Task 10) — espelha exatamente
@@ -264,31 +295,61 @@ export type OpcaoFrete = {
   prazoDias: number;
 };
 
-// Etapa 6.5 (Painel administrativo) — espelham as respostas de
-// GET /admin/melhor-envio/status e GET /admin/melhor-envio/conectar
-// (backend/src/melhor-envio/melhor-envio.controller.ts). `url` é sempre a
-// página de autorização do próprio Melhor Envio — nunca contém client
-// secret/token (ver MelhorEnvioService, backend).
+// Vistoria das Integrações (Admin) — espelha GET /admin/melhor-envio/status
+// (backend/src/melhor-envio/melhor-envio.controller.ts). `configured`
+// (credenciais OAuth2 presentes) e `conectado` (token já salvo — fluxo OAuth
+// já concluído alguma vez) são conceitos DIFERENTES, ver
+// MelhorEnvioService.obterStatusConexao: configurado sem nunca ter
+// conectado é um estado real. `ambiente`/`expiresAt` não são secretos
+// (sandbox/produção e a validade do token, nunca o token em si).
 export type MelhorEnvioStatusResponse = {
+  configured: boolean;
   conectado: boolean;
+  ambiente: "sandbox" | "production";
+  expiresAt: string | null;
 };
 
 export type MelhorEnvioConectarResponse = {
   url: string;
 };
 
-// Central de Integrações (Admin) — espelham GET /admin/asaas/status,
-// GET /admin/mail/status e GET /imagekit/status (backend). `configured` é
-// só um booleano derivado (nunca a credencial em si); `baseUrl` do Asaas
-// não é secreto (é só o host da API, ex. sandbox vs. produção) — nenhuma
-// dessas respostas carrega API key/token/secret.
+// Vistoria das Integrações (Admin) — resultado de uma verificação real sob
+// demanda ("Verificar agora"), sempre read-only e disparada só quando o
+// ADMIN clica (nunca automática). `operational` reflete se a chamada de
+// leitura contra o provedor teve sucesso agora — distinto de `configured`
+// (só confirma que a credencial existe, nunca que ela funciona de verdade).
+// `mensagem` é sempre texto seguro (nunca ecoa o corpo de erro do provedor
+// nem qualquer secret) — ver AsaasService/ImagekitService/
+// MelhorEnvioService.verificarOperacional (backend).
+export type VerificacaoOperacionalResponse = {
+  operational: boolean;
+  mensagem?: string;
+};
+
+// Central de Integrações (Admin) — espelha GET /admin/asaas/status
+// (backend). `configured` é só um booleano derivado (nunca a credencial em
+// si); `baseUrl` não é secreto (é só o host da API); `gatewayAtivo` reflete
+// CHECKOUT_GATEWAY (também não secreto) — nenhum campo carrega API key.
 export type AsaasStatusResponse = {
   configured: boolean;
   baseUrl?: string;
+  gatewayAtivo: "asaas" | "stripe";
 };
 
-export type IntegracaoStatusResponse = {
+// Espelha GET /admin/mail/status (backend). `from` é o EMAIL_FROM
+// configurado — endereço que já aparece para qualquer destinatário de um
+// e-mail da Sensora, nunca secreto (RESEND_API_KEY nunca é retornada).
+export type ResendStatusResponse = {
   configured: boolean;
+  from?: string;
+};
+
+// Espelha GET /imagekit/status (backend). `urlEndpoint` é a URL pública do
+// CDN do ImageKit — já usada para montar URL de imagem de produto em
+// qualquer página pública da loja, nunca secreta.
+export type ImagekitStatusResponse = {
+  configured: boolean;
+  urlEndpoint?: string;
 };
 
 // Espelha CheckoutSessionResponse (backend/src/checkout/entities/checkout-session.entity.ts).
@@ -400,6 +461,78 @@ export type Usuario = {
   // preenchido.
   cpf: string | null;
   telefone: string | null;
+};
+
+// Fase B (Admin/Clientes reais) — espelha backend/src/usuarios/entities/
+// cliente-detalhado.entity.ts (GET /usuarios/:id/detalhes). `pedidos` é um
+// resumo (id/numero/data/status/total), não o Pedido completo — a tela de
+// detalhe do cliente só precisa do suficiente para listar e linkar para
+// /workspace-x/pedidos/[id], que já mostra tudo o mais.
+export type PedidoResumoCliente = {
+  id: number;
+  numero: string;
+  data: string;
+  status: StatusPedido;
+  total: number;
+};
+
+export type ResumoPedidosCliente = {
+  quantidadePedidos: number;
+  totalComprado: number;
+  ultimoPedidoEm: string | null;
+};
+
+export type ClienteDetalhado = {
+  id: number;
+  nome: string;
+  email: string;
+  cpf: string | null;
+  telefone: string | null;
+  ativo: boolean;
+  emailVerificado: boolean;
+  enderecos: Endereco[];
+  pedidos: PedidoResumoCliente[];
+  resumo: ResumoPedidosCliente;
+};
+
+// Vistoria do Dashboard operacional (Admin) — espelha
+// backend/src/dashboard/entities/dashboard-resumo.entity.ts (GET
+// /dashboard/resumo). Substitui o que app/workspace-x/page.tsx antes
+// calculava sozinho a partir de listarPedidos()/listarProdutos()/
+// listarCategorias() completos — o backend agora agrega (count/groupBy) e
+// devolve só os números prontos, nenhuma linha crua de Pedido/Produto sai
+// por aqui.
+export type ResumoPedidosDashboard = {
+  total: number;
+  pagos: number;
+  porStatus: Record<StatusPedido, number>;
+};
+
+export type ResumoProdutosDashboard = {
+  total: number;
+  ativos: number;
+  semEstoque: number;
+  estoqueBaixo: number;
+};
+
+export type ResumoCategoriasDashboard = {
+  total: number;
+};
+
+// Clientes reais (Usuario com perfil CLIENTE) — nunca o model `Cliente`
+// legado (ver type Cliente/services/clientes.ts, CRUD desconectado de
+// Pedido/Usuario).
+export type ResumoClientesDashboard = {
+  total: number;
+  ativos: number;
+};
+
+export type DashboardResumo = {
+  faturamento: number;
+  pedidos: ResumoPedidosDashboard;
+  produtos: ResumoProdutosDashboard;
+  categorias: ResumoCategoriasDashboard;
+  clientes: ResumoClientesDashboard;
 };
 
 // Etapa 6.4 (Confirmação de e-mail) — espelha VerifyEmailDto/

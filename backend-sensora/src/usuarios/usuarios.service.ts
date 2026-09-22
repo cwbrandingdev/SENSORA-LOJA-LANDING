@@ -12,10 +12,16 @@ import {
 } from '../../generated/prisma/client';
 import { cpfValido, normalizarCpf } from '../common/utils/cpf.util';
 import { normalizarTelefone, telefoneValido } from '../common/utils/telefone.util';
+import { EnderecosService } from '../enderecos/enderecos.service';
+import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { PrismaService } from '../prisma/prisma.service';
 import { AtualizarMeusDadosDto } from './dto/atualizar-meus-dados.dto';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
+import {
+  ClienteDetalhado,
+  PedidoResumoCliente,
+} from './entities/cliente-detalhado.entity';
 import { Usuario, UsuarioPublico } from './entities/usuario.entity';
 import { PerfilUsuario } from './enums/perfil-usuario.enum';
 
@@ -23,7 +29,10 @@ const SALT_ROUNDS = 10;
 
 @Injectable()
 export class UsuariosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly enderecosService: EnderecosService,
+  ) {}
 
   async findAll(): Promise<UsuarioPublico[]> {
     const usuarios = await this.prisma.usuario.findMany();
@@ -32,6 +41,73 @@ export class UsuariosService {
 
   async findOne(id: number): Promise<UsuarioPublico> {
     return this.paraPublico(await this.localizar(id));
+  }
+
+  // Fase B (Admin/Clientes reais) — detalhe administrativo de um cliente,
+  // construído em cima das relações Usuario -> Pedido / Usuario -> Endereco
+  // já existentes no schema (nenhuma migration necessária). Só aceita
+  // perfil CLIENTE: um id de ADMIN/VENDEDOR (ou inexistente) recebe o mesmo
+  // 404 genérico — nunca revela que o id existe mas é de outro perfil,
+  // mesmo raciocínio anti-enumeração já usado em outras partes do projeto.
+  //
+  // Duas queries só, em paralelo (Promise.all) — nunca uma por pedido:
+  // quantidade/total comprado/último pedido são derivados em memória do
+  // único array de pedidos já carregado, evitando N+1. Endereços reutilizam
+  // EnderecosService.findByUsuario() (já mapeia para o shape público, sem
+  // duplicar lógica).
+  async buscarDetalheCliente(id: number): Promise<ClienteDetalhado> {
+    const usuario = await this.localizar(id);
+    if ((usuario.perfil as PerfilUsuario) !== PerfilUsuario.CLIENTE) {
+      throw new NotFoundException(`Cliente com id ${id} não encontrado`);
+    }
+
+    const [enderecos, pedidosPrisma] = await Promise.all([
+      this.enderecosService.findByUsuario(id),
+      this.prisma.pedido.findMany({
+        where: { usuarioId: id },
+        orderBy: { data: 'desc' },
+        select: {
+          id: true,
+          numero: true,
+          data: true,
+          status: true,
+          total: true,
+        },
+      }),
+    ]);
+
+    const pedidos: PedidoResumoCliente[] = pedidosPrisma.map((pedido) => ({
+      id: pedido.id,
+      numero: pedido.numero,
+      data: pedido.data,
+      status: pedido.status as StatusPedido,
+      total: Number(pedido.total),
+    }));
+
+    // Mesmo critério já usado no card "Faturamento" do Dashboard (frontend
+    // app/workspace-x/page.tsx): só PAGO conta como comprado de verdade.
+    const totalComprado = pedidos
+      .filter((pedido) => pedido.status === StatusPedido.PAGO)
+      .reduce((soma, pedido) => soma + pedido.total, 0);
+
+    return {
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      cpf: usuario.cpf,
+      telefone: usuario.telefone,
+      ativo: usuario.ativo,
+      emailVerificado: usuario.emailVerificado,
+      enderecos,
+      pedidos,
+      resumo: {
+        quantidadePedidos: pedidos.length,
+        totalComprado,
+        // `pedidos` já vem ordenado por data desc — o primeiro é sempre o
+        // mais recente, independente do status.
+        ultimoPedidoEm: pedidos[0]?.data ?? null,
+      },
+    };
   }
 
   async buscarPorEmail(email: string): Promise<Usuario | null> {

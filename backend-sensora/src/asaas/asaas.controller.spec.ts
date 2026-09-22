@@ -9,15 +9,16 @@ import { AsaasService } from './asaas.service';
 // Central de Integrações (Admin) — prova que o endpoint de status é um thin
 // wrapper (nunca reimplementa a checagem de configuração, só chama o que
 // AsaasService já expõe) e que a resposta NUNCA carrega ASAAS_API_KEY —
-// só os dois campos seguros (`configured`, `baseUrl`, que é só o host, não
+// só os campos seguros (`configured`, `baseUrl`/`gatewayAtivo`, nenhum
 // segredo). Guards/Roles verificados por metadata (mesmo padrão de
 // PedidosController — ver pedidos.controller.spec.ts), não por request HTTP
 // real.
 describe('AsaasController — status (Central de Integrações)', () => {
-  it('delega para AsaasService.isConfigured()/baseUrlConfigurado e devolve só os dois campos seguros', () => {
+  it('delega para AsaasService.isConfigured()/baseUrlConfigurado/gatewayAtivo e devolve só os campos seguros', () => {
     const asaasService = {
       isConfigured: jest.fn().mockReturnValue(true),
       baseUrlConfigurado: 'https://api.asaas.com/v3',
+      gatewayAtivo: 'asaas',
     };
     const controller = new AsaasController(
       asaasService as unknown as AsaasService,
@@ -29,26 +30,33 @@ describe('AsaasController — status (Central de Integrações)', () => {
     expect(resultado).toEqual({
       configured: true,
       baseUrl: 'https://api.asaas.com/v3',
+      gatewayAtivo: 'asaas',
     });
-    expect(Object.keys(resultado)).toEqual(['configured', 'baseUrl']);
+    expect(Object.keys(resultado)).toEqual(['configured', 'baseUrl', 'gatewayAtivo']);
   });
 
   it('não configurado: configured=false, baseUrl undefined (nunca inventa um host)', () => {
     const asaasService = {
       isConfigured: jest.fn().mockReturnValue(false),
       baseUrlConfigurado: undefined,
+      gatewayAtivo: 'stripe',
     };
     const controller = new AsaasController(
       asaasService as unknown as AsaasService,
     );
 
-    expect(controller.status()).toEqual({ configured: false, baseUrl: undefined });
+    expect(controller.status()).toEqual({
+      configured: false,
+      baseUrl: undefined,
+      gatewayAtivo: 'stripe',
+    });
   });
 
   it('resposta nunca contém a API key, mesmo se o service vazasse um campo extra por engano', () => {
     const asaasService = {
       isConfigured: jest.fn().mockReturnValue(true),
       baseUrlConfigurado: 'https://api.asaas.com/v3',
+      gatewayAtivo: 'asaas',
       // Simula um cenário hipotético de vazamento no service — o controller
       // não deve repassar nada além do que ele monta explicitamente.
       apiKey: 'segredo-nao-deveria-aparecer',
@@ -82,5 +90,19 @@ describe('AsaasController — status (Central de Integrações)', () => {
     } as never;
 
     expect(() => guard.canActivate(context)).toThrow();
+  });
+
+  it('verificar() delega para AsaasService.verificarOperacional() sem transformar o resultado', async () => {
+    const asaasService = {
+      verificarOperacional: jest
+        .fn()
+        .mockResolvedValue({ operational: true }),
+    };
+    const controller = new AsaasController(
+      asaasService as unknown as AsaasService,
+    );
+
+    await expect(controller.verificar()).resolves.toEqual({ operational: true });
+    expect(asaasService.verificarOperacional).toHaveBeenCalledTimes(1);
   });
 });

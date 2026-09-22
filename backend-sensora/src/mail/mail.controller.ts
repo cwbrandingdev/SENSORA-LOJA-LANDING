@@ -6,10 +6,14 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { MailService } from './mail.service';
 
 // Central de Integrações (Admin) — thin wrapper sobre
-// MailService.isConfigured() (já existente, usado internamente por
-// enviarEmail() — não duplica lógica, só a expõe). Nunca retorna
-// RESEND_API_KEY nem EMAIL_FROM. ADMIN_ONLY_ROLES: mesma proteção da página
-// /admin/integracoes (ver AsaasController).
+// MailService.isConfigured()/remetenteConfigurado (já existentes, usados
+// internamente por enviarEmail() — não duplica lógica, só os expõe). `from`
+// é o EMAIL_FROM configurado — não é secreto (endereço que já aparece para
+// qualquer destinatário) — mas RESEND_API_KEY nunca é retornada. Resend já
+// foi validado em produção com envio real: esta etapa não adiciona
+// verificação ao vivo aqui (nenhum e-mail é disparado), só mais contexto
+// sobre a configuração existente. ADMIN_ONLY_ROLES: mesma proteção da
+// página /admin/integracoes (ver AsaasController).
 @Controller('admin/mail')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(...ADMIN_ONLY_ROLES)
@@ -17,7 +21,10 @@ export class MailController {
   constructor(private readonly mailService: MailService) {}
 
   @Get('status')
-  status(): { configured: boolean } {
-    return { configured: this.mailService.isConfigured() };
+  status(): { configured: boolean; from?: string } {
+    return {
+      configured: this.mailService.isConfigured(),
+      from: this.mailService.remetenteConfigurado,
+    };
   }
 }
