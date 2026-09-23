@@ -631,3 +631,216 @@ test.describe("Carrinho — isolamento por conta (Etapa Carrinho por conta)", ()
     await expect(page.getByText("Ainda não há nada por aqui")).toBeVisible();
   });
 });
+
+// Etapa (Correção — merge visitante → conta no login) — achado da
+// auditoria: a migração em resolverChaveCarrinho() (context/CartContext.tsx)
+// só rodava quando a chave da conta AINDA NÃO EXISTIA. Qualquer conta que já
+// tivesse logado antes neste navegador (chave já criada, mesmo vazia) nunca
+// herdava um item adicionado como visitante numa sessão seguinte — o item
+// ficava "preso" na chave de visitante enquanto a tela passava a ler só a
+// chave da conta, dando a impressão de ter sumido. Corrigido para mesclar
+// (somar quantidade de produtos repetidos, acrescentar os novos) sempre que
+// o carrinho de visitante tiver itens, não só na ausência da chave da conta.
+test.describe("Carrinho — merge visitante → conta no login (correção do bug: item some ao logar)", () => {
+  const SUBMIT_LOGIN = 'form:has(#login-senha) button[type="submit"]';
+
+  async function mockLogin(page: Page) {
+    await page.route("**/auth/login", async (route) => {
+      await route.fulfill({ json: { access_token: fakeToken(1) } });
+    });
+  }
+
+  // Login real (mesmo formulário de e2e/login.spec.ts) — /login é outro
+  // root layout, sem CartProvider (ver comentário no topo de
+  // context/CartContext.tsx), então o redirecionamento pós-login remonta o
+  // CartProvider e dispara resolverChaveCarrinho().
+  async function login(page: Page) {
+    await page.locator("#login-email").fill("cliente1@sensora.dev");
+    await page.locator("#login-senha").fill("senha123");
+    await page.locator(SUBMIT_LOGIN).click();
+    await expect(page).toHaveURL(/\/$/);
+  }
+
+  function itemNoCarrinho(page: Page, nome: string) {
+    return page.locator("ul.divide-y > li").filter({ hasText: nome });
+  }
+
+  // Semeia as DUAS chaves de uma vez: a da conta (simulando uma conta que já
+  // tinha usado o site antes — a chave já existe, ainda que vazia) e a de
+  // visitante (item adicionado numa sessão seguinte, deslogada) — o cenário
+  // exato do bug relatado. `page.goto("/")` primeiro (sem token ainda) só
+  // para ter um documento com `window` para o `evaluate` escrever.
+  async function seedContaEVisitante(
+    page: Page,
+    itensConta: unknown[],
+    itensVisitante: unknown[],
+  ) {
+    await page.goto("/");
+    await page.evaluate(
+      ([contaKey, guestKey, itensContaJson, itensVisitanteJson]) => {
+        window.localStorage.setItem(contaKey, itensContaJson);
+        window.localStorage.setItem(guestKey, itensVisitanteJson);
+      },
+      [
+        `${CART_STORAGE_KEY}_1`,
+        CART_STORAGE_KEY,
+        JSON.stringify(itensConta),
+        JSON.stringify(itensVisitante),
+      ] as const,
+    );
+  }
+
+  test("conta que já possui carrinho salvo (sensora_carrinho_1) e o visitante adiciona um item novo: nada se perde ao logar", async ({
+    page,
+  }) => {
+    await seedContaEVisitante(page, [ITEM_VELA], [ITEM_SPRAY]);
+    await seedSession(page, 1);
+
+    // Navegação com sessão já válida no mount — equivalente ao reload
+    // completo de página que um login real provoca (ver comentário no topo
+    // de context/CartContext.tsx).
+    await page.goto(CARRINHO_URL);
+
+    await expect(itemNoCarrinho(page, "Vela Aromática Lavanda")).toBeVisible();
+    await expect(itemNoCarrinho(page, "Spray de Ambiente Cedro")).toBeVisible();
+
+    // Chave de visitante esvaziada depois do merge — nada fica duplicado
+    // "escondido" lá para reaparecer numa migração futura.
+    const guestRaw = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      CART_STORAGE_KEY,
+    );
+    expect(JSON.parse(guestRaw ?? "[]")).toEqual([]);
+  });
+
+  test("logout, adicionar item como visitante, login de novo na MESMA conta: o item do visitante não desaparece (reprodução exata do bug relatado)", async ({
+    page,
+  }) => {
+    await mockLogin(page);
+    // Conta já tinha usado o site antes — a chave da conta já existe, com
+    // um item salvo de uma sessão anterior. É exatamente essa pré-condição
+    // (chave da conta já existente) que fazia a migração antiga
+    // (checagem "=== null") nunca rodar de novo.
+    await seedContaEVisitante(page, [ITEM_VELA], []);
+
+    // "Logout": remove só o token, preservando a chave da conta intacta —
+    // mesmo efeito de AuthContext.logout() (context/AuthContext.tsx), que
+    // só chama removeToken() e nunca toca em nenhuma chave de carrinho.
+    // Não usa o botão "Sair" do Navbar aqui de propósito: esse clique já
+    // trava neste ambiente de teste mesmo sem nenhuma mudança em
+    // CartContext.tsx (confirmado revertendo a correção e reproduzindo o
+    // mesmo timeout nos testes pré-existentes da suíte "isolamento por
+    // conta" acima) — problema alheio ao bug desta suíte, e a transição de
+    // estado (sessão encerrada, chave da conta intacta) é idêntica de
+    // qualquer forma.
+    await page.evaluate((tokenKey) => {
+      window.localStorage.removeItem(tokenKey);
+    }, TOKEN_KEY);
+
+    // Adiciona como visitante. Sem UI de "adicionar produto" nesta suíte
+    // (mesmo padrão já usado nela para a Conta B) — grava direto na chave
+    // de visitante, papel equivalente a clicar em "Adicionar ao carrinho"
+    // deslogado.
+    await page.evaluate((item) => {
+      window.localStorage.setItem("sensora_carrinho", JSON.stringify([item]));
+    }, ITEM_SPRAY);
+
+    // Login real (mesmo formulário de e2e/login.spec.ts) na MESMA conta —
+    // /login é outro root layout, sem CartProvider (ver comentário no topo
+    // de context/CartContext.tsx), então o redirecionamento pós-login
+    // remonta o CartProvider e dispara o merge.
+    await page.goto("/login");
+    await login(page);
+
+    await page.goto(CARRINHO_URL);
+    await expect(itemNoCarrinho(page, "Vela Aromática Lavanda")).toBeVisible();
+    await expect(itemNoCarrinho(page, "Spray de Ambiente Cedro")).toBeVisible();
+  });
+
+  test("mesmo produto nos dois carrinhos: quantidades são somadas (1 + 2 = 3), nunca duplicadas como duas linhas", async ({
+    page,
+  }) => {
+    const itemConta = { ...ITEM_VELA, quantidade: 1 };
+    const itemVisitante = { ...ITEM_VELA, quantidade: 2 };
+    await seedContaEVisitante(page, [itemConta], [itemVisitante]);
+    await seedSession(page, 1);
+
+    await page.goto(CARRINHO_URL);
+
+    const linhas = itemNoCarrinho(page, "Vela Aromática Lavanda");
+    await expect(linhas).toHaveCount(1);
+    await expect(linhas.locator("span.tabular-nums")).toHaveText("3");
+
+    const contaRaw = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      `${CART_STORAGE_KEY}_1`,
+    );
+    expect(JSON.parse(contaRaw ?? "[]")).toEqual([{ ...ITEM_VELA, quantidade: 3 }]);
+  });
+
+  test("produtos diferentes em cada carrinho: nenhum se perde, os dois aparecem intactos após o merge", async ({
+    page,
+  }) => {
+    await seedContaEVisitante(page, [ITEM_VELA], [ITEM_SPRAY]);
+    await seedSession(page, 1);
+
+    await page.goto(CARRINHO_URL);
+    // Espera a UI refletir o merge (auto-retry do Playwright) antes de ler
+    // o localStorage diretamente — a leitura via evaluate() abaixo é
+    // síncrona/sem retry, então precisa rodar só depois que o efeito de
+    // hidratação de CartProvider (assíncrono em relação ao load da página)
+    // já tiver commitado o estado mesclado.
+    await expect(itemNoCarrinho(page, "Vela Aromática Lavanda")).toBeVisible();
+    await expect(itemNoCarrinho(page, "Spray de Ambiente Cedro")).toBeVisible();
+
+    const contaRaw = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      `${CART_STORAGE_KEY}_1`,
+    );
+    const contaItens = JSON.parse(contaRaw ?? "[]") as {
+      produtoId: number;
+      quantidade: number;
+    }[];
+    expect(contaItens).toHaveLength(2);
+    expect(
+      contaItens.find((item) => item.produtoId === ITEM_VELA.produtoId)
+        ?.quantidade,
+    ).toBe(ITEM_VELA.quantidade);
+    expect(
+      contaItens.find((item) => item.produtoId === ITEM_SPRAY.produtoId)
+        ?.quantidade,
+    ).toBe(ITEM_SPRAY.quantidade);
+  });
+
+  test("recarregar a página depois do merge não soma de novo (idempotência)", async ({
+    page,
+  }) => {
+    const itemConta = { ...ITEM_VELA, quantidade: 1 };
+    const itemVisitante = { ...ITEM_VELA, quantidade: 2 };
+    await seedContaEVisitante(page, [itemConta], [itemVisitante]);
+    await seedSession(page, 1);
+
+    // 1º mount: dispara o merge (1 + 2 = 3, chave de visitante esvaziada).
+    // Espera a UI (auto-retry) antes do evaluate() síncrono, mesmo motivo
+    // do teste anterior — dá tempo do efeito de hidratação de CartProvider
+    // commitar o merge antes da leitura direta do localStorage.
+    await page.goto(CARRINHO_URL);
+    const linha = itemNoCarrinho(page, "Vela Aromática Lavanda");
+    await expect(linha.locator("span.tabular-nums")).toHaveText("3");
+    let contaRaw = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      `${CART_STORAGE_KEY}_1`,
+    );
+    expect(JSON.parse(contaRaw ?? "[]")).toEqual([{ ...ITEM_VELA, quantidade: 3 }]);
+
+    // 2º mount (reload): resolverChaveCarrinho() roda de novo, mas o
+    // visitante já está vazio — nada para mesclar, quantidade continua 3.
+    await page.reload();
+    await expect(linha.locator("span.tabular-nums")).toHaveText("3");
+    contaRaw = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      `${CART_STORAGE_KEY}_1`,
+    );
+    expect(JSON.parse(contaRaw ?? "[]")).toEqual([{ ...ITEM_VELA, quantidade: 3 }]);
+  });
+});

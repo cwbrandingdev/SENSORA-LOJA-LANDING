@@ -95,15 +95,16 @@ function normalizarQuantidade(valor: number): number {
 // visitante (mesmo raciocínio "fail safe" de isTokenExpired) — nunca
 // reaproveita por engano a última conta que passou por aqui.
 //
-// Efeito colateral deliberado (só na primeira vez que ESTA conta loga
-// neste navegador — chave da conta ainda não existe): migra o que estava
-// no carrinho de visitante para a conta, e esvazia o balde de visitante.
-// Preserva o comportamento já existente/testado de "adicionar ao carrinho
-// sem estar logado, logar durante o checkout, carrinho continua lá" (Task
-// 7) — sem isso, o requisito "não pode simplesmente limpar no login" seria
-// violado para quem tinha itens como visitante. Uma conta que JÁ tem uma
-// chave própria (mesmo vazia) nunca é sobrescrita por um carrinho de
-// visitante avulso — só a primeira vez, nunca de novo.
+// Correção (achado da auditoria — item some do carrinho ao logar): a
+// migração ANTES só rodava quando a chave da conta ainda não existia
+// (`getItem(chaveConta) === null`) — então qualquer conta que já tivesse
+// logado antes neste navegador (mesmo com carrinho vazio) nunca herdava um
+// item adicionado como visitante numa sessão seguinte: o item ficava
+// "preso" na chave de visitante enquanto a tela passava a ler só a chave
+// da conta. Agora `mesclarCarrinhoVisitanteNaConta` roda sempre que há
+// sessão válida, decidido por SE o carrinho de visitante tem itens (nunca
+// pela existência da chave da conta) — ver comentário dela para o merge em
+// si.
 function resolverChaveCarrinho(): string {
   const token = getToken();
   if (!token || isTokenExpired(token)) return CART_STORAGE_KEY;
@@ -112,11 +113,7 @@ function resolverChaveCarrinho(): string {
   if (typeof sub !== "number") return CART_STORAGE_KEY;
 
   const chaveConta = `${CART_STORAGE_KEY}_${sub}`;
-  if (window.localStorage.getItem(chaveConta) === null) {
-    const carrinhoVisitante = window.localStorage.getItem(CART_STORAGE_KEY);
-    window.localStorage.setItem(chaveConta, carrinhoVisitante ?? "[]");
-    window.localStorage.setItem(CART_STORAGE_KEY, "[]");
-  }
+  mesclarCarrinhoVisitanteNaConta(chaveConta);
 
   return chaveConta;
 }
@@ -133,6 +130,66 @@ function isCartItemValido(valor: unknown): valor is CartItem {
     (item.imagemUrl === undefined || typeof item.imagemUrl === "string") &&
     (item.estoqueConhecido === undefined || typeof item.estoqueConhecido === "number")
   );
+}
+
+// Lê + valida uma chave de carrinho do localStorage, nunca lança: chave
+// ausente, JSON inválido ou formato inesperado sempre caem em "[]" (mesma
+// tolerância a dado corrompido que o efeito de hidratação de CartProvider
+// já exigia — reaproveitada aqui em vez de duas cópias da mesma lógica de
+// parse).
+function lerCarrinhoDoStorage(chave: string): CartItem[] {
+  try {
+    const raw = window.localStorage.getItem(chave);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(isCartItemValido) : [];
+  } catch {
+    return [];
+  }
+}
+
+// Mesma regra de soma de itens repetidos que adicionarItem já usa (ver
+// abaixo) — reaproveitada aqui para não ter duas lógicas de merge
+// divergentes. Item novo para a conta é só acrescentado; item que já
+// existia na conta soma a quantidade do visitante e refresca
+// `estoqueConhecido` para o valor do item do visitante (mesmo
+// comportamento de "última atualização vence" de adicionarItem).
+function mesclarItens(itensConta: CartItem[], itensVisitante: CartItem[]): CartItem[] {
+  const resultado = itensConta.map((item) => ({ ...item }));
+
+  for (const itemVisitante of itensVisitante) {
+    const existente = resultado.find(
+      (item) => item.produtoId === itemVisitante.produtoId,
+    );
+    if (existente) {
+      existente.quantidade = normalizarQuantidade(
+        existente.quantidade + itemVisitante.quantidade,
+      );
+      existente.estoqueConhecido = itemVisitante.estoqueConhecido;
+    } else {
+      resultado.push({ ...itemVisitante });
+    }
+  }
+
+  return resultado;
+}
+
+// Migra (com merge, nunca substituição cega) o carrinho de visitante para a
+// chave da conta informada. Idempotente por construção: a chave de
+// visitante é sempre esvaziada ao final, então uma segunda chamada (reload,
+// remount do CartProvider com a mesma sessão) não encontra nada para
+// mesclar de novo — nenhuma quantidade é somada duas vezes. No-op (nem lê
+// nem grava a chave da conta) quando o visitante não tem itens, para nunca
+// sobrescrever um carrinho de conta já existente com um merge vazio à toa.
+function mesclarCarrinhoVisitanteNaConta(chaveConta: string): void {
+  const itensVisitante = lerCarrinhoDoStorage(CART_STORAGE_KEY);
+  if (itensVisitante.length === 0) return;
+
+  const itensConta = lerCarrinhoDoStorage(chaveConta);
+  const mesclado = mesclarItens(itensConta, itensVisitante);
+
+  window.localStorage.setItem(chaveConta, JSON.stringify(mesclado));
+  window.localStorage.setItem(CART_STORAGE_KEY, "[]");
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -158,19 +215,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const chave = resolverChaveCarrinho();
     chaveRef.current = chave;
-    try {
-      const raw = window.localStorage.getItem(chave);
-      if (raw) {
-        const parsed: unknown = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setItens(parsed.filter(isCartItemValido));
-        }
-      }
-    } catch {
-      // JSON inválido — segue com carrinho vazio em vez de quebrar a página.
-    } finally {
-      setHidratado(true);
-    }
+    setItens(lerCarrinhoDoStorage(chave));
+    setHidratado(true);
   }, []);
 
   // Só persiste depois de terminar de ler o localStorage — sem essa guarda,

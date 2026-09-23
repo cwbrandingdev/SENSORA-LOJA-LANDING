@@ -334,7 +334,25 @@ test.describe("Checkout — autenticação (Task 7, preservada)", () => {
   test("login com redirect volta para /loja/checkout e o carrinho permanece intacto", async ({
     page,
   }) => {
-    await seedCart(page, [CART_ITEM]);
+    // Não usa seedCart() aqui de propósito: seedCart() reaplica o seed via
+    // addInitScript em TODA navegação (necessário para os ~30 outros usos
+    // deste helper no arquivo, onde a sessão já existe desde o início do
+    // teste) — mas este teste navega DUAS vezes (/login, depois o reload
+    // pós-login para CHECKOUT_URL), e na segunda navegação o token já
+    // existe, então seedCart() regravaria [CART_ITEM] direto na chave da
+    // CONTA por cima do merge real, deixando uma cópia extra na chave de
+    // visitante da primeira navegação — o merge (corretamente) somaria as
+    // duas e o teste veria quantidade 4, não 2. Escreve só a chave de
+    // visitante, uma única vez (guard idempotente contra a própria
+    // reaplicação em cada navegação), para exercitar o merge de verdade.
+    await page.addInitScript(
+      ([guestKey, itensJson]) => {
+        if (!window.localStorage.getItem(guestKey)) {
+          window.localStorage.setItem(guestKey, itensJson);
+        }
+      },
+      [CART_STORAGE_KEY, JSON.stringify([CART_ITEM])] as const,
+    );
     await mockEnderecos(page, [ENDERECO_PADRAO]);
     await page.route("**/auth/login", async (route) => {
       await route.fulfill({ json: { access_token: fakeToken() } });
@@ -355,18 +373,23 @@ test.describe("Checkout — autenticação (Task 7, preservada)", () => {
     await expect(page).toHaveURL(new RegExp(CHECKOUT_URL.replace("/", "\\/")));
     await expect(page.getByRole("heading", { name: "Checkout" })).toBeVisible();
 
-    // Etapa (Carrinho por conta) — este login é o PRIMEIRO desta conta
-    // (sub: 1) neste teste: o carrinho de visitante semeado por seedCart()
-    // acima migra para a chave da conta no momento do login (ver
-    // resolverChaveCarrinho em context/CartContext.tsx) — "permanece
-    // intacto" continua verdadeiro, só que agora na chave da conta, não
-    // mais na de visitante (que fica esvaziada de propósito após a
-    // migração).
+    // Etapa (Carrinho por conta) — o carrinho de visitante semeado acima
+    // migra (com merge, ver mesclarCarrinhoVisitanteNaConta em
+    // context/CartContext.tsx) para a chave da conta no momento do login —
+    // "permanece intacto" continua verdadeiro, só que agora na chave da
+    // conta, não mais na de visitante (que fica esvaziada de propósito
+    // após a migração, provado logo abaixo).
     const cartRaw = await page.evaluate(
       (key) => window.localStorage.getItem(key),
       CART_STORAGE_KEY_CONTA,
     );
     expect(JSON.parse(cartRaw ?? "[]")).toEqual([CART_ITEM]);
+
+    const guestRaw = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      CART_STORAGE_KEY,
+    );
+    expect(JSON.parse(guestRaw ?? "[]")).toEqual([]);
   });
 });
 
