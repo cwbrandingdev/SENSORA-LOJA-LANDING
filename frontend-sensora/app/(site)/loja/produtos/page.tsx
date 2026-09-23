@@ -9,6 +9,8 @@ import { ROUTES } from "@/lib/routes";
 import CategoryFilter from "@/components/loja/CategoryFilter";
 import ProductGrid from "@/components/loja/ProductGrid";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
+import { produtoCombina, sugerirProdutos } from "@/lib/busca-produtos";
+import { LOJA_PRODUTO_URL } from "@/lib/config";
 
 export const metadata: Metadata = {
   title: "Catálogo",
@@ -55,19 +57,13 @@ export default async function CatalogoPage({ searchParams }: CatalogoPageProps) 
     throw err;
   }
 
-  const termo = busca?.toLowerCase();
   const produtosFiltrados = produtos.filter((produto) => {
-    if (
-      categoriaAtiva &&
-      produto.categoria?.slug !== categoriaAtiva
-    ) {
-      return false;
-    }
-    if (!termo) return true;
-    return [produto.nome, produto.aroma, produto.descricao]
-      .filter((campo): campo is string => Boolean(campo))
-      .some((campo) => campo.toLowerCase().includes(termo));
+    if (categoriaAtiva && produto.categoria?.slug !== categoriaAtiva) return false;
+    if (!busca) return true;
+    return produtoCombina(produto, busca);
   });
+  const sugestoes =
+    busca && produtosFiltrados.length === 0 ? sugerirProdutos(produtos, busca) : [];
 
   return (
     <div className="mx-auto max-w-7xl px-6 pt-28 pb-24 sm:pt-36 sm:pb-32 lg:px-10 lg:pb-40">
@@ -90,7 +86,32 @@ export default async function CatalogoPage({ searchParams }: CatalogoPageProps) 
       </div>
 
       <div className="mt-12">
-        <ProductGrid produtos={produtosFiltrados} actionLabel="Ver detalhes" />
+        {busca && produtosFiltrados.length === 0 ? (
+          <div className="mx-auto max-w-xl py-16 text-center">
+            <p className="font-serif text-3xl font-normal text-brand-navy">
+              Não achamos esse produto.
+            </p>
+            {sugestoes.length > 0 && (
+              <>
+                <p className="mt-4 text-base text-slate-600">Você quis dizer…?</p>
+                <ul className="mt-5 flex flex-col items-center gap-2">
+                  {sugestoes.map((produto) => (
+                    <li key={produto.id}>
+                      <Link
+                        href={LOJA_PRODUTO_URL(produto.slug)}
+                        className="text-brand-navy underline underline-offset-4"
+                      >
+                        {produto.nome}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        ) : (
+          <ProductGrid produtos={produtosFiltrados} actionLabel="Ver detalhes" />
+        )}
       </div>
     </div>
   );

@@ -127,7 +127,7 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
           </p>
 
           {produto.descricao && (
-            <p className="mt-8 max-w-md text-[15px] leading-relaxed text-slate-600">
+            <p className="mt-8 max-w-xl whitespace-pre-line text-[15px] leading-relaxed text-slate-600">
               {produto.descricao}
             </p>
           )}

@@ -1,17 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import {
-  Menu,
-  Search,
-  ShoppingBag,
-  UserRound,
-  X,
-} from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Menu, ShoppingBag, UserRound, X } from "lucide-react";
 import Logo from "@/components/ui/Logo";
+import NavbarSearch from "@/components/layout/NavbarSearch";
 import { NAV_CATEGORIES } from "@/lib/content";
+import { ROTAS_LEGAIS } from "@/lib/empresa";
 import { ROUTES } from "@/lib/routes";
 import { loginComRedirect } from "@/lib/auth-redirect";
 import { useAuth } from "@/context/AuthContext";
@@ -19,9 +15,20 @@ import { useCart } from "@/context/CartContext";
 import { PerfilUsuario, STAFF_ROLES } from "@/lib/types/loja";
 import { cn } from "@/lib/utils";
 
-const CATEGORY_LINKS = NAV_CATEGORIES.filter(
-  (item) => item.href !== ROUTES.LOJA,
-);
+const ROTULOS_CURTOS: Record<string, string> = {
+  "/velas": "Velas",
+  "/sprays": "Sprays",
+  "/difusores": "Difusores",
+  "/colecoes": "Kits",
+};
+
+const CATEGORY_LINKS = [
+  ...NAV_CATEGORIES.filter((item) => item.href !== ROUTES.LOJA).map((item) => ({
+    ...item,
+    label: ROTULOS_CURTOS[item.href] ?? item.label,
+  })),
+  { label: "Quem somos", href: ROTAS_LEGAIS.quemSomos },
+];
 
 function NavLink({
   href,
@@ -94,12 +101,8 @@ function IconLink({
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const { totalItens } = useCart();
   const pathname = usePathname();
-  const router = useRouter();
   const { isAuthenticated, loading, perfil, logout } = useAuth();
 
   let contaLabel = "Entrar";
@@ -127,7 +130,6 @@ export default function Navbar() {
 
   useEffect(() => {
     setMenuOpen(false);
-    setSearchOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -139,33 +141,8 @@ export default function Navbar() {
     };
   }, [menuOpen]);
 
-  useEffect(() => {
-    if (!searchOpen) return;
-    searchInputRef.current?.focus();
-  }, [searchOpen]);
-
   function toggleMenu() {
-    setSearchOpen(false);
     setMenuOpen((value) => !value);
-  }
-
-  function toggleSearch() {
-    setMenuOpen(false);
-    setSearchOpen((value) => !value);
-  }
-
-  function handleSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const term = query.trim();
-    if (!term) {
-      router.push(ROUTES.LOJA_PRODUTOS);
-    } else {
-      router.push(
-        `${ROUTES.LOJA_PRODUTOS}?q=${encodeURIComponent(term)}`,
-      );
-    }
-    setSearchOpen(false);
-    setQuery("");
   }
 
   return (
@@ -191,10 +168,7 @@ export default function Navbar() {
               href="/"
               aria-label="Sensora, ir para o início"
               className="justify-self-center"
-              onClick={() => {
-                setMenuOpen(false);
-                setSearchOpen(false);
-              }}
+              onClick={() => setMenuOpen(false)}
             >
               <Logo
                 variant="dark"
@@ -205,40 +179,16 @@ export default function Navbar() {
             </Link>
 
             <div className="flex items-center justify-end gap-1">
-              <button
-                type="button"
-                onClick={toggleSearch}
-                aria-label={searchOpen ? "Fechar busca" : "Buscar produtos"}
-                aria-expanded={searchOpen}
-                className="inline-flex h-10 w-10 items-center justify-center text-brand-navy/70 transition-colors hover:text-brand-navy"
+              <NavbarSearch variant="painel" recolher={menuOpen} />
+              <IconLink
+                href={ROUTES.LOJA_CARRINHO}
+                label={cartLabel}
+                badge={totalItens}
               >
-                <Search className="h-[22px] w-[22px]" strokeWidth={1.5} />
-              </button>
-              <IconLink href={ROUTES.LOJA_CARRINHO} label={cartLabel} badge={totalItens}>
                 <ShoppingBag className="h-[22px] w-[22px]" strokeWidth={1.5} />
               </IconLink>
             </div>
           </div>
-
-          {searchOpen && (
-            <form
-              onSubmit={handleSearch}
-              className="border-t border-stone-200/80 px-4 py-3"
-            >
-              <label htmlFor="navbar-search" className="sr-only">
-                Buscar produtos
-              </label>
-              <input
-                id="navbar-search"
-                ref={searchInputRef}
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Buscar produtos"
-                className="w-full border-b border-brand-navy/20 bg-transparent py-2 text-[15px] text-brand-navy outline-none placeholder:text-brand-navy/40"
-              />
-            </form>
-          )}
         </div>
 
         {menuOpen && (
@@ -306,7 +256,7 @@ export default function Navbar() {
       </div>
 
       <div className="pointer-events-auto mx-auto hidden max-w-[96rem] px-5 pt-[max(0.75rem,env(safe-area-inset-top))] lg:block lg:px-8">
-        <div className="overflow-hidden rounded-full border border-slate-200 bg-white text-brand-navy shadow-[0_8px_28px_rgba(15,23,42,0.08)]">
+        <div className="overflow-visible rounded-full border border-slate-200 bg-white text-brand-navy shadow-[0_8px_28px_rgba(15,23,42,0.08)]">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-7 py-2.5">
             <Link
               href="/"
@@ -333,7 +283,8 @@ export default function Navbar() {
               </ul>
             </nav>
 
-            <div className="flex items-center justify-self-end gap-1.5">
+            <div className="flex min-w-0 items-center justify-self-end gap-1.5">
+              <NavbarSearch variant="barra" />
               <IconLink
                 href={ROUTES.LOJA_CARRINHO}
                 label={cartLabel}
@@ -344,31 +295,21 @@ export default function Navbar() {
               </IconLink>
 
               {!loading && (
-                <>
-                  <IconLink
-                    href={contaHref}
-                    label={contaLabel}
-                    className="rounded-full hover:bg-slate-100"
-                  >
-                    <UserRound
-                      className="h-[18px] w-[18px]"
-                      strokeWidth={1.75}
-                    />
-                  </IconLink>
-                  {isAuthenticated && (
-                    <NavLink onClick={logout} className="px-2.5 text-sm">
-                      Sair
-                    </NavLink>
-                  )}
-                </>
+                <IconLink
+                  href={contaHref}
+                  label={contaLabel}
+                  className="rounded-full hover:bg-slate-100"
+                >
+                  <UserRound
+                    className="h-[18px] w-[18px]"
+                    strokeWidth={1.75}
+                  />
+                </IconLink>
               )}
 
-              <Link
-                href={ROUTES.LOJA}
-                className="inline-flex items-center justify-center rounded-full bg-brand-navy px-5 py-2.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition-colors duration-300 hover:bg-brand-navy-light"
-              >
-                Adquira já
-              </Link>
+              <NavLink href={ROUTES.LOJA} active={isActive(ROUTES.LOJA)}>
+                Loja
+              </NavLink>
             </div>
           </div>
         </div>
