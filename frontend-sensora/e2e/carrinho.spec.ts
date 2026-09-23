@@ -349,7 +349,7 @@ test.describe("Carrinho — CTA para checkout", () => {
 
     await page.getByRole("button", { name: "Ir para o checkout →" }).click();
     await aviso.getByRole("button", { name: "Entrar" }).click();
-    await expect(page).toHaveURL(/\/login\?redirect=%2Floja%2Fcheckout/);
+    await expect(page).toHaveURL(/\/login\?redirect=%2Floja%2Fcarrinho/);
   });
 
   test("com sessão válida: leva direto para /loja/checkout", async ({ page }) => {

@@ -39,8 +39,9 @@ export default function CarrinhoPage() {
   }
 
   // Checkout exige sessão. Quem já está logado segue. Quem não está vê o
-  // aviso e escolhe entrar (o retorno continua sendo /loja/checkout) ou
-  // ficar na loja. O carrinho não é alterado.
+  // aviso e escolhe entrar (o retorno pós-login é /loja/carrinho, não
+  // direto para /loja/checkout — precisa clicar em "Ir para o checkout"
+  // de novo depois de logar) ou ficar na loja. O carrinho não é alterado.
   function handleIrParaCheckout() {
     if (possuiSessaoValida()) {
       router.push(ROUTES.LOJA_CHECKOUT);
@@ -165,7 +166,7 @@ export default function CarrinhoPage() {
         confirmLabel="Entrar"
         cancelLabel="Continuar navegando"
         confirmVariant="primary"
-        onConfirm={() => router.push(loginComRedirect(ROUTES.LOJA_CHECKOUT))}
+        onConfirm={() => router.push(loginComRedirect(ROUTES.LOJA_CARRINHO))}
         onCancel={() => setAvisoLoginAberto(false)}
       />
     </>
