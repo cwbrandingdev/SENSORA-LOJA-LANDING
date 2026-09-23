@@ -98,7 +98,18 @@ export default function CartItemRow({ item }: CartItemRowProps) {
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end sm:gap-6">
+        {/* Correção (achado CRÍTICO da auditoria mobile) — stepper + preço +
+            remover não cabiam lado a lado em 320/375px (todos shrink-0,
+            ~268px mínimos contra ~176-231px disponíveis), forçando scroll
+            horizontal na página inteira e deixando o botão de remover fora
+            da viewport. `flex-wrap` permite que o grupo preço+remover quebre
+            para uma segunda linha só quando necessário (320/375px) — em
+            telas maiores (≥ ~430px) e sempre a partir de sm, continua tudo
+            numa linha só, igual a antes (`sm:flex-nowrap`). Preço e remover
+            ficam agrupados num `<div>` próprio (não soltos no flex
+            principal) para que, ao quebrar linha, os dois continuem juntos
+            em vez de se espalharem pela largura toda. */}
+        <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap sm:shrink-0 sm:justify-end sm:gap-6">
           <QuantityStepper
             value={item.quantidade}
             onIncrease={() => aumentarQuantidade(item.produtoId)}
@@ -106,21 +117,23 @@ export default function CartItemRow({ item }: CartItemRowProps) {
             max={item.estoqueConhecido}
           />
 
-          <p className="w-20 shrink-0 text-right text-[15px] font-semibold tabular-nums text-brand-navy sm:w-24 sm:text-base">
-            {formatPrice.format(item.preco * item.quantidade)}
-          </p>
+          <div className="flex items-center gap-3 sm:gap-6">
+            <p className="w-20 shrink-0 text-right text-[15px] font-semibold tabular-nums text-brand-navy sm:w-24 sm:text-base">
+              {formatPrice.format(item.preco * item.quantidade)}
+            </p>
 
-          {/* Mesmo tamanho/formato circular do QuantityStepper (h-11 w-11 —
-              44px, alvo de toque adequado) em vez do "×" solto de antes, sem
-              nenhuma área de toque real ao redor dele. */}
-          <button
-            type="button"
-            onClick={handleRemover}
-            aria-label={`Remover "${item.nome}" do carrinho`}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-brand-orange focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
-          >
-            ×
-          </button>
+            {/* Mesmo tamanho/formato circular do QuantityStepper (h-11 w-11
+                — 44px, alvo de toque adequado) em vez do "×" solto de
+                antes, sem nenhuma área de toque real ao redor dele. */}
+            <button
+              type="button"
+              onClick={handleRemover}
+              aria-label={`Remover "${item.nome}" do carrinho`}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-brand-orange focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
+            >
+              ×
+            </button>
+          </div>
         </div>
       </div>
     </li>

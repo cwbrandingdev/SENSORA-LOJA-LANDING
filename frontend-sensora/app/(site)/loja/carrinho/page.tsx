@@ -166,7 +166,7 @@ export default function CarrinhoPage() {
         confirmLabel="Entrar"
         cancelLabel="Continuar navegando"
         confirmVariant="primary"
-        onConfirm={() => router.push(loginComRedirect(ROUTES.LOJA_CHECKOUT))}
+        onConfirm={() => router.push(loginComRedirect(ROUTES.LOJA_CARRINHO))}
         onCancel={() => setAvisoLoginAberto(false)}
       />
     </>

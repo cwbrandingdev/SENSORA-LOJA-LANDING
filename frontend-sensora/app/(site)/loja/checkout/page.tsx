@@ -450,7 +450,13 @@ export default function CheckoutPage() {
 
   return (
     <>
-      <section className="relative mx-48 max-w-3xl overflow-hidden px-6 py-8 pb-8 text-center lg:px-10">
+      {/* Correção (achado CRÍTICO da auditoria mobile) — `mx-48` (192px de
+          margem fixa de cada lado, sem breakpoint) esmagava o título e a
+          descrição numa coluna de 1-2 caracteres por linha em 320-430px;
+          `mx-auto` é o mesmo padrão já usado na seção equivalente de
+          /loja/carrinho/page.tsx, centraliza dentro do max-w-3xl em
+          qualquer largura. */}
+      <section className="relative mx-auto max-w-3xl overflow-hidden px-6 py-8 pb-8 text-center lg:px-10">
         <RevealOnScroll>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
             Loja

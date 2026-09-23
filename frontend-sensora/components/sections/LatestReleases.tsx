@@ -27,9 +27,12 @@ export default async function LatestReleases() {
   }
 
   return (
+    // py-16 no mobile (era py-24, achado REFINAMENTO da auditoria — mesmo
+    // motivo do py-16 em ProductCategories.tsx, seção logo acima com o
+    // mesmo fundo). sm/lg inalterados.
     <section
       aria-labelledby="lancamentos-heading"
-      className="relative bg-[#f5f2ed] py-24 sm:py-32 lg:py-40"
+      className="relative bg-[#f5f2ed] py-16 sm:py-32 lg:py-40"
     >
       <div className="mx-auto max-w-7xl px-6 lg:px-10">
         <RevealOnScroll className="mb-8 text-center sm:mb-10">

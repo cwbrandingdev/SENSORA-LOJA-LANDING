@@ -94,7 +94,13 @@ export default function AddToCartControls({ produto }: AddToCartControlsProps) {
           variant="primary"
           onClick={handleAdicionar}
           disabled={semEstoque}
-          className="min-w-[220px]"
+          // h-11 (44px, achado REFINAMENTO da auditoria mobile) — só nesta
+          // instância via className (não em Button.tsx, componente
+          // compartilhado por CTAs de navegação que não faziam parte do
+          // achado): a altura de 40px vem do py-3 + text-xs herdados do
+          // BASE_CLASS de Button; h-11 sobrescreve só a altura aqui,
+          // items-center (já no BASE_CLASS) mantém o texto centralizado.
+          className="h-11 min-w-[220px]"
         >
           {semEstoque ? "Esgotado" : acabouDeAdicionar ? "Adicionado ✓" : "Adicionar ao carrinho"}
         </Button>

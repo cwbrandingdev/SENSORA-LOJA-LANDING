@@ -55,8 +55,11 @@ export default function LatestReleaseCard({ produto }: { produto: ReleaseItem })
     window.setTimeout(() => setAdicionado(false), 1600);
   }
 
+  // h-11 (44px, achado REFINAMENTO da auditoria mobile) — alvo de toque
+  // mínimo recomendado, mesmo padrão já usado no stepper/remover do
+  // carrinho (QuantityStepper, CartItemRow).
   const acaoClass =
-    "mt-3 flex h-10 w-full items-center justify-center bg-brand-orange text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors duration-300 hover:bg-brand-orange-light disabled:cursor-not-allowed disabled:bg-slate-300";
+    "mt-3 flex h-11 w-full items-center justify-center bg-brand-orange text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors duration-300 hover:bg-brand-orange-light disabled:cursor-not-allowed disabled:bg-slate-300";
 
   return (
     <article className="flex h-full flex-col">

@@ -733,7 +733,14 @@ const AUTH_GRAIN = texturaSvg(
 const AUTH_SWITCH_CSS = `
 .authswitch-page {
   position: relative;
+  /* Correção (achado IMPORTANTE da auditoria mobile) — 100vh em navegadores
+     mobile reais é calculado com a barra de endereço RECOLHIDA, maior que a
+     área realmente visível quando ela está à mostra (típico no primeiro
+     load). 100dvh acompanha a altura visível de verdade; \`height: 100vh\`
+     continua declarado antes como fallback para navegadores sem suporte a
+     dvh (cascata simplesmente ignora a segunda declaração nesse caso). */
   height: 100vh;
+  height: 100dvh;
   width: 100%;
   background: var(--background);
 }
@@ -804,8 +811,10 @@ const AUTH_SWITCH_CSS = `
      dele) para "Criar conta" ficar igual, perto do azul, no lado dele. */
   align-items: flex-end;
   /* CPF + aceite aumentam a altura. O painel continua na mesma transição
-     (left 75%↔25%); o formulário só passa a rolar dentro da tela. */
+     (left 75%↔25%); o formulário só passa a rolar dentro da tela. Mesmo
+     fallback vh→dvh de .authswitch-page acima. */
   max-height: 100vh;
+  max-height: 100dvh;
   overflow-y: auto;
   justify-content: safe center;
   padding-top: 1.5rem;
@@ -1208,9 +1217,27 @@ const AUTH_SWITCH_CSS = `
   /* No mobile o formulário ocupa a largura toda e não há mais painel azul
      do lado — os dois formulários voltam a alinhar à esquerda, como o
      resto dos formulários do Sensora. */
+  /* Correção (achado IMPORTANTE da auditoria mobile) — 58vh escondia o
+     checkbox de termos e o botão "Criar conta" abaixo da dobra em telas
+     pequenas. Testei aumentar bem mais esse teto (92dvh) e reverti: em
+     320×568 o formulário passou a invadir a faixa do painel inferior
+     (.authswitch-right-panel, linha 3 do grid "1fr 2fr 1fr" — mede ~65% da
+     altura da tela) — esse painel tem pointer-events:all neste estado
+     (para o botão "Entrar" funcionar) e z-index maior que o formulário,
+     então passou a interceptar/bloquear os cliques no checkbox e no botão
+     "Criar conta" que caíam ali, tornando-os PIORES que antes (visíveis
+     mas inclicáveis). 60dvh é o máximo que ainda cabe antes dessa faixa
+     (medido: painel começa a ~65% da tela, formulário começa em top:5%) —
+     ganho real ainda modesto sobre 58vh, mas sem esse conflito. O alcance
+     de verdade do checkbox/botão em telas muito baixas continua vindo do
+     scroll interno já existente (overflow-y:auto acima) — ver também a
+     correção de pointer-events do painel inferior logo abaixo, que garante
+     que esse scroll chega até os campos sem cliques sendo engolidos pelo
+     painel, mesmo perto da borda. */
   .authswitch-sign-up-form {
     align-items: flex-start;
-    max-height: 58vh;
+    max-height: 60vh;
+    max-height: 60dvh;
   }
   .authswitch-signin-signup,
   .authswitch-container.sign-up-mode .authswitch-signin-signup {
@@ -1281,6 +1308,22 @@ const AUTH_SWITCH_CSS = `
   .authswitch-container.sign-up-mode .authswitch-signin-signup {
     top: 5%;
     transform: translate(-50%, 0);
+  }
+
+  /* Correção (achado IMPORTANTE da auditoria mobile) — defensiva, junto do
+     max-height acima: .authswitch-right-panel tem pointer-events:all neste
+     estado (regra base, linha ~1177) para o botão "Entrar" funcionar, e
+     fica acima do formulário em z-index. Restringe a área que realmente
+     captura clique só ao próprio botão — o resto do painel (fundo/texto,
+     invisível atrás do formulário neste estado) deixa de engolir toques
+     destinados ao formulário, mesmo que a caixa role até bem perto da
+     borda entre os dois. Não muda nada visualmente (pointer-events não
+     afeta renderização) nem o modo login (só dentro de .sign-up-mode). */
+  .authswitch-container.sign-up-mode .authswitch-right-panel {
+    pointer-events: none;
+  }
+  .authswitch-container.sign-up-mode .authswitch-right-panel .authswitch-btn-transparent {
+    pointer-events: auto;
   }
 }
 
