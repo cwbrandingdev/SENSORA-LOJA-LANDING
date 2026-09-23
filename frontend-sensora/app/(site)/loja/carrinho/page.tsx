@@ -57,7 +57,7 @@ export default function CarrinhoPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
             Loja
           </p>
-          <h1 className="mt-4 font-serif text-4xl font-normal tracking-tight text-brand-navy sm:text-5xl">
+          <h1 className="mt-16 font-serif text-4xl font-normal tracking-tight text-brand-navy sm:text-5xl">
             Seu carrinho
           </h1>
           <p className="mt-4 text-base leading-relaxed text-slate-600">
@@ -166,7 +166,7 @@ export default function CarrinhoPage() {
         confirmLabel="Entrar"
         cancelLabel="Continuar navegando"
         confirmVariant="primary"
-        onConfirm={() => router.push(loginComRedirect(ROUTES.LOJA_CARRINHO))}
+        onConfirm={() => router.push(loginComRedirect(ROUTES.LOJA_CHECKOUT))}
         onCancel={() => setAvisoLoginAberto(false)}
       />
     </>

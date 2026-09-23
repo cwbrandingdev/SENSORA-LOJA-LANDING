@@ -17,10 +17,12 @@ export function LegalPage({
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
             Sensora
           </p>
-          <h1 className="mt-4 font-serif text-4xl font-normal tracking-tight text-brand-navy sm:text-5xl">
+          <h1 className="mt-16 font-serif text-4xl font-normal tracking-tight text-brand-navy sm:text-5xl">
             {title}
           </h1>
-          <p className="mt-6 text-base leading-relaxed text-slate-600">{intro}</p>
+          <p className="mt-6 text-base leading-relaxed text-slate-600">
+            {intro}
+          </p>
         </RevealOnScroll>
       </section>
       <div className="mx-auto flex max-w-3xl flex-col gap-10 px-6 lg:px-10">
