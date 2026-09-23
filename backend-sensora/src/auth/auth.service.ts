@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -54,6 +55,16 @@ const VERIFICATION_RESEND_MENSAGEM =
   'Se existir uma conta com esse e-mail ainda não confirmada, você receberá um novo link de confirmação.';
 const EMAIL_JA_CONFIRMADO_MENSAGEM = 'Este e-mail já foi confirmado.';
 const TOKEN_VERIFICACAO_INVALIDO_MENSAGEM = 'Token inválido ou expirado';
+// Confirmação obrigatória no login — contrato explícito com o frontend
+// (ver AllExceptionsFilter/lib/errors.ts, mesmo padrão de
+// CODIGO_ERRO_FRETE_MELHOR_ENVIO em MelhorEnvioService): identifica esta
+// causa específica de falha de login para que a tela possa redirecionar a
+// /confirmar-email com opção de reenvio, em vez de só mostrar "credenciais
+// inválidas". Mantenha o valor sincronizado com
+// frontend-sensora/lib/errors.ts caso precise alterá-lo.
+const CODIGO_EMAIL_NAO_VERIFICADO = 'EMAIL_NAO_VERIFICADO';
+const EMAIL_NAO_VERIFICADO_MENSAGEM =
+  'Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada ou solicite um novo link de confirmação.';
 
 @Injectable()
 export class AuthService {
@@ -75,6 +86,18 @@ export class AuthService {
     const senhaValida = await bcrypt.compare(loginDto.senha, usuario.senha);
     if (!senhaValida) {
       throw new UnauthorizedException('Credenciais inválidas');
+    }
+
+    // Confirmação obrigatória — checada só depois da senha já validada
+    // acima, de propósito: quem chega até aqui já provou conhecer a senha
+    // correta, então devolver um motivo específico (em vez da mesma
+    // "Credenciais inválidas") não abre nenhuma enumeração nova — um
+    // atacante sem a senha correta nunca chega a ver esta distinção.
+    if (!usuario.emailVerificado) {
+      throw new ForbiddenException({
+        message: EMAIL_NAO_VERIFICADO_MENSAGEM,
+        code: CODIGO_EMAIL_NAO_VERIFICADO,
+      });
     }
 
     return this.gerarParDeTokens(usuario.id, usuario.email, usuario.perfil);

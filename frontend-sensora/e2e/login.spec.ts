@@ -106,6 +106,35 @@ test.describe("Entrar — /login", () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 
+  test("e-mail não confirmado (403, code EMAIL_NAO_VERIFICADO): redireciona para /confirmar-email com o e-mail preenchido", async ({
+    page,
+  }) => {
+    await page.route("**/auth/login", async (route) => {
+      await route.fulfill({
+        status: 403,
+        json: {
+          message: "Confirme seu e-mail antes de entrar.",
+          code: "EMAIL_NAO_VERIFICADO",
+        },
+      });
+    });
+
+    await page.goto("/login");
+    await page.locator("#login-email").fill("pendente@sensora.dev");
+    await page.locator("#login-senha").fill("senhaCorreta123");
+    await page.locator(SUBMIT_BUTTON).click();
+
+    await expect(page).toHaveURL(
+      /\/confirmar-email\?email=pendente%40sensora\.dev$/,
+    );
+    await expect(
+      page.getByRole("heading", { name: "E-mail ainda não confirmado" }),
+    ).toBeVisible();
+    await expect(page.locator("#reenvio-email")).toHaveValue(
+      "pendente@sensora.dev",
+    );
+  });
+
   test("erro de rede/servidor (não-401): mantém a mensagem inline existente, sem Toast", async ({
     page,
   }) => {

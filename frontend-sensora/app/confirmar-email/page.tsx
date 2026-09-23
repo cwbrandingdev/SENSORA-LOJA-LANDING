@@ -31,6 +31,11 @@ export default function ConfirmarEmailPage() {
 function ConfirmarEmailContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
+  // Preenchido quando a navegação vem do login bloqueado por e-mail não
+  // confirmado (ver AuthSwitch.tsx SignInForm, redirect com ?email=) —
+  // distingue esse caso do link de e-mail realmente quebrado/incompleto
+  // abaixo, e poupa o usuário de redigitar o e-mail no reenvio.
+  const emailPreenchido = searchParams.get("email");
 
   const [estado, setEstado] = useState<Estado>("idle");
   const [mensagem, setMensagem] = useState("");
@@ -56,7 +61,18 @@ function ConfirmarEmailContent() {
       <div className="flex w-full max-w-sm flex-col items-center gap-6 rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
         <Logo variant="dark" showTagline={false} />
 
-        {!token ? (
+        {!token && emailPreenchido ? (
+          <>
+            <h1 className="text-lg font-semibold text-brand-navy">
+              E-mail ainda não confirmado
+            </h1>
+            <p className="text-sm text-slate-600">
+              Você precisa confirmar seu e-mail antes de entrar. Reenvie o
+              link de confirmação abaixo.
+            </p>
+            <ReenviarConfirmacao emailInicial={emailPreenchido} />
+          </>
+        ) : !token ? (
           <>
             <h1 className="text-lg font-semibold text-brand-navy">Link inválido</h1>
             <p className="text-sm text-slate-600">
@@ -129,8 +145,12 @@ function ConfirmarEmailContent() {
 // sabemos qual é: um token inválido/expirado não revela de quem ele era).
 // Mesma resposta genérica sempre (backend nunca confirma se o e-mail existe
 // ou já está confirmado — ver AuthService.resendVerification).
-function ReenviarConfirmacao() {
-  const [email, setEmail] = useState("");
+function ReenviarConfirmacao({
+  emailInicial = "",
+}: {
+  emailInicial?: string;
+}) {
+  const [email, setEmail] = useState(emailInicial);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [erro, setErro] = useState("");

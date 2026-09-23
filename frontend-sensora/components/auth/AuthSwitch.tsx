@@ -196,36 +196,22 @@ function SignInForm({ active }: { active: boolean }) {
       // sistema). Não existe mais decisão de rota por perfil aqui.
       router.push("/");
     } catch (error) {
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7850/ingest/a0c66230-f554-475e-a6e9-668a6dd61ce2",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "9a24a4",
-          },
-          body: JSON.stringify({
-            sessionId: "9a24a4",
-            runId: "pre-fix",
-            hypothesisId: "H2",
-            location: "AuthSwitch.tsx:onSubmit",
-            message: "login failed",
-            data: {
-              isAxiosError: isAxiosError(error),
-              status: isAxiosError(error) ? error.response?.status : null,
-              requestURL: isAxiosError(error) ? error.config?.url : null,
-              baseURL: isAxiosError(error) ? error.config?.baseURL : null,
-              resolvedURL: isAxiosError(error)
-                ? `${error.config?.baseURL ?? ""}${error.config?.url ?? ""}`
-                : null,
-              code: isAxiosError(error) ? error.code : null,
-            },
-            timestamp: Date.now(),
-          }),
-        },
-      ).catch(() => {});
-      // #endregion
+      // Confirmação obrigatória de e-mail — backend responde 403 com
+      // code: "EMAIL_NAO_VERIFICADO" (ver AuthService.login,
+      // backend-sensora) só depois de já validar a senha, então chegar
+      // aqui já prova que o e-mail/senha digitados são os corretos. Redireciona
+      // para a tela de confirmação em vez de mostrar "credenciais inválidas",
+      // já preenchendo o e-mail para facilitar o reenvio.
+      const codigoErro = isAxiosError(error)
+        ? (error.response?.data as { code?: string } | undefined)?.code
+        : undefined;
+      if (isAxiosError(error) && error.response?.status === 403 && codigoErro === "EMAIL_NAO_VERIFICADO") {
+        router.push(
+          `${ROUTES.CONFIRM_EMAIL}?email=${encodeURIComponent(data.email)}`,
+        );
+        return;
+      }
+
       if (isAxiosError(error) && error.response?.status === 401) {
         // Etapa (Toast de login) — credenciais inválidas passam a usar o
         // Toast de erro (canto inferior direito, mesmo ToastProvider já
@@ -446,7 +432,11 @@ function SignUpForm({
       // Etapa (Toast de cadastro) — substitui a antiga mensagem inline
       // ("Conta criada!... voltando para o login...") por um Toast de
       // sucesso (canto inferior direito, via ToastProvider montado acima).
-      toast.success("Conta criada!");
+      // Confirmação obrigatória no login (AuthService.login) — o texto
+      // já orienta a confirmar o e-mail, já que a conta só consegue entrar
+      // depois disso. "Conta criada!" continua como prefixo de propósito:
+      // e2e/register.spec.ts casa por substring.
+      toast.success("Conta criada! Confirme seu e-mail para poder entrar.");
       // O cadastro original redirecionava para /login após 1s. Aqui já
       // estamos na mesma experiência (Auth Switch), então só volta ao modo
       // Entrar via estado do React, sem navegar de rota (uma rota nova

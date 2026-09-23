@@ -11,12 +11,18 @@ import { AuthService } from './auth.service';
 
 // Etapa 6.4 (Confirmação de e-mail) — primeira suíte de testes automatizados
 // de AuthService neste projeto. Cobre especificamente o fluxo novo
-// (register/verifyEmail/resendVerification) mais os pontos de integração
-// exigidos pela auditoria (login não bloqueado por falta de confirmação,
-// nenhuma autenticação automática na confirmação). Login/refresh/logout/
-// forgot-password/reset-password/change-password JÁ existentes não são
-// re-testados aqui além do necessário para provar G — não são o escopo
-// desta etapa e não foram alterados.
+// (register/verifyEmail/resendVerification), mais os pontos de integração
+// exigidos pela auditoria (nenhuma autenticação automática na confirmação).
+// Refresh/logout/forgot-password/reset-password/change-password JÁ
+// existentes não são re-testados aqui além do necessário — não são o
+// escopo desta etapa e não foram alterados.
+//
+// Confirmação obrigatória no login (ver describe 'login — confirmação
+// obrigatória' abaixo): decisão revertida depois desta etapa original —
+// login passou a bloquear emailVerificado:false (testes G/H/I), depois de
+// um backfill administrativo confirmando as contas já existentes antes do
+// bloqueio entrar em vigor (nenhuma conta pré-existente ficou presa fora
+// do sistema).
 //
 // bcrypt: usado de verdade (não mockado) com SALT_ROUNDS baixo só nesta
 // suíte (4, em vez dos 10 de produção) — mais rápido e ainda prova o
@@ -415,9 +421,30 @@ describe('AuthService', () => {
     });
   });
 
-  describe('login — preservado (Etapa 6.4 não deve alterar este comportamento)', () => {
+  describe('login — confirmação obrigatória', () => {
     // G
-    it('G: login continua funcionando normalmente para uma conta com e-mail ainda não confirmado', async () => {
+    it('G: login funciona normalmente para uma conta com e-mail confirmado', async () => {
+      usuariosService.buscarPorEmail.mockResolvedValueOnce({
+        id: 1,
+        nome: 'Cliente',
+        email: 'cliente@sensora.dev',
+        senha: SENHA_HASH_TESTE,
+        perfil: PerfilUsuario.CLIENTE,
+        ativo: true,
+        emailVerificado: true,
+      });
+
+      const resultado = await service.login({
+        email: 'cliente@sensora.dev',
+        senha: 'senhaCorreta123',
+      });
+
+      expect(resultado.access_token).toBe('access-token-fake');
+      expect(usuariosService.criarRefreshToken).toHaveBeenCalled();
+    });
+
+    // H
+    it('H: login é bloqueado (403, code EMAIL_NAO_VERIFICADO) para uma conta com e-mail ainda não confirmado, sem emitir tokens', async () => {
       usuariosService.buscarPorEmail.mockResolvedValueOnce({
         id: 1,
         nome: 'Cliente',
@@ -428,13 +455,38 @@ describe('AuthService', () => {
         emailVerificado: false,
       });
 
-      const resultado = await service.login({
+      await expect(
+        service.login({
+          email: 'cliente@sensora.dev',
+          senha: 'senhaCorreta123',
+        }),
+      ).rejects.toMatchObject({
+        constructor: ForbiddenException,
+        response: { code: 'EMAIL_NAO_VERIFICADO' },
+      });
+      expect(jwtService.sign).not.toHaveBeenCalled();
+      expect(usuariosService.criarRefreshToken).not.toHaveBeenCalled();
+    });
+
+    // I
+    it('I: senha incorreta continua rejeitada com "Credenciais inválidas" ANTES de checar emailVerificado — checagem de senha tem prioridade, não revela status de confirmação para quem não provou conhecer a senha', async () => {
+      usuariosService.buscarPorEmail.mockResolvedValueOnce({
+        id: 1,
+        nome: 'Cliente',
         email: 'cliente@sensora.dev',
-        senha: 'senhaCorreta123',
+        senha: SENHA_HASH_TESTE,
+        perfil: PerfilUsuario.CLIENTE,
+        ativo: true,
+        emailVerificado: false,
       });
 
-      expect(resultado.access_token).toBe('access-token-fake');
-      expect(usuariosService.criarRefreshToken).toHaveBeenCalled();
+      await expect(
+        service.login({
+          email: 'cliente@sensora.dev',
+          senha: 'senhaErrada',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(jwtService.sign).not.toHaveBeenCalled();
     });
   });
 
