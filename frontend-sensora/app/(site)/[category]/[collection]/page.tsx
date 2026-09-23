@@ -27,7 +27,7 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
   }
 
   return (
-    <div className="pt-28 sm:pt-36">
+    <div className="pt-8">
       <CollectionShowcase collection={collection} />
 
       {/* Kit 4 Estações — mesmo card/dados de [category]/page.tsx, só

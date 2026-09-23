@@ -74,7 +74,7 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 pb-12  lg:px-10 lg:pb-20">
+    <div className="mx-auto max-w-7xl px-6 pt-4 pb-12 sm:pt-0 lg:px-10 lg:pb-20">
       <Link
         href={
           produto.categoria?.slug

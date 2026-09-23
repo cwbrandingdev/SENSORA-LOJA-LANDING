@@ -70,7 +70,7 @@ export default function ContaPage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-4xl px-6 pt-28 pb-24 sm:pt-36 sm:pb-32 lg:px-10">
+    <div className="mx-auto max-w-4xl px-6 pt-8 pb-24 sm:pb-32 lg:px-10">
       <AccountPageHeader
         title={nomeExibicao ? `Olá, ${nomeExibicao}` : "Olá"}
         description="Aqui você vai poder acompanhar seus pedidos, gerenciar seus dados pessoais e endereços, e cuidar da segurança da sua conta. Estamos construindo essa área aos poucos — em breve, mais novidades por aqui."

@@ -73,7 +73,7 @@ export default function CheckoutSucessoPage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-2xl px-6 pt-28 pb-24 text-center sm:pt-36 sm:pb-32 lg:px-10">
+    <div className="mx-auto max-w-2xl px-6 pt-8 pb-24 text-center sm:pb-32 lg:px-10">
       <RevealOnScroll>
         <div
           aria-hidden

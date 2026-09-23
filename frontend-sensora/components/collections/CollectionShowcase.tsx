@@ -27,7 +27,7 @@ export default function CollectionShowcase({
       className="mx-auto max-w-7xl px-6 pb-24 sm:pb-32 lg:px-10 lg:pb-40"
     >
       {collection.heroImageSrc && (
-        <RevealOnScroll className="relative mx-auto aspect-[21/9] w-full max-w-6xl overflow-hidden rounded-sm shadow-2xl shadow-brand-navy/10">
+        <RevealOnScroll className="relative mx-auto aspect-[4/5] w-full max-w-6xl overflow-hidden rounded-sm shadow-2xl shadow-brand-navy/10 sm:aspect-[16/10] lg:aspect-[21/9]">
           <ImageReveal>
             <PlaceholderImage
               src={collection.heroImageSrc}

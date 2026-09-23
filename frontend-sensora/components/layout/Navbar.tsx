@@ -146,7 +146,16 @@ export default function Navbar() {
   }
 
   return (
-    <header className="pointer-events-none fixed inset-x-0 top-0 z-50 font-rounded">
+    <header
+      className={cn(
+        "pointer-events-none fixed inset-x-0 top-0 z-50 font-rounded",
+        // Menu mobile aberto precisa ficar acima do CookieConsentBanner
+        // (também z-50, renderizado depois no DOM — empataria e o banner
+        // venceria). max-lg: mantém o desktop em z-50, sem qualquer mudança,
+        // mesmo no caso extremo de menuOpen permanecer true após um resize.
+        menuOpen && "max-lg:z-60",
+      )}
+    >
       <div className="pointer-events-auto lg:hidden">
         <div className="border-b border-stone-200/80 bg-background">
           <div className="grid h-14 grid-cols-3 items-center px-4">

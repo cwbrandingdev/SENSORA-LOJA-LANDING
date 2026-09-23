@@ -66,7 +66,7 @@ export default async function CatalogoPage({ searchParams }: CatalogoPageProps) 
     busca && produtosFiltrados.length === 0 ? sugerirProdutos(produtos, busca) : [];
 
   return (
-    <div className="mx-auto max-w-7xl px-6 pt-28 pb-24 sm:pt-36 sm:pb-32 lg:px-10 lg:pb-40">
+    <div className="mx-auto max-w-7xl px-6 pt-8 pb-24 sm:pb-32 lg:px-10 lg:pb-40">
       <RevealOnScroll>
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
           Produtos

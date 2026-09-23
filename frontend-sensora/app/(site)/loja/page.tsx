@@ -61,7 +61,7 @@ export default async function LojaPage() {
 
   return (
     <>
-      <section className="relative mx-auto max-w-3xl overflow-hidden px-6 pt-28 pb-8 text-center lg:px-10">
+      <section className="relative mx-auto max-w-3xl overflow-hidden px-6 pt-8 pb-8 text-center lg:px-10">
         <RevealOnScroll>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
             Loja

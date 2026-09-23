@@ -27,7 +27,10 @@ export default function FormButton({
   return (
     <button
       type={type}
-      className={`inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium transition-[color,background-color,border-color,transform,box-shadow] duration-200 ease-out hover:-translate-y-px active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 disabled:hover:translate-y-0 motion-reduce:transition-colors motion-reduce:hover:translate-y-0 ${VARIANTS[variant]} ${className}`}
+      // py-3 no mobile eleva a altura real para ~44px (alvo de toque); a
+      // partir de sm (≥640px, tablet/desktop) volta a py-2, idêntico ao
+      // comportamento anterior — nada muda acima desse breakpoint.
+      className={`inline-flex items-center justify-center rounded-md px-3 py-3 sm:py-2 text-sm font-medium transition-[color,background-color,border-color,transform,box-shadow] duration-200 ease-out hover:-translate-y-px active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 disabled:hover:translate-y-0 motion-reduce:transition-colors motion-reduce:hover:translate-y-0 ${VARIANTS[variant]} ${className}`}
       {...props}
     >
       {children}

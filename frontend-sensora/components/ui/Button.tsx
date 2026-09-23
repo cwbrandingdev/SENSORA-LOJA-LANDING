@@ -9,8 +9,11 @@ const VARIANTS = {
   navy: "bg-brand-navy text-white hover:bg-brand-navy-light hover:shadow-brand-navy/30",
 } as const;
 
+// py-3.5 no mobile eleva a altura real para ~44px (alvo de toque); a partir
+// de sm (≥640px, tablet/desktop) volta a py-3, idêntico ao comportamento
+// anterior — nada muda acima desse breakpoint.
 const BASE_CLASS =
-  "inline-flex items-center justify-center rounded-full px-8 py-3 text-xs font-semibold uppercase tracking-[0.2em] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:shadow-lg disabled:pointer-events-none disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none";
+  "inline-flex items-center justify-center rounded-full px-8 py-3.5 sm:py-3 text-xs font-semibold uppercase tracking-[0.2em] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:shadow-lg disabled:pointer-events-none disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none";
 
 type ButtonBaseProps = {
   variant?: keyof typeof VARIANTS;

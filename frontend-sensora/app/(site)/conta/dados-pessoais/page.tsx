@@ -130,7 +130,7 @@ export default function DadosPessoaisPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-6 pt-28 pb-24 sm:pt-36 sm:pb-32 lg:px-10">
+    <div className="mx-auto max-w-2xl px-6 pt-8 pb-24 sm:pb-32 lg:px-10">
       <AccountPageHeader
         backHref={ROUTES.CONTA}
         backLabel="Voltar para Minha Conta"

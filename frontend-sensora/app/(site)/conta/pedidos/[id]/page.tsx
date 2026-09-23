@@ -189,7 +189,7 @@ export default function MeuPedidoDetalhePage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 pt-28 pb-24 sm:pt-36 sm:pb-32 lg:px-10">
+    <div className="mx-auto max-w-4xl px-6 pt-8 pb-24 sm:pb-32 lg:px-10">
       {/* Item 5/6/19 da Etapa 6.1 — sempre visível, mesmo durante
           loading/"não encontrado" (nunca depende dos dados do pedido já
           terem chegado). Volta para a LISTA (/conta/pedidos), não para
