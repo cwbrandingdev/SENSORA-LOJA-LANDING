@@ -18,6 +18,7 @@ type ConfirmDialogProps = {
   confirmLabel: string;
   confirmingLabel?: string;
   cancelLabel?: string;
+  confirmVariant?: "primary" | "danger";
   confirming?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -30,6 +31,7 @@ export default function ConfirmDialog({
   confirmLabel,
   confirmingLabel = "Processando...",
   cancelLabel = "Voltar",
+  confirmVariant = "danger",
   confirming = false,
   onConfirm,
   onCancel,
@@ -92,7 +94,7 @@ export default function ConfirmDialog({
           </FormButton>
           <FormButton
             type="button"
-            variant="danger"
+            variant={confirmVariant}
             onClick={onConfirm}
             disabled={confirming}
             autoFocus

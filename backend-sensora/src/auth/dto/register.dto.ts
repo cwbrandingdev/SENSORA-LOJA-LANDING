@@ -20,4 +20,10 @@ export class RegisterDto {
   @IsString()
   @MinLength(8)
   senha: string;
+
+  // Obrigatório no cadastro público: a nota fiscal da compra usa este CPF.
+  // Dígitos verificadores e duplicidade ficam em UsuariosService.create.
+  @IsString()
+  @IsNotEmpty()
+  cpf: string;
 }

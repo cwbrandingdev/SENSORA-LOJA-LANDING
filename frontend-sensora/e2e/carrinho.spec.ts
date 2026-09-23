@@ -331,12 +331,24 @@ test.describe("Carrinho — quantidade acima do estoque conhecido", () => {
 });
 
 test.describe("Carrinho — CTA para checkout", () => {
-  test("sem sessão: leva para /login preservando o retorno ao checkout", async ({ page }) => {
+  test("sem sessão: avisa que está deslogado e só vai ao login se escolher entrar", async ({
+    page,
+  }) => {
     await seedCart(page, [ITEM_VELA]);
     await page.goto(CARRINHO_URL);
 
     await page.getByRole("button", { name: "Ir para o checkout →" }).click();
 
+    const aviso = page.getByRole("dialog", { name: "Você não está logado" });
+    await expect(aviso).toBeVisible();
+    await expect(page).toHaveURL(/\/loja\/carrinho$/);
+
+    await aviso.getByRole("button", { name: "Continuar navegando" }).click();
+    await expect(aviso).toBeHidden();
+    await expect(page).toHaveURL(/\/loja\/carrinho$/);
+
+    await page.getByRole("button", { name: "Ir para o checkout →" }).click();
+    await aviso.getByRole("button", { name: "Entrar" }).click();
     await expect(page).toHaveURL(/\/login\?redirect=%2Floja%2Fcheckout/);
   });
 

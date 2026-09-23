@@ -4,9 +4,11 @@
 // CartContext (estado local, Task 1). Reaproveita RevealOnScroll, Button,
 // EmptyState e o mesmo cabeçalho editorial (eyebrow + h1 serif) já usado em
 // /loja e /loja/produtos — nenhum padrão visual novo, só a composição.
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EmptyState from "@/components/ui/EmptyState";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import CartItemRow from "@/components/loja/CartItemRow";
@@ -24,6 +26,7 @@ export default function CarrinhoPage() {
   const router = useRouter();
   const { itens, totalItens, subtotal, limparCarrinho } = useCart();
   const toast = useToast();
+  const [avisoLoginAberto, setAvisoLoginAberto] = useState(false);
 
   function handleLimparCarrinho() {
     if (
@@ -35,15 +38,15 @@ export default function CarrinhoPage() {
     toast.success("Carrinho esvaziado.");
   }
 
-  // Checkout exige sessão válida — visitante sem login vai para /login
-  // preservando /loja/checkout como destino de retorno; o carrinho em si
-  // (CartContext/localStorage) não é tocado aqui de forma alguma.
+  // Checkout exige sessão. Quem já está logado segue. Quem não está vê o
+  // aviso e escolhe entrar (o retorno continua sendo /loja/checkout) ou
+  // ficar na loja. O carrinho não é alterado.
   function handleIrParaCheckout() {
-    router.push(
-      possuiSessaoValida()
-        ? ROUTES.LOJA_CHECKOUT
-        : loginComRedirect(ROUTES.LOJA_CHECKOUT),
-    );
+    if (possuiSessaoValida()) {
+      router.push(ROUTES.LOJA_CHECKOUT);
+      return;
+    }
+    setAvisoLoginAberto(true);
   }
 
   return (
@@ -154,6 +157,17 @@ export default function CarrinhoPage() {
           </div>
         </section>
       )}
+
+      <ConfirmDialog
+        open={avisoLoginAberto}
+        title="Você não está logado"
+        description="Para pagar, entre na sua conta. O carrinho continua salvo se preferir seguir navegando."
+        confirmLabel="Entrar"
+        cancelLabel="Continuar navegando"
+        confirmVariant="primary"
+        onConfirm={() => router.push(loginComRedirect(ROUTES.LOJA_CHECKOUT))}
+        onCancel={() => setAvisoLoginAberto(false)}
+      />
     </>
   );
 }
