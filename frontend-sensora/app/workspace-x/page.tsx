@@ -23,6 +23,7 @@
 // DashboardService.obterResumo, backend).
 import { useEffect, useState } from "react";
 import { Wallet, ClipboardList, Package, Tags, PackageX, Users } from "lucide-react";
+import AlertasPanel from "@/components/admin/AlertasPanel";
 import MetricCard from "@/components/admin/MetricCard";
 import { getErrorMessage } from "@/lib/errors";
 import { buscarResumoDashboard } from "@/services/dashboard";
@@ -83,6 +84,13 @@ export default function AdminDashboardPage() {
         <h2 className="text-xl font-semibold text-brand-navy">Dashboard Sensora</h2>
         <p className="text-sm text-slate-600">Visão geral da loja.</p>
       </div>
+
+      {/* Vistoria de Alertas Operacionais (Admin) — antes da "Visão geral":
+          o que precisa de ação vem primeiro, os números gerais depois.
+          Painel independente (própria requisição/loading/erro, ver
+          AlertasPanel.tsx) — nunca reaproveita `resumo`/`erro` deste
+          componente, que são só do GET /dashboard/resumo. */}
+      <AlertasPanel />
 
       <section className="flex flex-col gap-5">
         <h3 className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">

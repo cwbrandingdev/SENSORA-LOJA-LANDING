@@ -41,25 +41,49 @@ async function seedSession(page: Page, perfil: "ADMIN" | "VENDEDOR" | "CLIENTE")
   );
 }
 
-// Etapa 6.6 (Dashboard Admin, Lote 2) — /workspace-x (Etapa 8.12, antes
-// /admin) passou a chamar GET /pedidos, /produtos e /categorias (ver
-// app/workspace-x/page.tsx). Sem mockar
-// essas três rotas, os testes abaixo que navegam para DASHBOARD_URL cairiam
-// no backend real (token fake → 401), disparando o redirect automático do
-// interceptor de services/api.ts NO MEIO do teste — não tem relação com o
-// que esta suíte testa (guarda ADMIN-only de Integrações), por isso só
-// neutralizamos com listas vazias, sem validar o conteúdo dos cards aqui
-// (isso é coberto em e2e/admin-dashboard-dados.spec.ts).
+// Etapa 6.6 (Dashboard Admin, Lote 2) + Vistoria de Alertas Operacionais —
+// /workspace-x (Etapa 8.12, antes /admin) chama GET /dashboard/resumo
+// (Visão geral) e GET /alertas (AlertasPanel), ver app/workspace-x/page.tsx.
+// Sem mockar essas duas rotas, os testes abaixo que navegam para
+// DASHBOARD_URL cairiam no backend real (token fake → 401), disparando o
+// redirect automático do interceptor de services/api.ts NO MEIO do teste —
+// não tem relação com o que esta suíte testa (guarda ADMIN-only de
+// Integrações), por isso só neutralizamos com respostas vazias, sem validar
+// o conteúdo dos cards/alertas aqui (isso é coberto em
+// e2e/admin-dashboard-dados.spec.ts e e2e/admin-alertas.spec.ts).
 async function mockDashboardApisVazias(page: Page) {
-  for (const rota of ["pedidos", "produtos", "categorias"]) {
-    await page.route(`**/${rota}`, async (route) => {
-      if (route.request().method() === "GET") {
-        await route.fulfill({ json: [] });
-        return;
-      }
+  await page.route("**/dashboard/resumo", async (route) => {
+    if (route.request().method() !== "GET") {
       await route.continue();
+      return;
+    }
+    await route.fulfill({
+      json: {
+        faturamento: 0,
+        pedidos: {
+          total: 0,
+          pagos: 0,
+          porStatus: {
+            PENDENTE: 0,
+            PAGO: 0,
+            CANCELADO: 0,
+            REEMBOLSO_SOLICITADO: 0,
+            REEMBOLSADO: 0,
+          },
+        },
+        produtos: { total: 0, ativos: 0, semEstoque: 0, estoqueBaixo: 0 },
+        categorias: { total: 0 },
+        clientes: { total: 0, ativos: 0 },
+      },
     });
-  }
+  });
+  await page.route("**/alertas", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    await route.continue();
+  });
 }
 
 async function mockTodosOsStatus(

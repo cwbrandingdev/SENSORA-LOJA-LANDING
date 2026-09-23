@@ -535,6 +535,28 @@ export type DashboardResumo = {
   clientes: ResumoClientesDashboard;
 };
 
+// Vistoria de Alertas Operacionais (Admin) — espelha
+// backend/src/alertas/entities/alerta.entity.ts (GET /alertas). Lista
+// SEMPRE só os problemas realmente em aberto (backend nunca inclui um item
+// com quantidade 0) — lista vazia é o estado normal ("sem alertas"), não um
+// erro. `link` é sempre uma rota base do Admin (nunca query string — ver
+// comentário em backend/src/alertas/constants/alertas.constants.ts).
+export type AlertaTipo =
+  | "ESTOQUE_BAIXO"
+  | "REEMBOLSO_SOLICITADO"
+  | "PEDIDO_AGUARDANDO_ENVIO"
+  | "MELHOR_ENVIO_DESCONECTADO";
+
+export type AlertaSeveridade = "warning" | "danger";
+
+export type Alerta = {
+  tipo: AlertaTipo;
+  severidade: AlertaSeveridade;
+  titulo: string;
+  quantidade: number;
+  link: string;
+};
+
 // Etapa 6.4 (Confirmação de e-mail) — espelha VerifyEmailDto/
 // ResendVerificationDto (backend/src/auth/dto).
 export type VerifyEmailPayload = {

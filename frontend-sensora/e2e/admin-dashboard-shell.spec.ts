@@ -6,21 +6,31 @@ import { test, expect, type Page } from "@playwright/test";
 // regressão do comportamento desktop). Mesmo padrão de mock via page.route
 // do resto do projeto.
 //
-// Lote 2 — o Dashboard passou a chamar GET /pedidos além de /produtos e
-// /categorias (ver app/workspace-x/page.tsx), então `mockListasVazias` abaixo
-// precisou passar a mockar /pedidos também: sem isso, essas chamadas cairiam
-// no backend real (token fake, 401) e o interceptor de services/api.ts
-// derrubaria a sessão no meio do teste — quebrando os testes de Header/
-// Sidebar desta suíte, que não têm nada a ver com o conteúdo dos cards. Os
-// testes de comportamento dos cards com dados reais (valor calculado,
-// loading, erro parcial, estado vazio) ficam em
-// e2e/admin-dashboard-dados.spec.ts — aqui só resta uma checagem leve de
-// que a seção "Visão geral" e os 4 títulos existem.
+// Manutenção (vistoria de Alertas Operacionais) — o Dashboard não chama
+// mais GET /pedidos, /produtos e /categorias: um ÚNICO GET /dashboard/resumo
+// (já agregado no banco) alimenta os 6 cards, e a página também monta o
+// AlertasPanel (GET /alertas). `mockDashboardApiVazio` abaixo mocka essas
+// duas rotas: sem isso, essas chamadas cairiam no backend real (token fake,
+// 401) e o interceptor de services/api.ts derrubaria a sessão no meio do
+// teste — quebrando os testes de Header/Sidebar desta suíte, que não têm
+// nada a ver com o conteúdo dos cards nem dos alertas. Os testes de
+// comportamento dos cards com dados reais (valor calculado, loading, erro,
+// estado vazio) ficam em e2e/admin-dashboard-dados.spec.ts, e os do
+// AlertasPanel em e2e/admin-alertas.spec.ts — aqui só resta uma checagem
+// leve de que a seção "Visão geral" e os 4 títulos existem.
+//
+// Achado da manutenção: as rotas eram mockadas com um prefixo absoluto
+// `http://localhost:3000`, que nunca correspondeu ao backend real
+// configurado neste ambiente (NEXT_PUBLIC_API_URL aponta para
+// https://backend-sensora-bright.fly.dev, ver .env/.env.local) — os mocks
+// nunca interceptavam nada, e vários testes desta suíte vinham batendo em
+// rede real. Trocado por padrão glob (`**/...`), mesmo usado em
+// e2e/admin-integracoes.spec.ts e e2e/admin-alertas.spec.ts, que não
+// depende do host configurado.
 
 const TOKEN_KEY = "sensora_token";
 const DASHBOARD_URL = "/workspace-x";
 const PRODUTOS_URL = "/workspace-x/produtos";
-const API_URL = "http://localhost:3000";
 
 function base64Url(payload: Record<string, unknown>): string {
   return Buffer.from(JSON.stringify(payload))
@@ -51,15 +61,38 @@ async function seedSession(page: Page, perfil: "ADMIN" | "VENDEDOR" = "ADMIN", e
 }
 
 async function mockListasVazias(page: Page) {
-  for (const rota of ["pedidos", "produtos", "categorias", "clientes"]) {
-    await page.route(`${API_URL}/${rota}`, async (route) => {
-      if (route.request().method() === "GET") {
-        await route.fulfill({ json: [] });
-        return;
-      }
+  await page.route("**/dashboard/resumo", async (route) => {
+    if (route.request().method() !== "GET") {
       await route.continue();
+      return;
+    }
+    await route.fulfill({
+      json: {
+        faturamento: 0,
+        pedidos: {
+          total: 0,
+          pagos: 0,
+          porStatus: {
+            PENDENTE: 0,
+            PAGO: 0,
+            CANCELADO: 0,
+            REEMBOLSO_SOLICITADO: 0,
+            REEMBOLSADO: 0,
+          },
+        },
+        produtos: { total: 0, ativos: 0, semEstoque: 0, estoqueBaixo: 0 },
+        categorias: { total: 0 },
+        clientes: { total: 0, ativos: 0 },
+      },
     });
-  }
+  });
+  await page.route("**/alertas", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    await route.continue();
+  });
 }
 
 test.describe("Dashboard Admin — Header", () => {

@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import * as Joi from 'joi';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AlertasModule } from './alertas/alertas.module';
 import { AuthModule } from './auth/auth.module';
 import { CloudflareAwareThrottlerGuard } from './auth/guards/render-throttler.guard';
 import { CategoriasModule } from './categorias/categorias.module';
@@ -127,6 +128,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     }),
     PrismaModule,
     ProdutosModule,
+    AlertasModule,
     CategoriasModule,
     CheckoutModule,
     ClientesModule,
