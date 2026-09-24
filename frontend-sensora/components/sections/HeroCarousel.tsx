@@ -9,6 +9,8 @@ import {
   type CarouselApi,
   CarouselContent,
   CarouselItem,
+  CarouselPrevious,
+  CarouselNext,
 } from "@/components/ui/carousel";
 import { HERO_SLIDES } from "@/lib/content";
 
@@ -150,6 +152,15 @@ export default function HeroCarousel() {
             </CarouselItem>
           ))}
         </CarouselContent>
+
+        <CarouselPrevious
+          aria-label="Slide anterior"
+          className="h-11 w-11 border-white/80 bg-black/30 backdrop-blur-sm hover:border-white hover:bg-black/50"
+        />
+        <CarouselNext
+          aria-label="Próximo slide"
+          className="h-11 w-11 border-white/80 bg-black/30 backdrop-blur-sm hover:border-white hover:bg-black/50"
+        />
       </Carousel>
     </section>
   );
