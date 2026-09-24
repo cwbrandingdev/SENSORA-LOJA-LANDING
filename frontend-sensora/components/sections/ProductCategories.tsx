@@ -34,14 +34,13 @@ const DEFAULT_CATEGORY_SIZES =
 export default function ProductCategories() {
   return (
     <div className="bg-[#f5f2ed]">
-      {/* py-16 no mobile (era py-24, achado REFINAMENTO da auditoria —
-          somado ao pt-16 de LatestReleases logo abaixo, os ~300px de vão
-          vazio entre o grid de categorias e "Conheça os últimos
-          lançamentos" em 320-430px viravam quase meia tela). sm/lg
-          inalterados. */}
+      {/* pb reduzido para, somado ao pt de LatestReleases logo abaixo
+          (mesmo fundo), dar ~120/176/208px de vão entre o grid de
+          categorias e "Conheça os últimos lançamentos" — o py cheio dos
+          dois lados deixava um vazio de até ~320px. */}
       <section
         aria-labelledby="produtos-heading"
-        className="bg-[#f5f2ed] relative mx-auto max-w-7xl overflow-hidden px-6 py-16 sm:py-32 lg:px-10 lg:py-40"
+        className="bg-[#f5f2ed] relative mx-auto max-w-7xl overflow-hidden px-6 pt-16 pb-15 sm:pt-32 sm:pb-22 lg:px-10 lg:pt-40 lg:pb-26"
       >
         <RevealOnScroll className="mx-auto mb-16 max-w-2xl text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
