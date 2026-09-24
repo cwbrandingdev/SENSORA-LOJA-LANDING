@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Autoplay from "embla-carousel-autoplay";
-import MagneticLink from "@/components/ui/MagneticLink";
+import Link from "next/link";
 import PlaceholderImage from "@/components/ui/PlaceholderImage";
 import {
   Carousel,
@@ -49,7 +49,11 @@ export default function HeroCarousel() {
         <CarouselContent className="ml-0 h-screen">
           {HERO_SLIDES.map((slide, slideIndex) => (
             <CarouselItem key={slide.id} className="h-screen pl-0">
-              <div className="relative h-full w-full overflow-hidden">
+              <Link
+                href={slide.ctaHref}
+                aria-label={`${slide.title} — ${slide.ctaLabel}`}
+                className="group/cta relative block h-full w-full overflow-hidden"
+              >
                 <div
                   className={`relative h-full w-full transition-transform ease-linear motion-reduce:!scale-100 motion-reduce:!duration-0 ${
                     slideIndex === index
@@ -128,9 +132,8 @@ export default function HeroCarousel() {
                       {slide.subtitle}
                     </p>
                   )}
-                  <MagneticLink
-                    href={slide.ctaHref}
-                    className={`group/cta !inline-flex items-center gap-3 border border-white/70 px-9 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-white transition-[color,background-color,border-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-brand-orange hover:bg-brand-orange focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy motion-reduce:transition-colors ${
+                  <span
+                    className={`inline-flex items-center gap-3 border border-white/70 px-9 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-white transition-[color,background-color,border-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover/cta:border-brand-orange group-hover/cta:bg-brand-orange group-focus-visible/cta:outline-none group-focus-visible/cta:ring-1 group-focus-visible/cta:ring-white/80 group-focus-visible/cta:ring-offset-2 group-focus-visible/cta:ring-offset-brand-navy motion-reduce:transition-colors ${
                       slide.id === "velas-4-estacoes" ? "mt-5 sm:mt-8" : "mt-8"
                     }`}
                   >
@@ -141,9 +144,9 @@ export default function HeroCarousel() {
                     >
                       →
                     </span>
-                  </MagneticLink>
+                  </span>
                 </div>
-              </div>
+              </Link>
             </CarouselItem>
           ))}
         </CarouselContent>
