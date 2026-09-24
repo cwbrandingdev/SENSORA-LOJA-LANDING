@@ -383,7 +383,7 @@ export default function DadosPessoaisPage() {
               )}
               className="text-brand-navy underline underline-offset-4"
             >
-              {EMPRESA.email}
+              {EMPRESA.emailSuporte}
             </a>
             . Os detalhes estão na{" "}
             <Link

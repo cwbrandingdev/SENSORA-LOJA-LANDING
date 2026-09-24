@@ -734,7 +734,7 @@ export default function CheckoutPage() {
                   </label>
                   <p className="mt-3 text-xs leading-relaxed text-slate-500">
                     A nota fiscal sai no CPF cadastrado em Dados pessoais. Se
-                    estiver em branco, pedimos por e-mail ({EMPRESA.email})
+                    estiver em branco, pedimos por e-mail ({EMPRESA.emailSuporte})
                     antes de emitir.
                   </p>
 

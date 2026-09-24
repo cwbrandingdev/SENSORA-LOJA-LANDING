@@ -44,7 +44,7 @@ export default function TrocasEDevolucoesPage() {
             href={mailtoArrependimento}
             className="text-brand-navy underline underline-offset-4"
           >
-            {EMPRESA.email}
+            {EMPRESA.emailSuporte}
           </a>{" "}
           com o número do pedido, que está em{" "}
           <Link href={ROUTES.CONTA_PEDIDOS} className="text-brand-navy underline underline-offset-4">
@@ -62,7 +62,7 @@ export default function TrocasEDevolucoesPage() {
           defeito (vazamento, item faltando no kit, dano que não seja mau uso),
           escreva para{" "}
           <a href={mailtoDefeito} className="text-brand-navy underline underline-offset-4">
-            {EMPRESA.email}
+            {EMPRESA.emailSuporte}
           </a>
           .
         </p>
@@ -87,7 +87,7 @@ export default function TrocasEDevolucoesPage() {
         <p>
           A nota da venda é emitida no CPF cadastrado. Guarde o documento: ele
           identifica a compra no arrependimento e na garantia. Se não tiver
-          recebido, peça em {EMPRESA.email}. As condições gerais da compra
+          recebido, peça em {EMPRESA.emailSuporte}. As condições gerais da compra
           estão nos{" "}
           <Link href={ROTAS_LEGAIS.termos} className="text-brand-navy underline underline-offset-4">
             Termos de Uso

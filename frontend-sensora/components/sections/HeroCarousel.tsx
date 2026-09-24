@@ -57,14 +57,39 @@ export default function HeroCarousel() {
                       : "duration-0 scale-100"
                   }`}
                 >
-                  <PlaceholderImage
-                    src={slide.imageSrc}
-                    alt={slide.imageAlt}
-                    label={slide.title}
-                    priority={slideIndex === 0}
-                    className="h-full w-full object-cover"
-                    sizes={slideIndex === 0 ? "100vw" : undefined}
-                  />
+                  {slide.imageSrcMobile ? (
+                    <>
+                      <div className="absolute inset-0 lg:hidden">
+                        <PlaceholderImage
+                          src={slide.imageSrcMobile}
+                          alt={slide.imageAlt}
+                          label={slide.title}
+                          priority={slideIndex === 0}
+                          className="h-full w-full object-cover"
+                          sizes={slideIndex === 0 ? "100vw" : undefined}
+                        />
+                      </div>
+                      <div className="absolute inset-0 hidden lg:block">
+                        <PlaceholderImage
+                          src={slide.imageSrc}
+                          alt={slide.imageAlt}
+                          label={slide.title}
+                          priority={slideIndex === 0}
+                          className="h-full w-full object-cover"
+                          sizes={slideIndex === 0 ? "100vw" : undefined}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <PlaceholderImage
+                      src={slide.imageSrc}
+                      alt={slide.imageAlt}
+                      label={slide.title}
+                      priority={slideIndex === 0}
+                      className="h-full w-full object-cover"
+                      sizes={slideIndex === 0 ? "100vw" : undefined}
+                    />
+                  )}
                 </div>
                 <div
                   aria-hidden

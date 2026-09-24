@@ -131,7 +131,7 @@ export default function PoliticaDePrivacidadePage() {
         <p>
           Para exclusão da conta ou qualquer outro pedido, escreva para{" "}
           <a href={mailtoPrivacidade} className="text-brand-navy underline underline-offset-4">
-            {EMPRESA.email}
+            {EMPRESA.emailSuporte}
           </a>
           . Dados que a lei manda guardar (nota fiscal, por exemplo) não são
           apagados antes do prazo.

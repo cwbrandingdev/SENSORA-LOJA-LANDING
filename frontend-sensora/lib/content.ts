@@ -16,6 +16,10 @@ export type HeroSlide = {
   imageAlt: string;
   /** Quando definido, a imagem final substitui o placeholder automaticamente. */
   imageSrc?: string;
+  /** Imagem exclusiva para telas abaixo de `lg` (mesmo breakpoint usado pela
+   *  Navbar para o menu mobile). Quando ausente, `imageSrc` é usada em todas
+   *  as larguras — comportamento anterior, sem mudança. */
+  imageSrcMobile?: string;
   /** Usar quando a arte do slide já traz título/subtítulo desenhados nela. */
   hideOverlayHeading?: boolean;
 };
@@ -448,6 +452,7 @@ export const HERO_SLIDES: HeroSlide[] = [
     ctaHref: getCollectionHref(VELAS_4_ESTACOES),
     imageAlt: VELAS_4_ESTACOES.heroImageAlt ?? "",
     imageSrc: "/images/hero/colecao-4-estacoes-banner.png",
+    imageSrcMobile: "/mobile/kits.jpg.jpeg",
   },
   {
     id: "sprays-de-ambiente",
@@ -457,6 +462,7 @@ export const HERO_SLIDES: HeroSlide[] = [
     ctaHref: getCategoryHref("sprays"),
     imageAlt: "Sprays de ambiente Sensora",
     imageSrc: "/images/hero/banner-sprays-novos.png",
+    imageSrcMobile: "/mobile/sprays.jpg.jpeg",
   },
   {
     id: "difusores-de-aroma",
@@ -466,6 +472,17 @@ export const HERO_SLIDES: HeroSlide[] = [
     ctaHref: getCategoryHref("difusores"),
     imageAlt: "Difusores de aroma Sensora",
     imageSrc: "/images/hero/difusores-de-aroma-banner.jpg",
+    imageSrcMobile: "/mobile/difusores.jpg.jpeg",
+  },
+  {
+    id: "velas-aromaticas",
+    title: "Velas Aromáticas",
+    subtitle: "Velas perfumadas que transformam qualquer ambiente.",
+    ctaLabel: "Conhecer kit",
+    ctaHref: getCategoryHref("velas"),
+    imageAlt: "Velas aromáticas Sensora",
+    imageSrc: "/images/hero/velas.png",
+    imageSrcMobile: "/mobile/velas.jpg.jpeg",
   },
 ];
 
@@ -565,7 +582,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     id: "contato",
     question: "Como entro em contato com a Sensora?",
     answer:
-      "Por e-mail, em suporte@sensorahome.com.br, ou pelo Instagram @sensoramarketingsensorial. Razão social, CNPJ e endereço estão na página Quem somos.",
+      "Por e-mail, em contato@sensorahome.com.br, ou pelo Instagram @sensoramarketingsensorial. Razão social, CNPJ e endereço estão na página Quem somos.",
   },
   {
     id: "arrependimento",
@@ -590,7 +607,7 @@ export const FAQ_ITEMS: FaqItem[] = [
 export const FOOTER_CONTENT = {
   tagline: "Marcas sentidas, em cada detalhe.",
   contact: {
-    email: "suporte@sensorahome.com.br",
+    email: "contato@sensorahome.com.br",
     phone: "",
   },
   social: [

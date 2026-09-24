@@ -11,7 +11,12 @@ export const EMPRESA = {
   cidade: "Curitiba",
   uf: "PR",
   cep: "80410-240",
-  email: "suporte@sensorahome.com.br",
+  // Contato geral/institucional (identificação legal do fornecedor, Termos
+  // de Uso, rodapé, FAQ "como entro em contato").
+  email: "contato@sensorahome.com.br",
+  // Pós-venda/LGPD (trocas, defeito, nota fiscal, dados pessoais) — sempre o
+  // destino de mailtoAssunto() abaixo, cujas chamadas hoje são só desse tipo.
+  emailSuporte: "suporte@sensorahome.com.br",
   instagram: "@sensoramarketingsensorial",
   instagramUrl: "https://www.instagram.com/sensoramarketingsensorial/",
   atualizadoEm: "22 de setembro de 2026",
@@ -28,5 +33,5 @@ export const ROTAS_LEGAIS = {
 } as const;
 
 export function mailtoAssunto(assunto: string, corpo: string): string {
-  return `mailto:${EMPRESA.email}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
+  return `mailto:${EMPRESA.emailSuporte}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
 }
