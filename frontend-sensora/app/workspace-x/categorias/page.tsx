@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import CategoryTable from "@/components/tables/CategoryTable";
+import CategoriasPainel from "@/components/admin/CategoriasPainel";
 import CategoryForm, { type CategoryFormValues } from "@/components/forms/CategoryForm";
 import FormButton from "@/components/ui/FormButton";
-import TableSkeleton from "@/components/ui/TableSkeleton";
-import InlineErrorState from "@/components/ui/InlineErrorState";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import {
@@ -101,21 +99,24 @@ export default function CategoriasPage() {
         </FormButton>
       </div>
 
-      {showForm && (
-        <CategoryForm
-          initialData={editingCategory}
-          onSubmit={handleSubmit}
-          onCancel={handleCancel}
-        />
-      )}
-
-      {loading ? (
-        <TableSkeleton rows={3} columns={3} />
-      ) : erro ? (
-        <InlineErrorState message={erro} onRetry={carregarCategorias} />
-      ) : (
-        <CategoryTable categorias={categorias} onEdit={handleEdit} onRemove={handleRemove} />
-      )}
+      <CategoriasPainel
+        categorias={categorias}
+        loading={loading}
+        erro={erro}
+        onRetry={carregarCategorias}
+        onEdit={handleEdit}
+        onRemove={handleRemove}
+        formulario={
+          showForm ? (
+            <CategoryForm
+              initialData={editingCategory}
+              onSubmit={handleSubmit}
+              onCancel={handleCancel}
+            />
+          ) : null
+        }
+        onFecharFormulario={handleCancel}
+      />
     </div>
   );
 }

@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import UserTable from "@/components/tables/UserTable";
+import UsuariosPainel from "@/components/admin/UsuariosPainel";
 import UserForm from "@/components/forms/UserForm";
 import FormButton from "@/components/ui/FormButton";
-import TableSkeleton from "@/components/ui/TableSkeleton";
-import InlineErrorState from "@/components/ui/InlineErrorState";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
@@ -134,21 +132,24 @@ export default function UsuariosPage() {
         </FormButton>
       </div>
 
-      {showForm && (
-        <UserForm
-          initialData={editingUser}
-          onSubmit={handleSubmit}
-          onCancel={handleCancel}
-        />
-      )}
-
-      {loading ? (
-        <TableSkeleton rows={4} columns={5} />
-      ) : erro ? (
-        <InlineErrorState message={erro} onRetry={carregarUsuarios} />
-      ) : (
-        <UserTable usuarios={usuarios} onEdit={handleEdit} onRemove={handleRemove} />
-      )}
+      <UsuariosPainel
+        usuarios={usuarios}
+        loading={loading}
+        erro={erro}
+        onRetry={carregarUsuarios}
+        onEdit={handleEdit}
+        onRemove={handleRemove}
+        formulario={
+          showForm ? (
+            <UserForm
+              initialData={editingUser}
+              onSubmit={handleSubmit}
+              onCancel={handleCancel}
+            />
+          ) : null
+        }
+        onFecharFormulario={handleCancel}
+      />
     </div>
   );
 }
