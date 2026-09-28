@@ -89,7 +89,10 @@ export default function KitShowcaseCard({ kit }: KitShowcaseCardProps) {
           {kit.seasons.map((season, index) => (
             <span key={season} className="flex items-center gap-2">
               {index > 0 && (
-                <span aria-hidden className="h-1 w-1 rounded-full bg-brand-navy/25" />
+                <span
+                  aria-hidden
+                  className="h-1 w-1 rounded-full bg-brand-navy/25"
+                />
               )}
               <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-navy/55">
                 {season}
@@ -101,7 +104,7 @@ export default function KitShowcaseCard({ kit }: KitShowcaseCardProps) {
       <div className="mt-7">
         {href ? (
           <Button href={href} variant="primary">
-            Conhecer kit →
+            ConheceSr kit →
           </Button>
         ) : (
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">

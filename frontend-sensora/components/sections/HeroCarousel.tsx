@@ -57,10 +57,10 @@ export default function HeroCarousel() {
                 className="group/cta relative block h-full w-full overflow-hidden"
               >
                 <div
-                  className={`relative h-full w-full transition-transform ease-linear motion-reduce:!scale-100 motion-reduce:!duration-0 ${
+                  className={`relative h-full w-full motion-reduce:!scale-100 motion-reduce:!duration-0 sm:transition-transform sm:ease-linear ${
                     slideIndex === index
-                      ? "duration-[9000ms] scale-[1.025]"
-                      : "duration-0 scale-100"
+                      ? "sm:duration-[9000ms] sm:scale-[1.025]"
+                      : "sm:duration-0 sm:scale-100"
                   }`}
                 >
                   {slide.imageSrcMobile ? (
@@ -155,11 +155,11 @@ export default function HeroCarousel() {
 
         <CarouselPrevious
           aria-label="Slide anterior"
-          className="h-11 w-11 border-white/80 bg-black/30 backdrop-blur-sm hover:border-white hover:bg-black/50"
+          className="h-11 w-11 border-white/80 bg-black/30 sm:backdrop-blur-sm hover:border-white hover:bg-black/50"
         />
         <CarouselNext
           aria-label="Próximo slide"
-          className="h-11 w-11 border-white/80 bg-black/30 backdrop-blur-sm hover:border-white hover:bg-black/50"
+          className="h-11 w-11 border-white/80 bg-black/30 sm:backdrop-blur-sm hover:border-white hover:bg-black/50"
         />
       </Carousel>
     </section>
