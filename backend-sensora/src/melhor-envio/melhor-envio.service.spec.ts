@@ -98,7 +98,8 @@ describe('MelhorEnvioService — OAuth2', () => {
       CONFIG_VALORES.MELHOR_ENVIO_REDIRECT_URI,
     );
     expect(url.searchParams.get('response_type')).toBe('code');
-    expect(url.searchParams.get('state')).toHaveLength(48);
+    // state = payload cifrado (AES-256-GCM) em base64url — nunca em memória.
+    expect(url.searchParams.get('state')).toMatch(/^[A-Za-z0-9_-]{60,}$/);
   });
 
   it('URL de autorização usa o domínio de produção quando MELHOR_ENVIO_ENV=production', async () => {
@@ -165,30 +166,26 @@ describe('MelhorEnvioService — OAuth2', () => {
   // Fail-safe (Etapa 8.4) — sem a chave de criptografia configurada, a
   // troca de code por token precisa FALHAR explicitamente ao tentar
   // persistir, nunca gravar o token em texto puro como alternativa.
-  it('sem MELHOR_ENVIO_TOKEN_ENCRYPTION_KEY configurada: trocarCodigoPorToken falha ao persistir, nunca grava token em texto puro', async () => {
+  it('sem MELHOR_ENVIO_TOKEN_ENCRYPTION_KEY configurada: a conexão falha já ao gerar o state, nunca chama o Melhor Envio nem grava token em texto puro', async () => {
     const configSemChave = { ...CONFIG_VALORES };
     delete configSemChave.MELHOR_ENVIO_TOKEN_ENCRYPTION_KEY;
     const { service, prisma } = await criarService(configSemChave);
-    const url = new URL(service.gerarUrlAutorizacao());
-    const state = url.searchParams.get('state')!;
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
 
-    global.fetch = mockFetchOnce(200, {
-      access_token: 'access-x',
-      refresh_token: 'refresh-x',
-      expires_in: 3600,
-    }) as unknown as typeof fetch;
-
-    await expect(
-      service.trocarCodigoPorToken('codigo-valido', state),
-    ).rejects.toThrow(InternalServerErrorException);
+    expect(() => service.gerarUrlAutorizacao()).toThrow(
+      InternalServerErrorException,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(prisma.melhorEnvioToken.upsert).not.toHaveBeenCalled();
   });
 
   it('mesmo state não pode ser reutilizado (uso único)', async () => {
-    const { service } = await criarService();
+    const { service, prisma } = await criarService();
     const url = new URL(service.gerarUrlAutorizacao());
     const state = url.searchParams.get('state')!;
 
+    prisma.melhorEnvioToken.findUnique.mockResolvedValueOnce(null);
     global.fetch = mockFetchOnce(200, {
       access_token: 'a',
       refresh_token: 'r',
@@ -196,12 +193,130 @@ describe('MelhorEnvioService — OAuth2', () => {
     }) as unknown as typeof fetch;
     await service.trocarCodigoPorToken('codigo-1', state);
 
+    // O banco agora tem o token gravado DEPOIS da emissão do state.
+    prisma.melhorEnvioToken.findUnique.mockResolvedValueOnce({
+      atualizadoEm: new Date(Date.now() + 1),
+    });
+
     const fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
     await expect(
       service.trocarCodigoPorToken('codigo-2', state),
     ).rejects.toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('state válido emitido por uma instância é aceito por OUTRA instância (sem memória local)', async () => {
+    const chave = randomBytes(32).toString('base64');
+    const config = { ...CONFIG_VALORES, MELHOR_ENVIO_TOKEN_ENCRYPTION_KEY: chave };
+    const maquinaA = await criarService(config);
+    const maquinaB = await criarService(config);
+
+    const state = new URL(maquinaA.service.gerarUrlAutorizacao()).searchParams.get(
+      'state',
+    )!;
+
+    maquinaB.prisma.melhorEnvioToken.findUnique.mockResolvedValueOnce(null);
+    maquinaB.prisma.melhorEnvioToken.upsert.mockResolvedValueOnce({});
+    global.fetch = mockFetchOnce(200, {
+      access_token: 'a',
+      refresh_token: 'r',
+      expires_in: 3600,
+    }) as unknown as typeof fetch;
+
+    await expect(
+      maquinaB.service.trocarCodigoPorToken('codigo', state),
+    ).resolves.toBeUndefined();
+    expect(maquinaB.prisma.melhorEnvioToken.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('state expirado (mais de 10 min) é rejeitado, nunca chama o Melhor Envio', async () => {
+    const { service } = await criarService();
+    const agora = Date.now();
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(agora);
+    const state = new URL(service.gerarUrlAutorizacao()).searchParams.get('state')!;
+
+    nowSpy.mockReturnValue(agora + 10 * 60_000 + 1);
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(service.trocarCodigoPorToken('codigo', state)).rejects.toThrow(
+      /state inválido ou expirado/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('state adulterado ou cifrado com outra chave é rejeitado', async () => {
+    const { service } = await criarService();
+    const state = new URL(service.gerarUrlAutorizacao()).searchParams.get('state')!;
+    const meio = Math.floor(state.length / 2);
+    const adulterado =
+      state.slice(0, meio) + (state[meio] === 'A' ? 'B' : 'A') + state.slice(meio + 1);
+
+    const outraChave = await criarService({
+      ...CONFIG_VALORES,
+      MELHOR_ENVIO_TOKEN_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
+    });
+    const deOutraChave = new URL(
+      outraChave.service.gerarUrlAutorizacao(),
+    ).searchParams.get('state')!;
+
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+    await expect(service.trocarCodigoPorToken('c', adulterado)).rejects.toThrow(
+      /state inválido ou expirado/,
+    );
+    await expect(service.trocarCodigoPorToken('c', deOutraChave)).rejects.toThrow(
+      /state inválido ou expirado/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('state emitido antes de uma conexão mais recente (gravada por qualquer máquina) é rejeitado', async () => {
+    const { service, prisma } = await criarService();
+    const state = new URL(service.gerarUrlAutorizacao()).searchParams.get('state')!;
+
+    prisma.melhorEnvioToken.findUnique.mockResolvedValueOnce({
+      atualizadoEm: new Date(Date.now() + 5_000),
+    });
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(service.trocarCodigoPorToken('c', state)).rejects.toThrow(
+      /state já utilizado/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('o state nunca contém client_secret nem tokens — e a troca do code envia o User-Agent configurado', async () => {
+    const { service, prisma, tokenCrypto } = await criarService();
+    const state = new URL(service.gerarUrlAutorizacao()).searchParams.get('state')!;
+    const conteudo = tokenCrypto.decrypt(
+      Buffer.from(state, 'base64url').toString('utf8'),
+    );
+    expect(conteudo).not.toContain('client-secret-teste');
+    expect(Object.keys(JSON.parse(conteudo) as object).sort()).toEqual([
+      'e',
+      'f',
+      'i',
+      'n',
+    ]);
+
+    prisma.melhorEnvioToken.findUnique.mockResolvedValueOnce(null);
+    prisma.melhorEnvioToken.upsert.mockResolvedValueOnce({});
+    const fetchMock = mockFetchOnce(200, {
+      access_token: 'a',
+      refresh_token: 'r',
+      expires_in: 3600,
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    await service.trocarCodigoPorToken('codigo', state);
+
+    const [urlChamada, opcoes] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(urlChamada).toBe('https://sandbox.melhorenvio.com.br/oauth/token');
+    expect((opcoes.headers as Record<string, string>)['User-Agent']).toBe(
+      CONFIG_VALORES.MELHOR_ENVIO_USER_AGENT,
+    );
   });
 
   it('credenciais ausentes: gerarUrlAutorizacao falha cedo, sem tentar nenhuma chamada', async () => {
@@ -380,6 +495,12 @@ describe('MelhorEnvioService — cotar (Etapa 6.5, Parte 3)', () => {
       (fetchMock.mock.calls[0][1] as RequestInit).body as string,
     ) as Record<string, string>;
     expect(corpoRefresh.refresh_token).toBe('refresh-velho');
+    // A renovação também envia o User-Agent exigido pela API.
+    expect(
+      ((fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>)[
+        'User-Agent'
+      ],
+    ).toBe(CONFIG_VALORES.MELHOR_ENVIO_USER_AGENT);
 
     // Caso I (Etapa 8.4) — o novo par de tokens devolvido pelo refresh
     // também é persistido CRIPTOGRAFADO, nunca em texto puro.

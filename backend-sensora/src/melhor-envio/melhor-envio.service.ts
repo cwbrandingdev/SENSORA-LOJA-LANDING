@@ -56,6 +56,21 @@ interface TokenResponse {
   expires_in: number;
 }
 
+// OAuth `state` sem memória local (o backend roda em mais de uma máquina):
+// o próprio state carrega {finalidade, nonce, emitido/expira em}, cifrado e
+// autenticado com AES-256-GCM pelo MelhorEnvioTokenCryptoService (mesma
+// chave já compartilhada pelas máquinas). Qualquer máquina valida; ninguém
+// forja nem altera. Nunca carrega client_secret/access_token/refresh_token.
+const STATE_FINALIDADE = 'melhor-envio-oauth';
+const STATE_VALIDADE_MS = 10 * 60_000;
+
+interface StatePayload {
+  f: string; // finalidade — amarra o state a este fluxo OAuth
+  n: string; // nonce aleatório (32 bytes)
+  i: number; // emitido em (ms)
+  e: number; // expira em (ms)
+}
+
 // Renova um pouco antes da expiração real — evita usar um access_token que
 // expira no meio de uma requisição em voo.
 const MARGEM_EXPIRACAO_MS = 60_000;
@@ -84,8 +99,6 @@ export class MelhorEnvioService {
   // depois. Guardado em memória, não no banco: é só proteção CSRF do fluxo
   // de conexão (não é dado de negócio), e um restart do backend nesse
   // intervalo raríssimo só obriga o admin a clicar em "Conectar" de novo.
-  private state?: { valor: string; expiraEm: number };
-
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
@@ -247,8 +260,7 @@ export class MelhorEnvioService {
 
   gerarUrlAutorizacao(): string {
     this.garantirCredenciaisConfiguradas();
-    const valor = randomBytes(24).toString('hex');
-    this.state = { valor, expiraEm: Date.now() + 10 * 60_000 };
+    const valor = this.emitirState();
 
     const params = new URLSearchParams({
       client_id: this.clientId!,
@@ -263,16 +275,22 @@ export class MelhorEnvioService {
   async trocarCodigoPorToken(code: string, state: string): Promise<void> {
     this.garantirCredenciaisConfiguradas();
 
-    if (
-      !this.state ||
-      this.state.valor !== state ||
-      this.state.expiraEm < Date.now()
-    ) {
+    const emitidoEm = this.validarState(state);
+
+    // Uso único sem tabela nova: `atualizadoEm` do token salvo (compartilhado
+    // por todas as máquinas via banco) marca a última conexão/renovação. Um
+    // state emitido ANTES disso já foi usado (ou foi superado por uma conexão
+    // mais recente) e é recusado — inclusive o próprio state, depois do
+    // primeiro callback bem-sucedido.
+    const tokenAtual = await this.prisma.melhorEnvioToken.findUnique({
+      where: { id: 1 },
+      select: { atualizadoEm: true },
+    });
+    if (tokenAtual && tokenAtual.atualizadoEm.getTime() >= emitidoEm) {
       throw new MelhorEnvioErroHttpError(
-        'state inválido ou expirado — reinicie a conexão com o Melhor Envio',
+        'state já utilizado — reinicie a conexão com o Melhor Envio',
       );
     }
-    this.state = undefined; // uso único — nunca aceita o mesmo state duas vezes
 
     const resposta = await this.requestToken({
       grant_type: 'authorization_code',
@@ -283,6 +301,54 @@ export class MelhorEnvioService {
     });
 
     await this.persistirToken(resposta);
+  }
+
+  private emitirState(): string {
+    const agora = Date.now();
+    const payload: StatePayload = {
+      f: STATE_FINALIDADE,
+      n: randomBytes(32).toString('hex'),
+      i: agora,
+      e: agora + STATE_VALIDADE_MS,
+    };
+    // base64url: o formato do ciphertext ("v1:iv:tag:dados", base64 comum)
+    // tem ':' '+' '/' '=' — vira um valor seguro para ir e voltar na URL.
+    return Buffer.from(
+      this.tokenCrypto.encrypt(JSON.stringify(payload)),
+      'utf8',
+    ).toString('base64url');
+  }
+
+  // Devolve o instante de emissão do state válido; qualquer problema
+  // (forjado, adulterado, de outro fluxo, expirado) vira a mesma recusa.
+  private validarState(state: string | undefined): number {
+    const invalido = () =>
+      new MelhorEnvioErroHttpError(
+        'state inválido ou expirado — reinicie a conexão com o Melhor Envio',
+      );
+    if (!state) throw invalido();
+
+    const cifrado = Buffer.from(state, 'base64url').toString('utf8');
+    if (!cifrado.startsWith('v1:')) throw invalido();
+
+    let payload: Partial<StatePayload>;
+    try {
+      payload = JSON.parse(
+        this.tokenCrypto.decrypt(cifrado),
+      ) as Partial<StatePayload>;
+    } catch {
+      throw invalido();
+    }
+
+    if (
+      payload.f !== STATE_FINALIDADE ||
+      typeof payload.i !== 'number' ||
+      typeof payload.e !== 'number' ||
+      payload.e < Date.now()
+    ) {
+      throw invalido();
+    }
+    return payload.i;
   }
 
   async estaConectado(): Promise<boolean> {
@@ -360,6 +426,9 @@ export class MelhorEnvioService {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
+          // Exigido pela API em toda requisição — vale para a troca do code
+          // e para a renovação via refresh_token (ambas passam por aqui).
+          ...(this.userAgent ? { 'User-Agent': this.userAgent } : {}),
         },
         body: JSON.stringify(body),
       });
