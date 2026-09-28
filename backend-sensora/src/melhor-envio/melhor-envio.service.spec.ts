@@ -319,6 +319,48 @@ describe('MelhorEnvioService — OAuth2', () => {
     );
   });
 
+  // Reconexão (botão "Reconectar" do Admin): já existe um token salvo — por
+  // exemplo de outra conta/app, que o Melhor Envio passou a recusar com 401.
+  // Um state emitido AGORA (depois da última gravação desse token) é aceito,
+  // e o token novo SOBRESCREVE o antigo via upsert — nada é apagado antes.
+  it('reconexão: com um token antigo salvo, um state novo é aceito e o token é sobrescrito (upsert), nunca apagado', async () => {
+    const { service, prisma, tokenCrypto } = await criarService();
+    const tokenAntigoGravadoEm = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const state = new URL(service.gerarUrlAutorizacao()).searchParams.get('state')!;
+
+    prisma.melhorEnvioToken.findUnique.mockResolvedValueOnce({
+      atualizadoEm: tokenAntigoGravadoEm,
+    });
+    prisma.melhorEnvioToken.upsert.mockResolvedValueOnce({});
+    (prisma.melhorEnvioToken as Record<string, jest.Mock>).delete = jest.fn();
+    (prisma.melhorEnvioToken as Record<string, jest.Mock>).deleteMany = jest.fn();
+    const fetchMock = mockFetchOnce(200, {
+      access_token: 'access-conta-nova',
+      refresh_token: 'refresh-conta-nova',
+      expires_in: 3600,
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await service.trocarCodigoPorToken('codigo-da-reconexao', state);
+
+    // Troca do code com o User-Agent configurado.
+    const [, opcoes] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((opcoes.headers as Record<string, string>)['User-Agent']).toBe(
+      CONFIG_VALORES.MELHOR_ENVIO_USER_AGENT,
+    );
+    // Sobrescreve o registro único (id 1) com o token novo, cifrado.
+    expect(prisma.melhorEnvioToken.upsert).toHaveBeenCalledTimes(1);
+    const chamada = prisma.melhorEnvioToken.upsert.mock.calls[0][0] as {
+      where: unknown;
+      update: { accessToken: string };
+    };
+    expect(chamada.where).toEqual({ id: 1 });
+    expect(tokenCrypto.decrypt(chamada.update.accessToken)).toBe('access-conta-nova');
+    // Nunca apaga o token antigo manualmente.
+    expect(prisma.melhorEnvioToken.delete).not.toHaveBeenCalled();
+    expect(prisma.melhorEnvioToken.deleteMany).not.toHaveBeenCalled();
+  });
+
   it('credenciais ausentes: gerarUrlAutorizacao falha cedo, sem tentar nenhuma chamada', async () => {
     const { service } = await criarService({ MELHOR_ENVIO_ENV: 'sandbox' });
     expect(() => service.gerarUrlAutorizacao()).toThrow(

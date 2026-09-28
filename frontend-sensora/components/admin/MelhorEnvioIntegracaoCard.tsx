@@ -190,11 +190,26 @@ export default function MelhorEnvioIntegracaoCard() {
 
       {!erroStatus && !carregandoStatus && (
         <div className="flex flex-col gap-2">
-          <div>
+          <div className="flex flex-wrap gap-2">
             {conectado ? (
-              <FormButton variant="secondary" onClick={handleVerificar} disabled={verificando}>
-                {verificando ? "Verificando..." : "Verificar agora"}
-              </FormButton>
+              <>
+                {/* "Verificar agora" só verifica o token atual — nunca inicia
+                    OAuth. "Reconectar" reaproveita handleConectar (mesmo
+                    GET /admin/melhor-envio/conectar + state seguro); o
+                    callback grava o token novo por cima do antigo. Útil
+                    quando o token salvo deixou de valer (ex.: troca de
+                    conta/app de produção → 401 em GET /api/v2/me). */}
+                <FormButton variant="secondary" onClick={handleVerificar} disabled={verificando}>
+                  {verificando ? "Verificando..." : "Verificar agora"}
+                </FormButton>
+                <FormButton
+                  variant={operational === false ? "primary" : "secondary"}
+                  onClick={handleConectar}
+                  disabled={conectando || !configurado}
+                >
+                  {conectando ? "Conectando..." : "Reconectar"}
+                </FormButton>
+              </>
             ) : (
               <FormButton
                 variant="primary"
@@ -208,6 +223,11 @@ export default function MelhorEnvioIntegracaoCard() {
           {mensagemOperacional && (
             <p className={`text-xs ${operational ? "text-emerald-600" : "text-amber-600"}`}>
               {mensagemOperacional}
+            </p>
+          )}
+          {conectado && operational === false && (
+            <p className="text-xs text-slate-500">
+              Se o Melhor Envio recusou o token salvo, use &quot;Reconectar&quot; para autorizar a conta novamente.
             </p>
           )}
         </div>
