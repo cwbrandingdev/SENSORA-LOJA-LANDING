@@ -12,8 +12,10 @@ import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import { produtoCombina, sugerirProdutos } from "@/lib/busca-produtos";
 import { LOJA_PRODUTO_URL } from "@/lib/config";
 
+// Canonical sem query: ?categoria= e ?q= apontam todos para o catálogo.
 export const metadata: Metadata = {
   title: "Catálogo",
+  alternates: { canonical: "/loja/produtos" },
 };
 
 type CatalogoPageProps = {

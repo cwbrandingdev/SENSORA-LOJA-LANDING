@@ -32,10 +32,21 @@ const nunito = Nunito({
   subsets: ["latin"],
 });
 
+// Sem canonical aqui de propósito: todas as páginas herdariam o da home.
+// Os canonicals ficam só nas páginas que precisam (home, catálogo, produto).
 export const metadata: Metadata = {
-  title: "Sensora | Marketing Sensorial",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://sensorahome.com.br"),
+  title: {
+    default: "Sensora | Marketing Sensorial",
+    template: "%s | Sensora",
+  },
   description:
     "Conheça as velas aromáticas, sprays de ambiente, difusores de aroma e kits da Sensora.",
+  openGraph: {
+    siteName: "Sensora",
+    locale: "pt_BR",
+    type: "website",
+  },
 };
 
 export default function RootLayout({

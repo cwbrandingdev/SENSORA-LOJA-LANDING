@@ -17,6 +17,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Painel administrativo — Sensora",
+  // Fora do índice sem listar o caminho no robots.txt (ver app/robots.ts).
+  robots: { index: false, follow: false },
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

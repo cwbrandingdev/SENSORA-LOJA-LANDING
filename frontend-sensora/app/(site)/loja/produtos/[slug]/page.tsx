@@ -5,6 +5,7 @@ import {
   buscarProdutoPublicoPorSlug,
   ApiPublicaIndisponivelError,
 } from "@/lib/api-publica";
+import { LOJA_PRODUTO_URL } from "@/lib/config";
 import { ROUTES } from "@/lib/routes";
 import PlaceholderImage from "@/components/ui/PlaceholderImage";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
@@ -31,7 +32,10 @@ export async function generateMetadata({
     if (!produto) {
       return { title: "Produto não encontrado" };
     }
-    return { title: produto.nome };
+    return {
+      title: produto.nome,
+      alternates: { canonical: LOJA_PRODUTO_URL(produto.slug) },
+    };
   } catch {
     return { title: "Catálogo" };
   }

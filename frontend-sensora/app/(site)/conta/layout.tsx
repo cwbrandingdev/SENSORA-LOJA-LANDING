@@ -3,7 +3,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import ProtectedAccountLayout from "@/components/conta/ProtectedAccountLayout";
 
 export const metadata: Metadata = {
-  title: "Minha Conta | Sensora",
+  title: "Minha Conta",
 };
 
 // AuthProvider aqui é escopado só à árvore de /conta — o layout raiz do site
