@@ -48,7 +48,7 @@ export default function HeroCarousel() {
         ]}
         className="h-screen w-full"
       >
-        <CarouselContent className="ml-0 h-screen">
+        <CarouselContent className="ml-0 h-screen max-sm:touch-pan-y max-sm:touch-pinch-zoom">
           {HERO_SLIDES.map((slide, slideIndex) => (
             <CarouselItem key={slide.id} className="h-screen pl-0">
               <Link

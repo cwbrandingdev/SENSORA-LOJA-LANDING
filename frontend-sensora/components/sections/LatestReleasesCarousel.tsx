@@ -25,7 +25,7 @@ export default function LatestReleasesCarousel({
 
   return (
     <Carousel opts={{ align: "start", loop: false }} className="w-full">
-      <CarouselContent className={`-ml-3 ${centralizar}`}>
+      <CarouselContent className={`-ml-3 max-sm:touch-pan-y max-sm:touch-pinch-zoom ${centralizar}`}>
         {produtos.map((produto) => (
           <CarouselItem
             key={produto.key}

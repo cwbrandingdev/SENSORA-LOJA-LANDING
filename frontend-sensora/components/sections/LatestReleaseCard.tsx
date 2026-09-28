@@ -58,7 +58,7 @@ export default function LatestReleaseCard({ produto }: { produto: ReleaseItem })
   // Barra "Adicionar à sacola" sobe por cima da foto no hover (desktop);
   // no mobile fica sempre visível. h-12 mantém o alvo de toque ≥ 44px.
   const acaoClass =
-    "absolute inset-x-0 bottom-0 z-10 flex h-12 items-center justify-center gap-2 bg-brand-navy/90 text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-sm transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-brand-orange disabled:cursor-not-allowed disabled:bg-slate-400/90 lg:translate-y-full lg:group-hover:translate-y-0 lg:focus-visible:translate-y-0";
+    "absolute inset-x-0 bottom-0 z-10 flex h-12 items-center justify-center gap-2 bg-brand-navy/90 text-[11px] font-semibold uppercase tracking-[0.18em] text-white sm:backdrop-blur-sm transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-brand-orange disabled:cursor-not-allowed disabled:bg-slate-400/90 lg:translate-y-full lg:group-hover:translate-y-0 lg:focus-visible:translate-y-0";
 
   const acaoConteudo = (
     <>
