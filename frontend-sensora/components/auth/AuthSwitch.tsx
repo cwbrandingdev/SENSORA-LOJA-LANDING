@@ -147,7 +147,7 @@ export default function AuthSwitch({ initialMode }: { initialMode: AuthMode }) {
 // ---------------------------------------------------------------------------
 
 const loginSchema = z.object({
-  email: z.string().min(1, "Email é obrigatório").email("Email inválido"),
+  email: z.string().trim().min(1, "Email é obrigatório").email("Email inválido"),
   senha: z
     .string()
     .min(1, "Senha é obrigatória")
@@ -349,10 +349,56 @@ function SignInForm({ active }: { active: boolean }) {
 // só o container/apresentação mudou.
 // ---------------------------------------------------------------------------
 
+// Erros de digitação conhecidos em domínios de e-mail → domínio provável.
+// Lista explícita (sem "adivinhação" por semelhança): só sugere quando o
+// erro é reconhecível com segurança. É um AVISO — nunca bloqueia o cadastro
+// (ex.: ".co" existe e pode ser legítimo). A confirmação por e-mail continua
+// sendo a validação definitiva.
+const CORRECOES_DOMINIO: Record<string, string> = {
+  "gmail.co": "gmail.com",
+  "gmail.con": "gmail.com",
+  "gmail.cm": "gmail.com",
+  "gmail.om": "gmail.com",
+  "gmail.com.br": "gmail.com",
+  "gmai.com": "gmail.com",
+  "gmial.com": "gmail.com",
+  "gmal.com": "gmail.com",
+  "gamil.com": "gmail.com",
+  "gnail.com": "gmail.com",
+  "gmaill.com": "gmail.com",
+  "hotmail.co": "hotmail.com",
+  "hotmail.con": "hotmail.com",
+  "hotmai.com": "hotmail.com",
+  "hotmal.com": "hotmail.com",
+  "hotmial.com": "hotmail.com",
+  "hotamil.com": "hotmail.com",
+  "homail.com": "hotmail.com",
+  "outlook.co": "outlook.com",
+  "outlook.con": "outlook.com",
+  "outlok.com": "outlook.com",
+  "outllook.com": "outlook.com",
+  "otlook.com": "outlook.com",
+  "yaho.com": "yahoo.com",
+  "yahooo.com": "yahoo.com",
+  "yhoo.com": "yahoo.com",
+  "icloud.co": "icloud.com",
+  "iclod.com": "icloud.com",
+  "icoud.com": "icloud.com",
+};
+
+function sugerirEmail(email: string): string | null {
+  const [usuario, dominio, ...resto] = email.trim().toLowerCase().split("@");
+  if (!usuario || !dominio || resto.length > 0) return null;
+  const correto = CORRECOES_DOMINIO[dominio];
+  return correto ? `${usuario}@${correto}` : null;
+}
+
 const registerSchema = z
   .object({
     nome: z.string().min(1, "Nome é obrigatório"),
-    email: z.string().min(1, "Email é obrigatório").email("Email inválido"),
+    // .trim(): espaço sobrando nas pontas não reprova mais um e-mail válido
+    // (o backend também normaliza: trim + minúsculas).
+    email: z.string().trim().min(1, "Email é obrigatório").email("Email inválido"),
     // Etapa (Repetir senha) — mínimo elevado de 6 para 8 caracteres, para
     // ficar igual ao backend (RegisterDto.senha, ver
     // backend-sensora/src/auth/dto/register.dto.ts — @MinLength(8)).
@@ -399,6 +445,7 @@ function SignUpForm({
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -408,6 +455,7 @@ function SignUpForm({
   const aceiteTermos = watch("aceiteTermos");
   const senhaValor = watch("senha");
   const confirmarValor = watch("confirmarSenha");
+  const sugestaoEmail = sugerirEmail(watch("email") ?? "");
   const cpfValor = watch("cpf");
   const cpfInvalidoAoVivo =
     normalizarCpf(cpfValor).length === 11 && !cpfValido(cpfValor);
@@ -513,6 +561,24 @@ function SignUpForm({
         {errors.email && (
           <p id="register-email-error" className="authswitch-field-error">
             {errors.email.message}
+          </p>
+        )}
+        {/* Aviso de possível erro de digitação no domínio — só sugere,
+            nunca impede o envio. */}
+        {!errors.email && sugestaoEmail && (
+          <p className="authswitch-field-hint" role="status" aria-live="polite">
+            Você quis dizer{" "}
+            <button
+              type="button"
+              className="authswitch-email-sugestao"
+              tabIndex={active ? 0 : -1}
+              onClick={() =>
+                setValue("email", sugestaoEmail, { shouldValidate: true })
+              }
+            >
+              {sugestaoEmail}
+            </button>
+            ?
           </p>
         )}
       </div>
@@ -965,6 +1031,15 @@ const AUTH_SWITCH_CSS = `
   color: #6b7280;
   margin-top: 0.3rem;
   margin-left: 0.85rem;
+}
+.authswitch-email-sugestao {
+  font-weight: 600;
+  color: #1e293b;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.authswitch-email-sugestao:hover {
+  color: #c2410c;
 }
 
 .authswitch-forgot {

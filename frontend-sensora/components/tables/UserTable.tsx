@@ -98,6 +98,13 @@ export default function UserTable({ usuarios, onEdit, onRemove }: UserTableProps
                 <p className="truncate text-slate-500" title={usuario.email}>
                   {usuario.email}
                 </p>
+                {/* Estado da confirmação de e-mail (campo já vindo da API).
+                    Conta não verificada não consegue entrar até confirmar. */}
+                <div className="mt-1.5">
+                  <Badge tone={usuario.emailVerificado ? "success" : "warning"}>
+                    {usuario.emailVerificado ? "E-mail verificado" : "E-mail não verificado"}
+                  </Badge>
+                </div>
               </td>
               <td className="px-5 py-4">
                 <Badge tone={PERFIL_TONE[usuario.perfil]}>{PERFIL_LABEL[usuario.perfil]}</Badge>

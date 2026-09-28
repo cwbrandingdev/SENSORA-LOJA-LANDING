@@ -35,7 +35,17 @@ describe('UsuariosService — create (Etapa 6.4: estado inicial de emailVerifica
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsuariosService,
-        { provide: PrismaService, useValue: { usuario: { create: prismaCreate } } },
+        {
+          provide: PrismaService,
+          // findUnique: checagem de e-mail duplicado em create() — nenhum
+          // usuário existente nestes cenários.
+          useValue: {
+            usuario: {
+              create: prismaCreate,
+              findUnique: jest.fn().mockResolvedValue(null),
+            },
+          },
+        },
         ENDERECOS_SERVICE_STUB,
       ],
     }).compile();
@@ -182,6 +192,71 @@ describe('UsuariosService — atualizarMeusDados: CPF/telefone', () => {
     }).compile();
 
     service = module.get(UsuariosService);
+  });
+
+  // ---- E-mail (normalização + troca exige nova confirmação) ---------------
+
+  it('e-mail com maiúsculas e espaços é gravado normalizado; troca de e-mail zera a verificação e grava o token novo na mesma escrita', async () => {
+    const expiry = new Date('2030-01-01T00:00:00Z');
+    const resultado = await service.atualizarMeusDados(
+      1,
+      { nome: 'Cliente Um', email: '  NOVO@GMAIL.COM ' },
+      { emailVerificationHash: 'hash-novo', emailVerificationExpiry: expiry },
+    );
+
+    expect(resultado.email).toBe('novo@gmail.com');
+    expect(resultado.emailVerificado).toBe(false);
+    expect(update).toHaveBeenCalledTimes(1);
+    const data = update.mock.calls[0][0].data as Record<string, unknown>;
+    expect(data).toMatchObject({
+      email: 'novo@gmail.com',
+      emailVerificado: false,
+      emailVerificadoEm: null,
+      emailVerificationHash: 'hash-novo',
+      emailVerificationExpiry: expiry,
+    });
+  });
+
+  it('troca de e-mail sem token informado continua zerando a verificação e limpa o hash anterior', async () => {
+    usuariosFake.set(1, usuarioBase({ emailVerificationHash: 'hash-antigo' }));
+
+    const resultado = await service.atualizarMeusDados(1, {
+      nome: 'Cliente Um',
+      email: 'outro@sensora.dev',
+    });
+
+    expect(resultado.emailVerificado).toBe(false);
+    expect(usuariosFake.get(1)).toMatchObject({
+      emailVerificado: false,
+      emailVerificationHash: null,
+    });
+  });
+
+  it('mesmo e-mail com outra caixa/espaços NÃO é troca: a verificação é mantida', async () => {
+    const resultado = await service.atualizarMeusDados(1, {
+      nome: 'Cliente Um Editado',
+      email: ' UM@Sensora.DEV ',
+    });
+
+    expect(resultado.emailVerificado).toBe(true);
+    const data = update.mock.calls[0][0].data as Record<string, unknown>;
+    expect(data).not.toHaveProperty('emailVerificado');
+    expect(data).toHaveProperty('email', 'um@sensora.dev');
+  });
+
+  it('e-mail de outra conta com caixa diferente é conflito (sem duplicidade por maiúsculas)', async () => {
+    await expect(
+      service.atualizarMeusDados(1, {
+        nome: 'Cliente Um',
+        email: 'DOIS@SENSORA.DEV',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('buscarPorEmail normaliza a entrada antes de consultar', async () => {
+    const encontrado = await service.buscarPorEmail('  Dois@SENSORA.dev ');
+    expect(encontrado?.id).toBe(2);
   });
 
   // ---- CPF ----------------------------------------------------------------

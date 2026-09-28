@@ -120,10 +120,17 @@ export default function DadosPessoaisPage() {
   async function onSubmit(data: DadosFormValues) {
     try {
       const atualizado = await atualizarMeuPerfil(data);
+      // Troca de e-mail: o backend grava o endereço novo como não verificado
+      // e envia o link de confirmação para ele (a sessão atual continua).
+      const emailAlterado = usuario !== null && atualizado.email !== usuario.email;
       setUsuario(atualizado);
       reset(valoresIniciais(atualizado));
       setCampoEditando(null);
-      toast.success("Dados atualizados com sucesso.");
+      toast.success(
+        emailAlterado
+          ? `Novo e-mail salvo. Enviamos um link de confirmação para ${atualizado.email} — confirme o novo endereço para continuar entrando com ele.`
+          : "Dados atualizados com sucesso.",
+      );
     } catch (err) {
       toast.error(getErrorMessage(err, "Não foi possível atualizar seus dados."));
     }
@@ -217,7 +224,18 @@ export default function DadosPessoaisPage() {
                       {errors.email && <p className={errorClass}>{errors.email.message}</p>}
                     </div>
                   ) : (
-                    <p className="mt-1 truncate text-base text-brand-navy">{usuario.email}</p>
+                    <>
+                      <p className="mt-1 truncate text-base text-brand-navy">{usuario.email}</p>
+                      {/* Aviso persistente (o toast some): e-mail ainda não
+                          confirmado, normalmente logo após uma troca. */}
+                      {!usuario.emailVerificado && (
+                        <p className="mt-2 text-sm text-amber-700">
+                          E-mail ainda não confirmado. Enviamos um link de
+                          confirmação para este endereço — confirme para
+                          continuar entrando com ele.
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
 

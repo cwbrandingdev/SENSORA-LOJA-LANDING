@@ -151,6 +151,61 @@ test.describe("Criar conta — /register", () => {
     await expect(page.getByText("Conta criada!")).toBeVisible();
   });
 
+  test("domínio com erro comum (gmail.co): sugere gmail.com, e clicar na sugestão corrige o campo", async ({
+    page,
+  }) => {
+    await page.goto("/register");
+    await preencherCadastro(page, { email: "xuxeco9@gmail.co" });
+
+    const sugestao = page.getByRole("button", { name: "xuxeco9@gmail.com" });
+    await expect(page.getByText("Você quis dizer")).toBeVisible();
+    await sugestao.click();
+
+    await expect(page.locator("#register-email")).toHaveValue("xuxeco9@gmail.com");
+    await expect(page.getByText("Você quis dizer")).toHaveCount(0);
+  });
+
+  test("a sugestão de domínio é só um aviso: ignorá-la não impede o cadastro", async ({
+    page,
+  }) => {
+    let corpoEnviado: { email?: string } | null = null;
+    await page.route("**/auth/register", async (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        json: {
+          id: 999,
+          nome: "Cliente Teste",
+          email: "cliente@outlok.com",
+          perfil: "CLIENTE",
+          ativo: true,
+          emailVerificado: false,
+        },
+      });
+    });
+
+    await page.goto("/register");
+    await preencherCadastro(page, {
+      nome: "Cliente Teste",
+      email: "cliente@outlok.com",
+      cpf: CPF_VALIDO,
+      senha: "senhaSegura123",
+      confirmar: "senhaSegura123",
+    });
+    await expect(page.getByRole("button", { name: "cliente@outlook.com" })).toBeVisible();
+    await page.locator("#register-aceite").check();
+    await page.locator(SUBMIT_BUTTON).click();
+
+    await expect(page.getByText("Conta criada!")).toBeVisible();
+    expect(corpoEnviado).toMatchObject({ email: "cliente@outlok.com" });
+  });
+
+  test("domínio legítimo (.co de empresa) não gera sugestão", async ({ page }) => {
+    await page.goto("/register");
+    await preencherCadastro(page, { email: "contato@empresa.co" });
+    await expect(page.getByText("Você quis dizer")).toHaveCount(0);
+  });
+
   test("mostrar uma senha revela as duas; ocultar esconde as duas", async ({ page }) => {
     await page.goto("/register");
 

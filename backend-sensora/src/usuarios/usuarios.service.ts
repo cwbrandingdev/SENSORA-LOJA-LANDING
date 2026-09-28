@@ -11,6 +11,7 @@ import {
   type Usuario as UsuarioPrisma,
 } from '../../generated/prisma/client';
 import { cpfValido, normalizarCpf } from '../common/utils/cpf.util';
+import { normalizarEmail } from '../common/utils/email.util';
 import { normalizarTelefone, telefoneValido } from '../common/utils/telefone.util';
 import { EnderecosService } from '../enderecos/enderecos.service';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
@@ -110,8 +111,13 @@ export class UsuariosService {
     };
   }
 
+  // Normaliza aqui também (além dos DTOs): todo lookup por e-mail — login,
+  // cadastro, recuperação de senha, reenvio de confirmação — passa por este
+  // método, então nenhuma comparação depende de o chamador ter normalizado.
   async buscarPorEmail(email: string): Promise<Usuario | null> {
-    const usuario = await this.prisma.usuario.findUnique({ where: { email } });
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { email: normalizarEmail(email) },
+    });
     if (!usuario) {
       return null;
     }
@@ -154,9 +160,20 @@ export class UsuariosService {
       SALT_ROUNDS,
     );
     const { cpf, telefone, ...rest } = createUsuarioDto;
+    const email = normalizarEmail(rest.email);
+
+    // Criação pelo painel não passava por nenhuma checagem de e-mail (só o
+    // cadastro público, em AuthService.register) — um duplicado caía no
+    // P2002 abaixo com a mensagem de CPF.
+    if (await this.buscarPorEmail(email)) {
+      throw new ConflictException(
+        'Já existe um usuário cadastrado com este e-mail',
+      );
+    }
 
     const data: Prisma.UsuarioCreateInput = {
       ...rest,
+      email,
       senha: senhaCriptografada,
       ativo: createUsuarioDto.ativo ?? true,
       ...(opcoes?.emailVerificado !== undefined && {
@@ -201,6 +218,19 @@ export class UsuariosService {
     const { senha, cpf, telefone, ...rest } = updateUsuarioDto;
 
     const data: Prisma.UsuarioUpdateInput = { ...rest };
+
+    // Alteração administrativa: normaliza e checa duplicidade, mas mantém o
+    // estado de verificação — o painel é operado por ADMIN, mesmo raciocínio
+    // de contas criadas pelo painel nascerem verificadas (schema.prisma).
+    if (rest.email !== undefined) {
+      data.email = normalizarEmail(rest.email);
+      const existente = await this.buscarPorEmail(data.email);
+      if (existente && existente.id !== id) {
+        throw new ConflictException(
+          'Este e-mail já está em uso por outra conta.',
+        );
+      }
+    }
 
     if (senha !== undefined) {
       data.senha = await bcrypt.hash(senha, SALT_ROUNDS);
@@ -248,21 +278,42 @@ export class UsuariosService {
   // próprio usuário mantendo o e-mail que já tinha não é duplicidade) — o
   // mesmo raciocínio é aplicado ao CPF logo abaixo, em
   // normalizarEValidarCpfParaUsuario.
+  //
+  // Troca de e-mail: o endereço novo ainda não foi provado, então a conta
+  // volta a `emailVerificado:false` NA MESMA escrita que troca o e-mail —
+  // nunca existe um instante em que o e-mail novo aparece como verificado.
+  // `verificacao` (hash + validade do token novo, gerados em AuthService,
+  // que também envia o link) entra nessa mesma escrita; sem ela, o hash
+  // anterior é limpo (um link antigo jamais confirma o endereço novo) e o
+  // usuário pode pedir um link pelo reenvio de confirmação.
   async atualizarMeusDados(
     id: number,
     dto: AtualizarMeusDadosDto,
+    verificacao?: {
+      emailVerificationHash: string;
+      emailVerificationExpiry: Date;
+    },
   ): Promise<UsuarioPublico> {
-    await this.localizar(id);
+    const atual = await this.localizar(id);
+    const email = normalizarEmail(dto.email);
 
-    const existente = await this.buscarPorEmail(dto.email);
+    const existente = await this.buscarPorEmail(email);
     if (existente && existente.id !== id) {
       throw new ConflictException('Este e-mail já está em uso por outra conta.');
     }
 
     const data: Prisma.UsuarioUpdateInput = {
       nome: dto.nome,
-      email: dto.email,
+      email,
     };
+
+    if (email !== atual.email) {
+      data.emailVerificado = false;
+      data.emailVerificadoEm = null;
+      data.emailVerificationHash = verificacao?.emailVerificationHash ?? null;
+      data.emailVerificationExpiry =
+        verificacao?.emailVerificationExpiry ?? null;
+    }
 
     if (dto.cpf !== undefined) {
       data.cpf = await this.normalizarEValidarCpfParaUsuario(id, dto.cpf);

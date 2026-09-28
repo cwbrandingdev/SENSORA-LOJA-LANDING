@@ -9,6 +9,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { PerfilUsuario } from '../enums/perfil-usuario.enum';
+import { NormalizarEmail } from '../../common/utils/email.util';
 
 export class CreateUsuarioDto {
   // Etapa 10 / Task 6 (achado H8)
@@ -17,6 +18,7 @@ export class CreateUsuarioDto {
   @MaxLength(150)
   nome: string;
 
+  @NormalizarEmail()
   @IsEmail()
   email: string;
 

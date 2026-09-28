@@ -5,6 +5,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { NormalizarEmail } from '../../common/utils/email.util';
 
 export class RegisterDto {
   // Etapa 10 / Task 6 (achado H8)
@@ -13,6 +14,7 @@ export class RegisterDto {
   @MaxLength(150)
   nome: string;
 
+  @NormalizarEmail()
   @IsEmail()
   email: string;
 

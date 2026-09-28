@@ -51,6 +51,8 @@ describe('AuthService', () => {
     buscarRefreshTokenPorHash: jest.Mock;
     buscarAtivoPorId: jest.Mock;
     revogarRefreshTokenSeAtivo: jest.Mock;
+    findOne: jest.Mock;
+    atualizarMeusDados: jest.Mock;
   };
   let mailService: { enviarEmail: jest.Mock };
   let jwtService: { sign: jest.Mock };
@@ -71,6 +73,8 @@ describe('AuthService', () => {
       buscarRefreshTokenPorHash: jest.fn(),
       buscarAtivoPorId: jest.fn(),
       revogarRefreshTokenSeAtivo: jest.fn(),
+      findOne: jest.fn(),
+      atualizarMeusDados: jest.fn(),
     };
     mailService = { enviarEmail: jest.fn() };
     jwtService = { sign: jest.fn(() => 'access-token-fake') };
@@ -154,6 +158,8 @@ describe('AuthService', () => {
         expect.objectContaining({
           to: 'cliente@sensora.dev',
           subject: 'Confirme seu e-mail',
+          // Cadastro continua com o texto de boas-vindas (inalterado).
+          html: expect.stringContaining('Obrigado por criar sua conta'),
         }),
       );
     });
@@ -418,6 +424,70 @@ describe('AuthService', () => {
 
       expect(usuariosService.emitirTokenVerificacaoEmail).toHaveBeenCalledTimes(1);
       expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('atualizarMeusDados — troca de e-mail exige nova confirmação', () => {
+    const atual = {
+      id: 7,
+      nome: 'Cliente',
+      email: 'cliente@sensora.dev',
+      perfil: PerfilUsuario.CLIENTE,
+      ativo: true,
+      emailVerificado: true,
+    };
+
+    it('e-mail igual (mesmo com outra caixa/espaços): só repassa, sem token nem e-mail', async () => {
+      usuariosService.findOne.mockResolvedValueOnce(atual);
+      usuariosService.atualizarMeusDados.mockResolvedValueOnce(atual);
+
+      await service.atualizarMeusDados(7, {
+        nome: 'Cliente',
+        email: ' CLIENTE@Sensora.dev ',
+      });
+
+      expect(usuariosService.atualizarMeusDados).toHaveBeenCalledWith(7, {
+        nome: 'Cliente',
+        email: ' CLIENTE@Sensora.dev ',
+      });
+      expect(mailService.enviarEmail).not.toHaveBeenCalled();
+    });
+
+    it('e-mail novo: grava o hash (nunca o token) na mesma chamada e envia o link para o endereço NOVO', async () => {
+      usuariosService.findOne.mockResolvedValueOnce(atual);
+      usuariosService.atualizarMeusDados.mockResolvedValueOnce({
+        ...atual,
+        email: 'novo@gmail.com',
+        emailVerificado: false,
+      });
+
+      const resultado = await service.atualizarMeusDados(7, {
+        nome: 'Cliente',
+        email: 'NOVO@GMAIL.COM',
+      });
+
+      expect(resultado.emailVerificado).toBe(false);
+      const [, , verificacao] = usuariosService.atualizarMeusDados.mock.calls[0] as [
+        number,
+        unknown,
+        { emailVerificationHash: string; emailVerificationExpiry: Date },
+      ];
+      expect(verificacao.emailVerificationHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(verificacao.emailVerificationExpiry.getTime()).toBeGreaterThan(Date.now());
+
+      expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
+      const enviado = mailService.enviarEmail.mock.calls[0][0] as {
+        to: string;
+        html: string;
+      };
+      expect(enviado.to).toBe('novo@gmail.com');
+      // Texto de troca de endereço, nunca o de cadastro.
+      expect(enviado.html).toContain('foi alterado');
+      expect(enviado.html).not.toContain('Obrigado por criar sua conta');
+      const token = /token=([a-f0-9]+)/.exec(enviado.html)?.[1];
+      expect(token).toBeDefined();
+      // O link carrega o token; o banco recebe só o hash dele.
+      expect(token).not.toBe(verificacao.emailVerificationHash);
     });
   });
 

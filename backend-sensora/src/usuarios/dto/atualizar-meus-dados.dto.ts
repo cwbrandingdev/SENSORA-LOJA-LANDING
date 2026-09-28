@@ -1,4 +1,5 @@
 import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { NormalizarEmail } from '../../common/utils/email.util';
 
 // Etapa 3 (Minha Conta / Dados Pessoais) — whitelist deliberadamente restrita
 // a nome/email(/cpf/telefone, Etapa "Dados do Cliente / Cadastro"). NUNCA
@@ -23,6 +24,7 @@ export class AtualizarMeusDadosDto {
   @MaxLength(150)
   nome: string;
 
+  @NormalizarEmail()
   @IsEmail()
   email: string;
 

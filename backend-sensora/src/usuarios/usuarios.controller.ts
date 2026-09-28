@@ -5,12 +5,15 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Inject,
   Param,
   ParseIntPipe,
   Post,
   Put,
   UseGuards,
+  forwardRef,
 } from '@nestjs/common';
+import { AuthService } from '../auth/auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -34,7 +37,14 @@ import { UsuariosService } from './usuarios.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(...ADMIN_ONLY_ROLES)
 export class UsuariosController {
-  constructor(private readonly usuariosService: UsuariosService) {}
+  // AuthService via forwardRef: AuthModule já importa UsuariosModule, e a
+  // troca de e-mail em PUT /usuarios/me precisa do fluxo de confirmação que
+  // vive no AuthService (token + envio do link) — sem duplicá-lo aqui.
+  constructor(
+    private readonly usuariosService: UsuariosService,
+    @Inject(forwardRef(() => AuthService))
+    private readonly authService: AuthService,
+  ) {}
 
   @Get()
   findAll(): Promise<UsuarioPublico[]> {
@@ -60,7 +70,7 @@ export class UsuariosController {
     @Body() dto: AtualizarMeusDadosDto,
     @CurrentUser() user: UsuarioAutenticado,
   ): Promise<UsuarioPublico> {
-    return this.usuariosService.atualizarMeusDados(user.id, dto);
+    return this.authService.atualizarMeusDados(user.id, dto);
   }
 
   @Get(':id')

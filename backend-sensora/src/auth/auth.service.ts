@@ -9,7 +9,9 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'crypto';
+import { normalizarEmail } from '../common/utils/email.util';
 import { MailService } from '../mail/mail.service';
+import { AtualizarMeusDadosDto } from '../usuarios/dto/atualizar-meus-dados.dto';
 import { Usuario, UsuarioPublico } from '../usuarios/entities/usuario.entity';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
 import { UsuariosService } from '../usuarios/usuarios.service';
@@ -313,6 +315,46 @@ export class AuthService {
     return { message: VERIFICATION_RESEND_MENSAGEM };
   }
 
+  // Minha Conta (PUT /usuarios/me) — orquestra a troca de e-mail com o mesmo
+  // fluxo de confirmação do cadastro. Sem troca de e-mail, é só um repasse
+  // para UsuariosService.atualizarMeusDados. Com troca, o token novo é
+  // gravado na MESMA escrita que troca o e-mail e zera a verificação (ver
+  // atualizarMeusDados) e o link vai para o endereço novo. MailService nunca
+  // lança: se o envio falhar, a conta fica não verificada com um token
+  // válido — estado consistente, recuperável pelo reenvio de confirmação.
+  // A sessão atual não é encerrada (o usuário continua podendo corrigir o
+  // e-mail em Minha Conta); só um NOVO login exige a confirmação.
+  async atualizarMeusDados(
+    usuarioId: number,
+    dto: AtualizarMeusDadosDto,
+  ): Promise<UsuarioPublico> {
+    const atual = await this.usuariosService.findOne(usuarioId);
+
+    if (normalizarEmail(dto.email) === atual.email) {
+      return this.usuariosService.atualizarMeusDados(usuarioId, dto);
+    }
+
+    const emailVerificationToken = randomBytes(32).toString('hex');
+    const usuario = await this.usuariosService.atualizarMeusDados(
+      usuarioId,
+      dto,
+      {
+        emailVerificationHash: this.hashToken(emailVerificationToken),
+        emailVerificationExpiry: new Date(
+          Date.now() + EMAIL_VERIFICATION_VALIDADE_MS,
+        ),
+      },
+    );
+
+    await this.enviarEmailVerificacao(
+      usuario,
+      emailVerificationToken,
+      'troca-email',
+    );
+
+    return usuario;
+  }
+
   // Limite de reenvio por e-mail-alvo (aprovado, requisito 12): sem coluna
   // nova — `emailVerificationExpiry - EMAIL_VERIFICATION_VALIDADE_MS` é
   // exatamente o instante em que o token atual foi emitido (seja pelo
@@ -329,9 +371,14 @@ export class AuthService {
 
   // Mesmo raciocínio de enviarEmailResetSenha: FRONTEND_URL ausente só pula
   // o envio (com warning), nunca derruba o fluxo que chamou este método.
+  // `motivo` só muda o texto: o link/token/validade são os mesmos nos dois
+  // casos. Cadastro e reenvio usam 'cadastro' (padrão); troca de e-mail em
+  // Minha Conta usa 'troca-email' — não faz sentido agradecer por "criar a
+  // conta" a quem só trocou o endereço.
   private async enviarEmailVerificacao(
     usuario: { nome: string; email: string },
     token: string,
+    motivo: 'cadastro' | 'troca-email' = 'cadastro',
   ): Promise<void> {
     const frontendUrl = this.configService.get<string>('FRONTEND_URL');
     if (!frontendUrl) {
@@ -342,16 +389,23 @@ export class AuthService {
     }
 
     const link = `${frontendUrl}/confirmar-email?token=${token}`;
+    const trocaDeEmail = motivo === 'troca-email';
 
     await this.mailService.enviarEmail({
       to: usuario.email,
-      subject: 'Confirme seu e-mail',
+      subject: trocaDeEmail
+        ? 'Confirme seu novo endereço de e-mail'
+        : 'Confirme seu e-mail',
       html:
         `<p>Olá, ${usuario.nome}.</p>` +
-        '<p>Obrigado por criar sua conta na Sensora! Clique no link abaixo para confirmar seu e-mail:</p>' +
+        (trocaDeEmail
+          ? '<p>O endereço de e-mail da sua conta na Sensora foi alterado para este. Clique no link abaixo para confirmar o novo endereço:</p>'
+          : '<p>Obrigado por criar sua conta na Sensora! Clique no link abaixo para confirmar seu e-mail:</p>') +
         `<p><a href="${link}">${link}</a></p>` +
         `<p>Este link expira em ${EMAIL_VERIFICATION_VALIDADE_HORAS} horas.</p>` +
-        '<p>Se você não criou uma conta na Sensora, ignore este e-mail.</p>',
+        (trocaDeEmail
+          ? '<p>Se você não fez essa alteração, ignore este e-mail e fale com a gente.</p>'
+          : '<p>Se você não criou uma conta na Sensora, ignore este e-mail.</p>'),
     });
   }
 
