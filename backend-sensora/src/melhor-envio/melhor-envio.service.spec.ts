@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
-import { InternalServerErrorException } from '@nestjs/common';
+import { InternalServerErrorException, Logger } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { MelhorEnvioTokenCryptoService } from './melhor-envio-token-crypto.service';
@@ -814,9 +814,182 @@ describe('MelhorEnvioService — Central de Integrações (Admin)', () => {
     });
   });
 
+  // "Verificar agora" — valida a capacidade real de cotação (escopo
+  // shipping-calculate) reutilizando cotar(); nunca GET /api/v2/me.
   describe('verificarOperacional', () => {
+    // Pacote EXPLICITAMENTE configurado (o teste de conexão não aceita os
+    // valores padrão do construtor).
+    const CONFIG_COMPLETA: Record<string, string> = {
+      ...CONFIG_VALORES,
+      MELHOR_ENVIO_PACOTE_ALTURA_CM: '12',
+      MELHOR_ENVIO_PACOTE_LARGURA_CM: '16',
+      MELHOR_ENVIO_PACOTE_COMPRIMENTO_CM: '22',
+      MELHOR_ENVIO_PACOTE_PESO_GRAMAS: '450',
+    };
+
+    function tokenValido(tokenCrypto: MelhorEnvioTokenCryptoService) {
+      return {
+        accessToken: tokenCrypto.encrypt('access-valido'),
+        refreshToken: tokenCrypto.encrypt('refresh-valido'),
+        expiresAt: new Date(Date.now() + 60 * 60_000),
+      };
+    }
+
+    function respostaCotacao(status: number, corpo: unknown) {
+      const ok = status >= 200 && status < 300;
+      return jest.fn().mockResolvedValueOnce({
+        ok,
+        status,
+        statusText:
+          status === 401
+            ? 'Unauthorized'
+            : status === 403
+              ? 'Forbidden'
+              : ok
+                ? 'OK'
+                : 'Erro',
+        json: async () => corpo,
+        text: async () => JSON.stringify(corpo),
+      } as unknown as Response);
+    }
+
+    const OPCAO = (id: number) => ({
+      id,
+      name: `Serviço ${id}`,
+      price: '19.90',
+      delivery_time: 5,
+      company: { name: 'Transportadora' },
+    });
+
+    it('sucesso: cota via POST /shipment/calculate reutilizando cotar() (Bearer + User-Agent, CEP de origem, pacote configurado) e nunca chama /api/v2/me', async () => {
+      const { service, prisma, tokenCrypto } =
+        await criarService(CONFIG_COMPLETA);
+      prisma.melhorEnvioToken.findUnique.mockResolvedValue(
+        tokenValido(tokenCrypto),
+      );
+      const fetchMock = respostaCotacao(200, [OPCAO(1), OPCAO(2)]);
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      const resultado = await service.verificarOperacional();
+
+      expect(resultado.operational).toBe(true);
+      expect(resultado.mensagem).toContain('2 opções');
+      expect(resultado.mensagem).toContain(
+        'não garante frete para todos os destinos',
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe(
+        'https://sandbox.melhorenvio.com.br/api/v2/me/shipment/calculate',
+      );
+      expect(url).not.toMatch(/\/api\/v2\/me$/);
+      expect(init.method).toBe('POST');
+      const headers = init.headers as Record<string, string>;
+      expect(headers.Authorization).toBe('Bearer access-valido');
+      expect(headers['User-Agent']).toBe(
+        CONFIG_VALORES.MELHOR_ENVIO_USER_AGENT,
+      );
+      const corpo = JSON.parse(init.body as string) as {
+        from: { postal_code: string };
+        to: { postal_code: string };
+        package: {
+          height: number;
+          width: number;
+          length: number;
+          weight: number;
+        };
+        options: { insurance_value: number };
+      };
+      // Origem -> ela mesma: nenhum CEP inventado.
+      expect(corpo.from.postal_code).toBe('80000000');
+      expect(corpo.to.postal_code).toBe('80000000');
+      // Exatamente o pacote configurado (não os padrões 10/15/20/300).
+      expect(corpo.package).toEqual({
+        height: 12,
+        width: 16,
+        length: 22,
+        weight: 0.45,
+      });
+      expect(corpo.options.insurance_value).toBe(0);
+    });
+
+    it('resposta vazia (200 com lista vazia): conexão/escopo válidos, deixando claro que não garante frete', async () => {
+      const { service, prisma, tokenCrypto } =
+        await criarService(CONFIG_COMPLETA);
+      prisma.melhorEnvioToken.findUnique.mockResolvedValue(
+        tokenValido(tokenCrypto),
+      );
+      global.fetch = respostaCotacao(200, []) as unknown as typeof fetch;
+
+      const resultado = await service.verificarOperacional();
+
+      expect(resultado.operational).toBe(true);
+      expect(resultado.mensagem).toContain('sem opções');
+      expect(resultado.mensagem).toContain(
+        'não garante frete para todos os destinos',
+      );
+    });
+
+    it('CEP de origem ausente: configuração incompleta, nunca chama o Melhor Envio', async () => {
+      const config = { ...CONFIG_COMPLETA };
+      delete config.MELHOR_ENVIO_CEP_ORIGEM;
+      const { service, prisma } = await criarService(config);
+      const fetchMock = jest.fn();
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      const resultado = await service.verificarOperacional();
+
+      expect(resultado.operational).toBe(false);
+      expect(resultado.mensagem).toContain('Configuração incompleta');
+      expect(resultado.mensagem).toContain('MELHOR_ENVIO_CEP_ORIGEM');
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(prisma.melhorEnvioToken.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('pacote incompleto (sem peso e sem altura): configuração incompleta, nunca usa os padrões nem chama o Melhor Envio', async () => {
+      const config = { ...CONFIG_COMPLETA };
+      delete config.MELHOR_ENVIO_PACOTE_PESO_GRAMAS;
+      delete config.MELHOR_ENVIO_PACOTE_ALTURA_CM;
+      const { service } = await criarService(config);
+      const fetchMock = jest.fn();
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      const resultado = await service.verificarOperacional();
+
+      expect(resultado.operational).toBe(false);
+      expect(resultado.mensagem).toContain('MELHOR_ENVIO_PACOTE_PESO_GRAMAS');
+      expect(resultado.mensagem).toContain('MELHOR_ENVIO_PACOTE_ALTURA_CM');
+      expect(resultado.mensagem).not.toContain(
+        'MELHOR_ENVIO_PACOTE_LARGURA_CM',
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [401, 'Unauthorized'],
+      [403, 'Forbidden'],
+    ])(
+      'Melhor Envio recusa a cotação com %i: operational=false com a mensagem administrativa de sempre',
+      async (status) => {
+        const { service, prisma, tokenCrypto } =
+          await criarService(CONFIG_COMPLETA);
+        prisma.melhorEnvioToken.findUnique.mockResolvedValue(
+          tokenValido(tokenCrypto),
+        );
+        global.fetch = respostaCotacao(status, {
+          message: 'Unauthenticated.',
+        }) as unknown as typeof fetch;
+
+        await expect(service.verificarOperacional()).resolves.toEqual({
+          operational: false,
+          mensagem: 'O Melhor Envio recusou a verificação da conexão.',
+        });
+      },
+    );
+
     it('não conectado: operational=false com a mesma mensagem de MelhorEnvioNaoConectadoError, nunca chama fetch', async () => {
-      const { service, prisma } = await criarService();
+      const { service, prisma } = await criarService(CONFIG_COMPLETA);
       prisma.melhorEnvioToken.findUnique.mockResolvedValueOnce(null);
       const fetchMock = jest.fn();
       global.fetch = fetchMock as unknown as typeof fetch;
@@ -828,65 +1001,62 @@ describe('MelhorEnvioService — Central de Integrações (Admin)', () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it('conectado, token válido: GET /api/v2/me com o access token certo -> operational=true', async () => {
-      const { service, prisma, tokenCrypto } = await criarService();
-      prisma.melhorEnvioToken.findUnique.mockResolvedValue({
-        accessToken: tokenCrypto.encrypt('access-valido'),
-        refreshToken: tokenCrypto.encrypt('refresh-valido'),
-        expiresAt: new Date(Date.now() + 60 * 60_000),
-      });
-      const fetchMock = jest.fn().mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-      } as unknown as Response);
-      global.fetch = fetchMock as unknown as typeof fetch;
-
-      await expect(service.verificarOperacional()).resolves.toEqual({
-        operational: true,
-      });
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-      expect(url).toBe('https://sandbox.melhorenvio.com.br/api/v2/me');
-      expect(init.method).toBe('GET');
-      expect((init.headers as Record<string, string>).Authorization).toBe(
-        'Bearer access-valido',
-      );
-    });
-
-    it('Melhor Envio recusa a verificação (não-OK): operational=false com mensagem segura, nunca o corpo cru', async () => {
-      const { service, prisma, tokenCrypto } = await criarService();
-      prisma.melhorEnvioToken.findUnique.mockResolvedValue({
-        accessToken: tokenCrypto.encrypt('access-valido'),
-        refreshToken: tokenCrypto.encrypt('refresh-valido'),
-        expiresAt: new Date(Date.now() + 60 * 60_000),
-      });
-      global.fetch = jest.fn().mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized',
-      } as unknown as Response) as unknown as typeof fetch;
-
-      await expect(service.verificarOperacional()).resolves.toEqual({
-        operational: false,
-        mensagem: 'O Melhor Envio recusou a verificação da conexão.',
-      });
-    });
-
     it('falha de rede: operational=false, nunca lança', async () => {
-      const { service, prisma, tokenCrypto } = await criarService();
-      prisma.melhorEnvioToken.findUnique.mockResolvedValue({
-        accessToken: tokenCrypto.encrypt('access-valido'),
-        refreshToken: tokenCrypto.encrypt('refresh-valido'),
-        expiresAt: new Date(Date.now() + 60 * 60_000),
-      });
+      const { service, prisma, tokenCrypto } =
+        await criarService(CONFIG_COMPLETA);
+      prisma.melhorEnvioToken.findUnique.mockResolvedValue(
+        tokenValido(tokenCrypto),
+      );
       global.fetch = jest
         .fn()
-        .mockRejectedValueOnce(new Error('ECONNREFUSED')) as unknown as typeof fetch;
+        .mockRejectedValueOnce(
+          new Error('ECONNREFUSED'),
+        ) as unknown as typeof fetch;
 
       await expect(service.verificarOperacional()).resolves.toEqual({
         operational: false,
         mensagem: 'Não foi possível se comunicar com o Melhor Envio.',
       });
+    });
+
+    it('nenhum token, secret ou cabeçalho Authorization aparece nos logs, mesmo numa recusa 401/403', async () => {
+      const logs: string[] = [];
+      for (const nivel of [
+        'log',
+        'warn',
+        'error',
+        'debug',
+        'verbose',
+      ] as const) {
+        jest
+          .spyOn(Logger.prototype, nivel)
+          .mockImplementation((...args: unknown[]) => {
+            logs.push(args.map(String).join(' '));
+          });
+      }
+      const { service, prisma, tokenCrypto } =
+        await criarService(CONFIG_COMPLETA);
+      prisma.melhorEnvioToken.findUnique.mockResolvedValue(
+        tokenValido(tokenCrypto),
+      );
+      global.fetch = respostaCotacao(403, {
+        message: 'This action is unauthorized.',
+      }) as unknown as typeof fetch;
+
+      await service.verificarOperacional();
+
+      expect(logs.length).toBeGreaterThan(0); // a recusa foi registrada...
+      const tudo = logs.join('\n');
+      expect(tudo).toContain('403'); // ...com o status, para diagnóstico
+      for (const segredo of [
+        'access-valido',
+        'refresh-valido',
+        'client-secret-teste',
+        'Bearer',
+        CHAVE_CRIPTOGRAFIA_TESTE,
+      ]) {
+        expect(tudo).not.toContain(segredo);
+      }
     });
   });
 });

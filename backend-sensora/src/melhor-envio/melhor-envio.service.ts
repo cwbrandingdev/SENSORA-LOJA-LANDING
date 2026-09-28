@@ -71,6 +71,21 @@ interface StatePayload {
   e: number; // expira em (ms)
 }
 
+// Variáveis que definem o pacote da cotação. O construtor tem valores
+// padrão (usados pelo checkout, comportamento inalterado), mas o "Verificar
+// agora" só testa com elas EXPLICITAMENTE configuradas — ver
+// verificarOperacional.
+const VARIAVEIS_PACOTE = [
+  'MELHOR_ENVIO_PACOTE_ALTURA_CM',
+  'MELHOR_ENVIO_PACOTE_LARGURA_CM',
+  'MELHOR_ENVIO_PACOTE_COMPRIMENTO_CM',
+  'MELHOR_ENVIO_PACOTE_PESO_GRAMAS',
+];
+
+// Mesma mensagem de sempre de executarCotacao — constante só para que
+// verificarOperacional a reconheça e mostre a mensagem administrativa.
+const MENSAGEM_COTACAO_RECUSADA = 'O Melhor Envio recusou a cotação';
+
 // Renova um pouco antes da expiração real — evita usar um access_token que
 // expira no meio de uma requisição em voo.
 const MARGEM_EXPIRACAO_MS = 60_000;
@@ -199,55 +214,71 @@ export class MelhorEnvioService {
   }
 
   // Central de Integrações (Admin) — verificação real sob demanda (botão
-  // "Verificar agora"), nunca automática. GET /api/v2/me é a leitura
-  // autenticada mais barata da API do Melhor Envio (confirma que o access
-  // token armazenado ainda autentica de verdade, distinto de `conectado`
-  // acima, que só prova que existe uma linha salva no banco) — nunca cota
-  // frete nem gera nenhum efeito colateral. Reaproveita
-  // garantirAccessToken() (mesma renovação automática já usada por
-  // cotar()), nenhuma lógica de token duplicada. Nunca lança: qualquer
-  // falha (não conectado, rede, recusa do Melhor Envio) vira
-  // `{ operational: false, mensagem }` com a mesma mensagem segura já usada
-  // pelas exceções deste serviço — nunca client_secret/token/corpo cru da
-  // resposta do Melhor Envio.
+  // "Verificar agora"), nunca automática. Valida exatamente a capacidade de
+  // que o Sensora precisa: uma COTAÇÃO via POST /api/v2/me/shipment/calculate
+  // (escopo `shipping-calculate`, o único solicitado). Antes usava
+  // GET /api/v2/me, que exige `users-read` — fora do escopo do app — e por
+  // isso respondia 403 mesmo com a conta conectada corretamente.
+  //
+  // Reaproveita cotar() inteiro (token, renovação automática, cabeçalhos com
+  // Bearer + User-Agent, montagem da requisição e tratamento de erros) —
+  // nenhuma lógica duplicada. A cotação de teste vai do CEP de origem para
+  // ele mesmo, com o pacote EXPLICITAMENTE configurado e sem seguro (0): não
+  // inventa CEP, medidas nem peso, e não cria carrinho/etiqueta nem gera
+  // cobrança.
+  //
+  // Configuração incompleta (sem CEP de origem ou sem alguma medida/peso do
+  // pacote nas variáveis de ambiente) NÃO chama o Melhor Envio: responde
+  // "configuração incompleta" em vez de testar com os valores padrão de
+  // desenvolvimento do construtor. Nunca lança: qualquer falha vira
+  // `{ operational: false, mensagem }` com mensagem segura — nunca
+  // client_secret/token/corpo cru.
   async verificarOperacional(): Promise<{
     operational: boolean;
     mensagem?: string;
   }> {
-    try {
-      const accessToken = await this.garantirAccessToken();
+    const faltando = ['MELHOR_ENVIO_CEP_ORIGEM', ...VARIAVEIS_PACOTE].filter(
+      (nome) => !this.configService.get<string>(nome),
+    );
+    if (faltando.length > 0) {
+      return {
+        operational: false,
+        mensagem: `Configuração incompleta para testar a cotação: defina ${faltando.join(', ')}.`,
+      };
+    }
 
-      let response: Response;
-      try {
-        response = await fetch(`${this.baseUrl}/api/v2/me`, {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-            ...(this.userAgent ? { 'User-Agent': this.userAgent } : {}),
-          },
-        });
-      } catch {
+    try {
+      const opcoes = await this.cotar({
+        cepDestino: this.cepOrigem!,
+        pacote: this.pacotePadrao,
+        valorDeclarado: 0,
+      });
+      return {
+        operational: true,
+        mensagem:
+          opcoes.length > 0
+            ? `Cotação de teste respondeu com ${opcoes.length} ${opcoes.length === 1 ? 'opção' : 'opções'} de frete. Isso confirma a conexão e a permissão de cotação — não garante frete para todos os destinos.`
+            : 'Cotação de teste respondeu sem opções para o CEP de origem. A conexão e a permissão de cotação estão válidas, mas isso não garante frete para todos os destinos.',
+      };
+    } catch (erro) {
+      if (erro instanceof MelhorEnvioErroHttpError) {
+        // 401/403 e demais recusas: o status e o corpo de erro já foram
+        // registrados (sem token) em executarCotacao — aqui só a mensagem
+        // administrativa de sempre.
+        return {
+          operational: false,
+          mensagem:
+            this.extrairMensagem(erro) === MENSAGEM_COTACAO_RECUSADA
+              ? 'O Melhor Envio recusou a verificação da conexão.'
+              : this.extrairMensagem(erro),
+        };
+      }
+      if (erro instanceof MelhorEnvioIndisponivelError) {
         return {
           operational: false,
           mensagem: 'Não foi possível se comunicar com o Melhor Envio.',
         };
       }
-
-      if (!response.ok) {
-        // Mesmo padrão de log de executarCotacao: status/statusText no log
-        // do servidor, nunca no que volta para o chamador.
-        this.logger.error(
-          `Melhor Envio recusou GET /api/v2/me -> ${response.status} ${response.statusText}`,
-        );
-        return {
-          operational: false,
-          mensagem: 'O Melhor Envio recusou a verificação da conexão.',
-        };
-      }
-
-      return { operational: true };
-    } catch (erro) {
       const mensagem =
         erro instanceof HttpException
           ? this.extrairMensagem(erro)
@@ -579,7 +610,7 @@ export class MelhorEnvioService {
       this.logger.error(
         `Melhor Envio recusou POST /shipment/calculate -> ${response.status} ${response.statusText}: ${corpoErro}`,
       );
-      throw new MelhorEnvioErroHttpError('O Melhor Envio recusou a cotação');
+      throw new MelhorEnvioErroHttpError(MENSAGEM_COTACAO_RECUSADA);
     }
 
     let corpo: unknown;
