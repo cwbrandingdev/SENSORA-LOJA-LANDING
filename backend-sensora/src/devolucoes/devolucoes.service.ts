@@ -9,6 +9,7 @@ import type {
   Devolucao as DevolucaoPrisma,
   EvidenciaDevolucao as EvidenciaDevolucaoPrisma,
   ItemDevolucao as ItemDevolucaoPrisma,
+  Prisma,
 } from '../../generated/prisma/client';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { ImagekitService } from '../imagekit/imagekit.service';
@@ -16,7 +17,11 @@ import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDevolucaoDto } from './dto/create-devolucao.dto';
-import { Devolucao, EvidenciaDevolucao } from './entities/devolucao.entity';
+import {
+  Devolucao,
+  DevolucoesDoPedido,
+  EvidenciaDevolucao,
+} from './entities/devolucao.entity';
 import { StatusDevolucao } from './enums/status-devolucao.enum';
 
 // Devoluções recusadas ou canceladas não "gastam" a quantidade do item —
@@ -121,13 +126,8 @@ export class DevolucoesService {
         pedido.itens.map((item) => [item.id, item]),
       );
 
-      const jaDevolvidos = await tx.itemDevolucao.findMany({
-        where: {
-          itemPedidoId: { in: itemPedidoIds },
-          devolucao: { status: { notIn: STATUS_QUE_NAO_CONTAM } },
-        },
-        select: { itemPedidoId: true, quantidade: true },
-      });
+      // Lido dentro da transação, depois da trava do pedido.
+      const jaDevolvido = await this.quantidadesJaDevolvidas(tx, itemPedidoIds);
 
       for (const item of dto.itens) {
         const itemPedido = itensDoPedido.get(item.itemPedidoId);
@@ -137,10 +137,8 @@ export class DevolucoesService {
           );
         }
 
-        const quantidadeJaDevolvida = jaDevolvidos
-          .filter((devolvido) => devolvido.itemPedidoId === item.itemPedidoId)
-          .reduce((soma, devolvido) => soma + devolvido.quantidade, 0);
-        const disponivel = itemPedido.quantidade - quantidadeJaDevolvida;
+        const disponivel =
+          itemPedido.quantidade - (jaDevolvido.get(item.itemPedidoId) ?? 0);
 
         if (item.quantidade > disponivel) {
           throw new BadRequestException(
@@ -172,6 +170,49 @@ export class DevolucoesService {
     });
 
     return this.paraDevolucao(devolucao);
+  }
+
+  // Histórico do pedido para a tela do cliente: todas as devoluções dele (as
+  // mais recentes primeiro, com itens e fotos em URLs assinadas) e o saldo
+  // que ainda pode ser devolvido de cada item — calculado aqui, nunca no
+  // frontend. É só uma prévia: `criar` continua validando com a trava.
+  async listarDoPedido(
+    pedidoId: number,
+    user: UsuarioAutenticado,
+  ): Promise<DevolucoesDoPedido> {
+    const pedido = await this.prisma.pedido.findUnique({
+      where: { id: pedidoId },
+      include: { itens: true },
+    });
+
+    // Mesma mensagem para "não existe" e "é de outro usuário" — mesmo
+    // padrão de PedidosService.findOne.
+    if (!pedido || pedido.usuarioId !== user.id) {
+      throw new NotFoundException(`Pedido com id ${pedidoId} não encontrado`);
+    }
+
+    const devolucoes = await this.prisma.devolucao.findMany({
+      // usuarioId: defesa extra, além do dono do pedido conferido acima.
+      where: { pedidoId, usuarioId: user.id },
+      orderBy: [{ solicitadaEm: 'desc' }, { id: 'desc' }],
+      include: { itens: true, evidencias: { orderBy: { id: 'asc' } } },
+    });
+
+    const jaDevolvido = await this.quantidadesJaDevolvidas(
+      this.prisma,
+      pedido.itens.map((item) => item.id),
+    );
+
+    return {
+      devolucoes: devolucoes.map((devolucao) => this.paraDevolucao(devolucao)),
+      itensDisponiveis: pedido.itens.map((item) => ({
+        itemPedidoId: item.id,
+        quantidadeDisponivel: Math.max(
+          0,
+          item.quantidade - (jaDevolvido.get(item.id) ?? 0),
+        ),
+      })),
+    };
   }
 
   // Devolução do próprio cliente, com os itens e as fotos (URLs assinadas
@@ -288,6 +329,32 @@ export class DevolucoesService {
     });
   }
 
+  // Regra única do saldo (usada por `criar` e `listarDoPedido`): quanto de
+  // cada ItemPedido já está em devoluções que consomem saldo — todas, menos
+  // RECUSADA e CANCELADA. Recebe o client para rodar dentro da transação
+  // quando preciso. Devolve itemPedidoId -> quantidade já devolvida.
+  private async quantidadesJaDevolvidas(
+    client: Prisma.TransactionClient,
+    itemPedidoIds: number[],
+  ): Promise<Map<number, number>> {
+    const jaDevolvidos = await client.itemDevolucao.findMany({
+      where: {
+        itemPedidoId: { in: itemPedidoIds },
+        devolucao: { status: { notIn: STATUS_QUE_NAO_CONTAM } },
+      },
+      select: { itemPedidoId: true, quantidade: true },
+    });
+
+    const soma = new Map<number, number>();
+    for (const devolvido of jaDevolvidos) {
+      soma.set(
+        devolvido.itemPedidoId,
+        (soma.get(devolvido.itemPedidoId) ?? 0) + devolvido.quantidade,
+      );
+    }
+    return soma;
+  }
+
   // Mesma mensagem para "não existe", "é de outro cliente" e "é de outro
   // pedido" — mesmo padrão de PedidosService.findOne.
   private devolucaoDoCliente<
@@ -352,6 +419,7 @@ export class DevolucoesService {
       motivo: devolucao.motivo,
       descricao: devolucao.descricao,
       solicitadaEm: devolucao.solicitadaEm,
+      analisadaEm: devolucao.analisadaEm ?? null,
       itens: devolucao.itens.map((item) => ({
         id: item.id,
         itemPedidoId: item.itemPedidoId,

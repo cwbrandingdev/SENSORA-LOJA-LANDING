@@ -22,6 +22,16 @@ export class Devolucao {
   motivo: string;
   descricao: string | null;
   solicitadaEm: Date;
+  // Preenchida quando a devolução é aprovada ou recusada. A observação da
+  // análise (observacaoAnalise) não é exposta ao cliente.
+  analisadaEm: Date | null;
   itens: ItemDevolucao[];
   evidencias: EvidenciaDevolucao[];
+}
+
+// Resposta de GET /pedidos/meus/:id/devolucoes: o histórico do pedido e o
+// saldo que ainda pode ser devolvido de cada item (calculado no backend).
+export class DevolucoesDoPedido {
+  devolucoes: Devolucao[];
+  itensDisponiveis: { itemPedidoId: number; quantidadeDisponivel: number }[];
 }

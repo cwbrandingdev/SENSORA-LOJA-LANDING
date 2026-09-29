@@ -20,12 +20,13 @@ import Skeleton from "@/components/ui/Skeleton";
 import { BackLink } from "@/components/conta/AccountPageHeader";
 import StatusPedidoBadge from "@/components/conta/StatusPedidoBadge";
 import AcompanhamentoPedido from "@/components/conta/AcompanhamentoPedido";
-import EvidenciasDevolucao from "@/components/conta/EvidenciasDevolucao";
+import HistoricoDevolucoes from "@/components/conta/HistoricoDevolucoes";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import {
   buscarMeuPedido,
   cancelarMeuPedido,
+  listarMinhasDevolucoes,
   solicitarDevolucaoMeuPedido,
   solicitarReembolsoMeuPedido,
 } from "@/services/pedidos";
@@ -34,6 +35,7 @@ import { ROTAS_LEGAIS } from "@/lib/empresa";
 import {
   StatusEnvio,
   StatusPedido,
+  type DevolucoesDoPedido,
   type Pedido,
   type PedidoComItensDetalhado,
 } from "@/lib/types/loja";
@@ -87,11 +89,26 @@ export default function MeuPedidoDetalhePage() {
   const [motivoDevolucao, setMotivoDevolucao] = useState("");
   const [descricaoDevolucao, setDescricaoDevolucao] = useState("");
   const [erroDevolucao, setErroDevolucao] = useState<string | null>(null);
-  // Etapa 5 (Evidências) — id da devolução recém-criada, para enviar as
-  // fotos a ela; `fotosConcluidas` esconde o bloco de fotos quando o
-  // cliente termina (ou decide seguir sem fotos).
-  const [devolucaoRegistradaId, setDevolucaoRegistradaId] = useState<number | null>(null);
-  const [fotosConcluidas, setFotosConcluidas] = useState(false);
+  // Etapa 6 — histórico de devoluções e saldo de cada item, vindos do
+  // backend (fonte da verdade; a tela não recalcula o saldo).
+  const [devolucoesDoPedido, setDevolucoesDoPedido] = useState<DevolucoesDoPedido | null>(
+    null,
+  );
+
+  // Só pedido PAGO já ENVIADO tem devolução; para os outros, não busca nada.
+  async function carregarDevolucoes(pedido: Pedido) {
+    if (pedido.status !== StatusPedido.PAGO || pedido.statusEnvio !== StatusEnvio.ENVIADO) {
+      setDevolucoesDoPedido(null);
+      return;
+    }
+    try {
+      setDevolucoesDoPedido(await listarMinhasDevolucoes(pedido.id));
+    } catch (err) {
+      toast.error(
+        getErrorMessage(err, "Não foi possível carregar as devoluções deste pedido."),
+      );
+    }
+  }
 
   useEffect(() => {
     // Id fora da URL não é um número válido — mesmo resultado prático de um
@@ -104,7 +121,10 @@ export default function MeuPedidoDetalhePage() {
     }
 
     buscarMeuPedido(pedidoId)
-      .then(setDados)
+      .then(async (resultado) => {
+        setDados(resultado);
+        await carregarDevolucoes(resultado.pedido);
+      })
       .catch((err) => {
         if (isAxiosError(err) && err.response?.status === 404) {
           setNaoEncontrado(true);
@@ -216,8 +236,8 @@ export default function MeuPedidoDetalhePage() {
   }
 
   // Etapa 4 (Devoluções) — só para pedido PAGO já ENVIADO (botão só existe
-  // nesse caso). O limite de quantidade na tela é o comprado; o saldo real
-  // (descontando devoluções anteriores) é sempre validado no backend, e a
+  // nesse caso). O limite de quantidade na tela é o saldo informado pelo
+  // backend (Etapa 6); ainda assim a criação é validada de novo lá, e a
   // mensagem dele aparece no próprio formulário.
   function handleAbrirModalDevolucao() {
     setQuantidadesDevolucao({});
@@ -259,15 +279,16 @@ export default function MeuPedidoDetalhePage() {
     setErroDevolucao(null);
     setEnviandoDevolucao(true);
     try {
-      const devolucao = await solicitarDevolucaoMeuPedido(dados.pedido.id, {
+      await solicitarDevolucaoMeuPedido(dados.pedido.id, {
         motivo,
         descricao: descricaoDevolucao.trim() || undefined,
         itens,
       });
       setModalDevolucaoAberto(false);
-      setDevolucaoRegistradaId(devolucao.id);
-      setFotosConcluidas(false);
-      toast.success("Solicitação de devolução registrada.");
+      toast.success("Solicitação de devolução registrada. Você pode enviar fotos abaixo.");
+      // O histórico recarregado já traz a nova devolução (com as fotos
+      // editáveis) e o saldo atualizado dos itens.
+      await carregarDevolucoes(dados.pedido);
     } catch (err) {
       if (isAxiosError(err) && err.response?.status === 409) {
         // O pedido mudou de situação (ex.: reembolso em andamento) — fecha
@@ -277,7 +298,10 @@ export default function MeuPedidoDetalhePage() {
         );
         setModalDevolucaoAberto(false);
         buscarMeuPedido(dados.pedido.id)
-          .then(setDados)
+          .then(async (resultado) => {
+            setDados(resultado);
+            await carregarDevolucoes(resultado.pedido);
+          })
           .catch(() => {});
       } else {
         // Ex.: quantidade acima do saldo disponível — mostra a mensagem do
@@ -295,6 +319,14 @@ export default function MeuPedidoDetalhePage() {
   }
 
   const pedidoEnviado = dados?.pedido.statusEnvio === StatusEnvio.ENVIADO;
+  // Saldo de cada item (itemPedidoId -> quantidade que ainda pode voltar).
+  const saldoPorItem = new Map(
+    (devolucoesDoPedido?.itensDisponiveis ?? []).map((item) => [
+      item.itemPedidoId,
+      item.quantidadeDisponivel,
+    ]),
+  );
+  const temSaldoParaDevolver = [...saldoPorItem.values()].some((saldo) => saldo > 0);
 
   return (
     <div className="mx-auto max-w-4xl px-6 pt-8 pb-24 sm:pb-32 lg:px-10">
@@ -369,26 +401,23 @@ export default function MeuPedidoDetalhePage() {
                   Solicitar reembolso
                 </FormButton>
               )}
-              {dados.pedido.status === StatusPedido.PAGO && pedidoEnviado && (
-                <FormButton type="button" onClick={handleAbrirModalDevolucao}>
-                  Solicitar devolução
-                </FormButton>
-              )}
+              {/* Etapa 6 — some quando nenhum item tem saldo (ou enquanto
+                  o saldo não foi carregado). */}
+              {dados.pedido.status === StatusPedido.PAGO &&
+                pedidoEnviado &&
+                temSaldoParaDevolver && (
+                  <FormButton type="button" onClick={handleAbrirModalDevolucao}>
+                    Solicitar devolução
+                  </FormButton>
+                )}
             </div>
           </div>
 
-          {devolucaoRegistradaId !== null && (
-            <p className="mt-4 text-sm leading-relaxed text-slate-600">
-              Sua solicitação de devolução foi registrada e será analisada.
-              Avisaremos você sobre os próximos passos.
-            </p>
-          )}
-
-          {devolucaoRegistradaId !== null && !fotosConcluidas && (
-            <EvidenciasDevolucao
+          {devolucoesDoPedido && devolucoesDoPedido.devolucoes.length > 0 && (
+            <HistoricoDevolucoes
               pedidoId={dados.pedido.id}
-              devolucaoId={devolucaoRegistradaId}
-              onConcluir={() => setFotosConcluidas(true)}
+              devolucoes={devolucoesDoPedido.devolucoes}
+              itensPedido={dados.itens}
             />
           )}
 
@@ -533,22 +562,29 @@ export default function MeuPedidoDetalhePage() {
                   {dados.itens.map((item) => {
                     const quantidade = quantidadesDevolucao[item.id] ?? 0;
                     const selecionado = quantidade > 0;
+                    // Saldo calculado no backend (comprado menos o que já
+                    // está em outras devoluções).
+                    const saldo = saldoPorItem.get(item.id) ?? 0;
                     return (
                       <li key={item.id} className="flex items-center justify-between gap-3 py-3">
-                        <label className="flex items-center gap-3 text-brand-navy">
+                        <label
+                          className={`flex items-center gap-3 ${saldo === 0 ? "text-slate-400" : "text-brand-navy"}`}
+                        >
                           <input
                             type="checkbox"
                             checked={selecionado}
                             onChange={() =>
                               alterarQuantidadeDevolucao(item.id, selecionado ? 0 : 1)
                             }
-                            disabled={enviandoDevolucao}
+                            disabled={enviandoDevolucao || saldo === 0}
                             className="h-4 w-4 accent-brand-navy"
                           />
                           <span>
                             <span className="block font-medium">{item.produtoNome}</span>
                             <span className="block text-xs text-slate-500">
-                              Comprado: {item.quantidade}
+                              {saldo > 0
+                                ? `Disponível para devolução: ${saldo} de ${item.quantidade}`
+                                : "Já incluído em outra devolução"}
                             </span>
                           </span>
                         </label>
@@ -556,13 +592,10 @@ export default function MeuPedidoDetalhePage() {
                           <QuantityStepper
                             value={quantidade}
                             min={1}
-                            max={item.quantidade}
+                            max={saldo}
                             disabled={enviandoDevolucao}
                             onIncrease={() =>
-                              alterarQuantidadeDevolucao(
-                                item.id,
-                                Math.min(quantidade + 1, item.quantidade),
-                              )
+                              alterarQuantidadeDevolucao(item.id, Math.min(quantidade + 1, saldo))
                             }
                             onDecrease={() =>
                               alterarQuantidadeDevolucao(item.id, Math.max(quantidade - 1, 1))

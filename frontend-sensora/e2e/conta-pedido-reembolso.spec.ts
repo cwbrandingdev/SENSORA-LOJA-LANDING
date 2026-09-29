@@ -73,14 +73,18 @@ const ITEM_DETALHADO = {
 // para que os testes de sucesso consigam refletir a mudança de status
 // devolvida pelo POST sem precisar reconfigurar o mock a cada passo (mesmo
 // raciocínio de `pedidoFake` no backend, aqui do lado do frontend).
-async function mockBuscarMeuPedido(page: Page, pedidoRef: { current: PedidoFake }) {
+async function mockBuscarMeuPedido(
+  page: Page,
+  pedidoRef: { current: PedidoFake },
+  itens: (typeof ITEM_DETALHADO)[] = [ITEM_DETALHADO],
+) {
   await page.route(`**/pedidos/meus/${PEDIDO_ID}`, async (route) => {
     if (route.request().method() !== "GET") {
       await route.continue();
       return;
     }
     await route.fulfill({
-      json: { pedido: pedidoRef.current, itens: [ITEM_DETALHADO], total: 119.8 },
+      json: { pedido: pedidoRef.current, itens, total: 119.8 },
     });
   });
 }
@@ -424,31 +428,73 @@ function pedidoEnviado(): PedidoFake {
   return { ...pedidoBase("PAGO"), statusEnvio: "ENVIADO" };
 }
 
-// Captura o corpo enviado e responde com o status escolhido.
+type DevolucaoFake = {
+  id: number;
+  pedidoId: number;
+  status: string;
+  motivo: string;
+  descricao: string | null;
+  solicitadaEm: string;
+  analisadaEm: string | null;
+  itens: { id: number; itemPedidoId: number; quantidade: number; precoUnitario: number }[];
+  evidencias: { id: number; url: string; criadoEm: string }[];
+};
+
+type HistoricoFake = {
+  devolucoes: DevolucaoFake[];
+  itensDisponiveis: { itemPedidoId: number; quantidadeDisponivel: number }[];
+};
+
+// GET e POST /pedidos/meus/:id/devolucoes com estado, como o backend: o GET
+// devolve o histórico e o saldo atuais; o POST cria a devolução no topo da
+// lista e desconta o saldo (ou responde o erro escolhido). Por padrão, sem
+// devoluções e com o item 1 (comprado 2x) inteiro disponível.
 async function mockDevolucao(
   page: Page,
-  options: { status?: number; message?: string } = {},
-): Promise<{ corpos: unknown[] }> {
+  options: { status?: number; message?: string; historico?: HistoricoFake } = {},
+): Promise<{ corpos: unknown[]; listagens: number }> {
   const { status = 201, message } = options;
-  const chamadas = { corpos: [] as unknown[] };
+  const historico: HistoricoFake = options.historico ?? {
+    devolucoes: [],
+    itensDisponiveis: [{ itemPedidoId: 1, quantidadeDisponivel: 2 }],
+  };
+  const chamadas = { corpos: [] as unknown[], listagens: 0 };
+
   await page.route(`**/pedidos/meus/${PEDIDO_ID}/devolucoes`, async (route) => {
-    chamadas.corpos.push(route.request().postDataJSON());
+    if (route.request().method() === "GET") {
+      chamadas.listagens += 1;
+      await route.fulfill({ json: historico });
+      return;
+    }
+
+    const corpo = route.request().postDataJSON() as {
+      motivo: string;
+      descricao?: string;
+      itens: { itemPedidoId: number; quantidade: number }[];
+    };
+    chamadas.corpos.push(corpo);
     if (status >= 300) {
       await route.fulfill({ status, json: { statusCode: status, message } });
       return;
     }
-    await route.fulfill({
-      status,
-      json: {
-        id: 1,
-        pedidoId: PEDIDO_ID,
-        status: "SOLICITADA",
-        motivo: "Chegou quebrada",
-        descricao: null,
-        solicitadaEm: "2026-09-29T12:00:00.000Z",
-        itens: [{ id: 1, itemPedidoId: 1, quantidade: 2, precoUnitario: 59.9 }],
-      },
-    });
+
+    const nova: DevolucaoFake = {
+      id: historico.devolucoes.length + 1,
+      pedidoId: PEDIDO_ID,
+      status: "SOLICITADA",
+      motivo: corpo.motivo,
+      descricao: corpo.descricao ?? null,
+      solicitadaEm: "2026-09-29T12:00:00.000Z",
+      analisadaEm: null,
+      itens: corpo.itens.map((item, i) => ({ id: i + 1, precoUnitario: 59.9, ...item })),
+      evidencias: [],
+    };
+    historico.devolucoes.unshift(nova);
+    for (const item of corpo.itens) {
+      const saldo = historico.itensDisponiveis.find((s) => s.itemPedidoId === item.itemPedidoId);
+      if (saldo) saldo.quantidadeDisponivel -= item.quantidade;
+    }
+    await route.fulfill({ status, json: nova });
   });
   return chamadas;
 }
@@ -458,6 +504,7 @@ test("M: pedido PAGO e ENVIADO mostra Solicitar devolução no lugar do reembols
 }) => {
   await seedSession(page);
   await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  await mockDevolucao(page);
 
   await page.goto(PEDIDO_URL);
 
@@ -498,7 +545,9 @@ test("O: sem item selecionado ou sem motivo não chama a API", async ({ page }) 
   expect(chamadas.corpos).toHaveLength(0);
 });
 
-test("P: quantidade limitada ao comprado e envio com o corpo correto", async ({ page }) => {
+test("P: quantidade limitada ao saldo, envio com o corpo correto e histórico recarregado", async ({
+  page,
+}) => {
   await seedSession(page);
   await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
   const chamadas = await mockDevolucao(page);
@@ -510,19 +559,26 @@ test("P: quantidade limitada ao comprado e envio com o corpo correto", async ({ 
   await dialog.getByRole("checkbox").check();
   const aumentar = dialog.getByRole("button", { name: "Aumentar quantidade" });
   await aumentar.click();
-  // Comprou 2: o "+" trava em 2.
+  // Saldo 2 (comprou 2, nada devolvido): o "+" trava em 2.
   await expect(aumentar).toBeDisabled();
 
   await dialog.getByLabel("Motivo").fill("  Chegou quebrada  ");
   await dialog.getByLabel("Descrição (opcional)").fill("Tampa rachada");
+  // (Em dev, o React pode carregar a lista 2x na abertura — por isso compara
+  // antes e depois do envio, em vez de um número fixo.)
+  const listagensAntes = chamadas.listagens;
   await dialog.getByRole("button", { name: "Enviar solicitação" }).click();
 
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(
-    page.getByText("Sua solicitação de devolução foi registrada e será analisada.", {
-      exact: false,
-    }),
-  ).toBeVisible();
+  // O histórico foi recarregado e já mostra a nova solicitação.
+  const novaDevolucao = page.getByRole("listitem", { name: /Devolução solicitada em/ });
+  await expect(novaDevolucao).toHaveCount(1);
+  await expect(novaDevolucao).toContainText("Solicitada");
+  await expect(novaDevolucao).toContainText("Motivo: Chegou quebrada");
+  await expect(novaDevolucao).toContainText("2 × Vela Aromática Lavanda");
+  expect(chamadas.listagens).toBe(listagensAntes + 1);
+  // Saldo zerado: o botão some.
+  await expect(page.getByRole("button", { name: "Solicitar devolução" })).toHaveCount(0);
   expect(chamadas.corpos).toEqual([
     {
       motivo: "Chegou quebrada",
@@ -554,9 +610,9 @@ test("Q: erro de validação do backend aparece no formulário", async ({ page }
 });
 
 // Etapa 5 (Evidências) — fotos opcionais enviadas depois de criar a
-// devolução (POST/DELETE /pedidos/meus/:id/devolucoes/:devolucaoId/evidencias,
-// GET /pedidos/meus/:id/devolucoes/:devolucaoId). Tudo simulado via
-// page.route; a imagem de retorno é um PNG 1x1 em data URL.
+// devolução (POST/DELETE /pedidos/meus/:id/devolucoes/:devolucaoId/evidencias).
+// Desde a Etapa 6, o bloco de fotos fica dentro da devolução no histórico.
+// Tudo simulado via page.route; a imagem de retorno é um PNG 1x1 em data URL.
 const PNG_1X1_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 const PNG_1X1 = Buffer.from(PNG_1X1_BASE64, "base64");
@@ -579,22 +635,6 @@ async function mockEvidencias(
   await page.route(`**/pedidos/meus/${PEDIDO_ID}/devolucoes/1**`, async (route) => {
     const request = route.request();
     const url = request.url();
-
-    if (request.method() === "GET") {
-      await route.fulfill({
-        json: {
-          id: 1,
-          pedidoId: PEDIDO_ID,
-          status: "SOLICITADA",
-          motivo: "Chegou quebrada",
-          descricao: null,
-          solicitadaEm: "2026-09-29T12:00:00.000Z",
-          itens: [],
-          evidencias: [],
-        },
-      });
-      return;
-    }
 
     if (request.method() === "POST" && url.endsWith("/evidencias")) {
       chamadas.envios.push({
@@ -658,18 +698,16 @@ async function prepararPedidoEnviado(page: Page, options: { falharEnvio?: number
   return mockEvidencias(page, options);
 }
 
-test("R: depois de criar a devolução dá para continuar sem fotos", async ({ page }) => {
+test("R: fotos são opcionais — a devolução fica registrada no histórico sem nenhum envio", async ({
+  page,
+}) => {
   const chamadas = await prepararPedidoEnviado(page);
   const blocoFotos = await criarDevolucaoEAbrirFotos(page);
 
-  await blocoFotos.getByRole("button", { name: "Continuar sem fotos" }).click();
-
-  await expect(blocoFotos).toHaveCount(0);
-  await expect(
-    page.getByText("Sua solicitação de devolução foi registrada e será analisada.", {
-      exact: false,
-    }),
-  ).toBeVisible();
+  await expect(blocoFotos.getByRole("img")).toHaveCount(0);
+  await expect(page.getByRole("listitem", { name: /Devolução solicitada em/ })).toContainText(
+    "Solicitada",
+  );
   expect(chamadas.envios).toHaveLength(0);
 });
 
@@ -706,7 +744,6 @@ test("T: envia cada foto como multipart no campo foto e mostra Enviada", async (
     expect(envio.contentType).toMatch(/^multipart\/form-data; boundary=/);
     expect(envio.temCampoFoto).toBe(true);
   }
-  await expect(blocoFotos.getByRole("button", { name: "Concluir" })).toBeVisible();
 });
 
 test("U: erro em uma foto não perde as enviadas, e tentar de novo reenvia só a que falhou", async ({
@@ -764,4 +801,189 @@ test("W: no máximo 5 fotos — as excedentes são recusadas com aviso", async (
   await expect(blocoFotos.getByRole("alert")).toContainText("6.png: limite de 5 fotos");
   // Com 5 fotos, o botão de adicionar some.
   await expect(blocoFotos.getByText("Adicionar fotos")).toHaveCount(0);
+});
+
+// Etapa 6 — histórico das devoluções (GET /pedidos/meus/:id/devolucoes) e
+// saldo por item vindo do backend.
+function devolucaoFake(extras: Partial<DevolucaoFake>): DevolucaoFake {
+  return {
+    id: 1,
+    pedidoId: PEDIDO_ID,
+    status: "SOLICITADA",
+    motivo: "Chegou quebrada",
+    descricao: null,
+    solicitadaEm: "2026-09-20T12:00:00.000Z",
+    analisadaEm: null,
+    itens: [{ id: 1, itemPedidoId: 1, quantidade: 1, precoUnitario: 59.9 }],
+    evidencias: [],
+    ...extras,
+  };
+}
+
+const FOTO_URL = `data:image/png;base64,${PNG_1X1_BASE64}`;
+
+// Duas devoluções: a mais recente ainda SOLICITADA (fotos editáveis) e uma
+// antiga RECUSADA (fotos só para ver). A recusada libera o saldo, então o
+// item 1 (comprado 2x) tem 1 disponível.
+function historicoComDuas(): HistoricoFake {
+  return {
+    devolucoes: [
+      devolucaoFake({
+        id: 2,
+        status: "SOLICITADA",
+        motivo: "Cheiro fraco",
+        descricao: "Quase sem perfume",
+        solicitadaEm: "2026-09-25T12:00:00.000Z",
+        evidencias: [{ id: 21, url: FOTO_URL, criadoEm: "2026-09-25T12:05:00.000Z" }],
+      }),
+      devolucaoFake({
+        id: 1,
+        status: "RECUSADA",
+        motivo: "Chegou quebrada",
+        solicitadaEm: "2026-09-20T12:00:00.000Z",
+        analisadaEm: "2026-09-21T12:00:00.000Z",
+        evidencias: [{ id: 11, url: FOTO_URL, criadoEm: "2026-09-20T12:05:00.000Z" }],
+      }),
+    ],
+    itensDisponiveis: [{ itemPedidoId: 1, quantidadeDisponivel: 1 }],
+  };
+}
+
+function blocosDeDevolucao(page: Page) {
+  return page.getByRole("listitem", { name: /Devolução solicitada em/ });
+}
+
+test("X: histórico aparece após recarregar, com cada devolução em um bloco", async ({ page }) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  await mockDevolucao(page, { historico: historicoComDuas() });
+
+  await page.goto(PEDIDO_URL);
+  await page.reload();
+
+  const blocos = blocosDeDevolucao(page);
+  await expect(blocos).toHaveCount(2);
+
+  // Mais recente primeiro, na ordem do backend.
+  const [recente, antiga] = [blocos.nth(0), blocos.nth(1)];
+  await expect(recente).toContainText("Solicitada");
+  await expect(recente).toContainText("Motivo: Cheiro fraco");
+  await expect(recente).toContainText("Quase sem perfume");
+  await expect(recente).toContainText("1 × Vela Aromática Lavanda");
+  await expect(recente.getByRole("img", { name: "Foto da devolução" })).toHaveCount(1);
+
+  await expect(antiga).toContainText("Recusada");
+  await expect(antiga).toContainText("Analisada em");
+  await expect(antiga).toContainText("Motivo: Chegou quebrada");
+  await expect(antiga.getByRole("img", { name: "Foto da devolução" })).toHaveCount(1);
+});
+
+test("Y: fotos só são editáveis na devolução SOLICITADA", async ({ page }) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  await mockDevolucao(page, { historico: historicoComDuas() });
+
+  await page.goto(PEDIDO_URL);
+  const [recente, antiga] = [blocosDeDevolucao(page).nth(0), blocosDeDevolucao(page).nth(1)];
+
+  await expect(
+    recente.getByRole("region", { name: "Fotos da devolução (opcional)" }),
+  ).toBeVisible();
+  await expect(recente.getByText("Adicionar fotos")).toBeVisible();
+  await expect(recente.getByRole("button", { name: "Remover" })).toHaveCount(1);
+
+  await expect(antiga.getByRole("region")).toHaveCount(0);
+  await expect(antiga.getByText("Adicionar fotos")).toHaveCount(0);
+  await expect(antiga.getByRole("button", { name: "Remover" })).toHaveCount(0);
+});
+
+test("Z: saldo do backend limita a quantidade (comprou 2, disponível 1)", async ({ page }) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  await mockDevolucao(page, { historico: historicoComDuas() });
+
+  await page.goto(PEDIDO_URL);
+  await page.getByRole("button", { name: "Solicitar devolução" }).click();
+  const dialog = page.getByRole("dialog");
+
+  await expect(dialog).toContainText("Disponível para devolução: 1 de 2");
+  await dialog.getByRole("checkbox").check();
+  await expect(dialog.getByRole("button", { name: "Aumentar quantidade" })).toBeDisabled();
+});
+
+test("AA: item sem saldo fica indisponível; item com saldo continua selecionável", async ({
+  page,
+}) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() }, [
+    ITEM_DETALHADO,
+    { ...ITEM_DETALHADO, id: 2, produtoId: 102, produtoNome: "Spray Baunilha", quantidade: 1 },
+  ]);
+  await mockDevolucao(page, {
+    historico: {
+      devolucoes: [
+        devolucaoFake({ itens: [{ id: 1, itemPedidoId: 1, quantidade: 2, precoUnitario: 59.9 }] }),
+      ],
+      itensDisponiveis: [
+        { itemPedidoId: 1, quantidadeDisponivel: 0 },
+        { itemPedidoId: 2, quantidadeDisponivel: 1 },
+      ],
+    },
+  });
+
+  await page.goto(PEDIDO_URL);
+  await page.getByRole("button", { name: "Solicitar devolução" }).click();
+  const dialog = page.getByRole("dialog");
+  const [semSaldo, comSaldo] = [
+    dialog.getByRole("listitem").filter({ hasText: "Vela Aromática Lavanda" }),
+    dialog.getByRole("listitem").filter({ hasText: "Spray Baunilha" }),
+  ];
+
+  await expect(semSaldo.getByRole("checkbox")).toBeDisabled();
+  await expect(semSaldo).toContainText("Já incluído em outra devolução");
+  await expect(comSaldo.getByRole("checkbox")).toBeEnabled();
+  await expect(comSaldo).toContainText("Disponível para devolução: 1 de 1");
+});
+
+test("AB: sem saldo em nenhum item, Solicitar devolução some (e o histórico continua)", async ({
+  page,
+}) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  await mockDevolucao(page, {
+    historico: {
+      devolucoes: [
+        devolucaoFake({ itens: [{ id: 1, itemPedidoId: 1, quantidade: 2, precoUnitario: 59.9 }] }),
+      ],
+      itensDisponiveis: [{ itemPedidoId: 1, quantidadeDisponivel: 0 }],
+    },
+  });
+
+  await page.goto(PEDIDO_URL);
+
+  await expect(blocosDeDevolucao(page)).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Solicitar devolução" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Solicitar reembolso" })).toHaveCount(0);
+});
+
+test("AC: nova devolução com histórico existente aparece no topo após recarregar a lista", async ({
+  page,
+}) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  const chamadas = await mockDevolucao(page, { historico: historicoComDuas() });
+
+  await page.goto(PEDIDO_URL);
+  await expect(blocosDeDevolucao(page)).toHaveCount(2);
+
+  await page.getByRole("button", { name: "Solicitar devolução" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("checkbox").check();
+  await dialog.getByLabel("Motivo").fill("Tampa solta");
+  const listagensAntes = chamadas.listagens;
+  await dialog.getByRole("button", { name: "Enviar solicitação" }).click();
+
+  await expect(blocosDeDevolucao(page)).toHaveCount(3);
+  await expect(blocosDeDevolucao(page).nth(0)).toContainText("Motivo: Tampa solta");
+  expect(chamadas.listagens).toBe(listagensAntes + 1);
 });

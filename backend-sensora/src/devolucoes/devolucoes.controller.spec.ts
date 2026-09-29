@@ -53,6 +53,21 @@ describe('DevolucoesController — POST /pedidos/meus/:id/devolucoes', () => {
     expect(resultado).toBe(devolucaoRetornada);
   });
 
+  it('GET meus/:id/devolucoes delega para listarDoPedido com o id da URL e o usuário do token', async () => {
+    const historico = { devolucoes: [], itensDisponiveis: [] };
+    const devolucoesService = {
+      listarDoPedido: jest.fn().mockResolvedValue(historico),
+    };
+    const controller = new DevolucoesController(
+      devolucoesService as unknown as DevolucoesService,
+    );
+
+    const resultado = await controller.listarDoPedido(10, cliente);
+
+    expect(devolucoesService.listarDoPedido).toHaveBeenCalledWith(10, cliente);
+    expect(resultado).toBe(historico);
+  });
+
   it('exige autenticação (JwtAuthGuard + RolesGuard) e só o perfil CLIENTE', () => {
     const guards = Reflect.getMetadata(
       '__guards__',

@@ -25,7 +25,11 @@ import {
 } from './devolucoes.service';
 import type { ArquivoEnviado } from './devolucoes.service';
 import { CreateDevolucaoDto } from './dto/create-devolucao.dto';
-import { Devolucao, EvidenciaDevolucao } from './entities/devolucao.entity';
+import {
+  Devolucao,
+  DevolucoesDoPedido,
+  EvidenciaDevolucao,
+} from './entities/devolucao.entity';
 
 // Rotas do cliente sob /pedidos/meus/:id/..., mesmo formato de
 // POST /pedidos/meus/:id/cancelar (PedidosController). Só CLIENTE: a
@@ -45,6 +49,14 @@ export class DevolucoesController {
     @CurrentUser() user: UsuarioAutenticado,
   ): Promise<Devolucao> {
     return this.devolucoesService.criar(id, dto, user);
+  }
+
+  @Get('meus/:id/devolucoes')
+  listarDoPedido(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: UsuarioAutenticado,
+  ): Promise<DevolucoesDoPedido> {
+    return this.devolucoesService.listarDoPedido(id, user);
   }
 
   @Get('meus/:id/devolucoes/:devolucaoId')

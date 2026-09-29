@@ -247,6 +247,7 @@ describe('DevolucoesService — criar (Etapa 3)', () => {
       motivo: 'Chegou quebrada',
       descricao: 'Tampa rachada',
       solicitadaEm: new Date('2026-09-29T12:00:00Z'),
+      analisadaEm: null,
       itens: [{ id: 1, itemPedidoId: 100, quantidade: 1, precoUnitario: 50 }],
       evidencias: [],
     });

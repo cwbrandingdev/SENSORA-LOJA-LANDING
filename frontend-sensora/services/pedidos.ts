@@ -2,6 +2,7 @@
 import api from "./api";
 import type {
   Devolucao,
+  DevolucoesDoPedido,
   EvidenciaDevolucao,
   Pedido,
   PedidoComItens,
@@ -57,15 +58,11 @@ export async function solicitarDevolucaoMeuPedido(
   return response.data;
 }
 
-// Etapa 5 (Evidências) — devolução do próprio cliente, com as fotos em URLs
-// assinadas de validade curta.
-export async function buscarMinhaDevolucao(
-  pedidoId: number,
-  devolucaoId: number,
-): Promise<Devolucao> {
-  const response = await api.get<Devolucao>(
-    `/pedidos/meus/${pedidoId}/devolucoes/${devolucaoId}`,
-  );
+// Etapa 6 — histórico de devoluções do próprio pedido (mais recentes
+// primeiro, com fotos em URLs assinadas de validade curta) e o saldo de
+// cada item, calculado no backend.
+export async function listarMinhasDevolucoes(pedidoId: number): Promise<DevolucoesDoPedido> {
+  const response = await api.get<DevolucoesDoPedido>(`/pedidos/meus/${pedidoId}/devolucoes`);
   return response.data;
 }
 

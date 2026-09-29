@@ -459,6 +459,7 @@ export type Devolucao = {
   motivo: string;
   descricao: string | null;
   solicitadaEm: string;
+  analisadaEm: string | null;
   itens: {
     id: number;
     itemPedidoId: number;
@@ -466,6 +467,14 @@ export type Devolucao = {
     precoUnitario: number;
   }[];
   evidencias: EvidenciaDevolucao[];
+};
+
+// Etapa 6 — resposta de GET /pedidos/meus/:id/devolucoes: histórico do
+// pedido (mais recentes primeiro) e o saldo de cada item, calculado no
+// backend (o frontend não recalcula).
+export type DevolucoesDoPedido = {
+  devolucoes: Devolucao[];
+  itensDisponiveis: { itemPedidoId: number; quantidadeDisponivel: number }[];
 };
 
 // Etapa 8.1 (HIGH-01 — preço arbitrário de ItemPedido) — `precoUnitario`

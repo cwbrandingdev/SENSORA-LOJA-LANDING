@@ -8,11 +8,8 @@
 import { useEffect, useRef, useState } from "react";
 import FormButton from "@/components/ui/FormButton";
 import { getErrorMessage } from "@/lib/errors";
-import {
-  buscarMinhaDevolucao,
-  enviarEvidenciaDevolucao,
-  removerEvidenciaDevolucao,
-} from "@/services/pedidos";
+import type { EvidenciaDevolucao } from "@/lib/types/loja";
+import { enviarEvidenciaDevolucao, removerEvidenciaDevolucao } from "@/services/pedidos";
 
 const MAXIMO_FOTOS = 5;
 const TAMANHO_MAXIMO_BYTES = 5 * 1024 * 1024;
@@ -30,7 +27,10 @@ type Foto = {
 type EvidenciasDevolucaoProps = {
   pedidoId: number;
   devolucaoId: number;
-  onConcluir: () => void;
+  // Fotos que a devolução já tem (vêm do histórico carregado pela página).
+  evidenciasIniciais: EvidenciaDevolucao[];
+  // Opcional: quando informado, mostra o botão "Concluir".
+  onConcluir?: () => void;
 };
 
 // Mesmo visual do botão de seleção do ImageUploader (Admin).
@@ -40,30 +40,23 @@ const botaoSelecionarClass =
 export default function EvidenciasDevolucao({
   pedidoId,
   devolucaoId,
+  evidenciasIniciais,
   onConcluir,
 }: EvidenciasDevolucaoProps) {
-  const [fotos, setFotos] = useState<Foto[]>([]);
+  // As fotos iniciais só servem para montar a lista; depois disso o estado
+  // local é quem acompanha envios e remoções.
+  const [fotos, setFotos] = useState<Foto[]>(() =>
+    evidenciasIniciais.map((evidencia) => ({
+      chave: `evidencia-${evidencia.id}`,
+      preview: evidencia.url,
+      evidenciaId: evidencia.id,
+      status: "enviada",
+    })),
+  );
   const [aviso, setAviso] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const previewsCriadas = useRef<string[]>([]);
-
-  // Fotos que já estão na devolução (ex.: tela reaberta logo depois).
-  useEffect(() => {
-    buscarMinhaDevolucao(pedidoId, devolucaoId)
-      .then((devolucao) =>
-        setFotos(
-          devolucao.evidencias.map((evidencia) => ({
-            chave: `evidencia-${evidencia.id}`,
-            preview: evidencia.url,
-            evidenciaId: evidencia.id,
-            status: "enviada",
-          })),
-        ),
-      )
-      .catch(() => {
-        // Sem a lista, o cliente ainda pode adicionar fotos normalmente.
-      });
-  }, [pedidoId, devolucaoId]);
+  const tituloId = `fotos-devolucao-${devolucaoId}`;
 
   // Libera as prévias locais (URL.createObjectURL) ao sair da tela.
   useEffect(() => {
@@ -157,12 +150,12 @@ export default function EvidenciasDevolucao({
 
   return (
     <section
-      aria-labelledby="fotos-devolucao-titulo"
-      className="mt-6 rounded-lg border border-slate-200 p-4 sm:p-6"
+      aria-labelledby={tituloId}
+      className="mt-4 rounded-lg border border-slate-200 p-4 sm:p-6"
     >
-      <h2 id="fotos-devolucao-titulo" className="font-serif text-lg font-normal text-brand-navy">
+      <h3 id={tituloId} className="font-serif text-lg font-normal text-brand-navy">
         Fotos da devolução (opcional)
-      </h2>
+      </h3>
       <p className="mt-1 text-sm text-slate-600">
         Se quiser, envie até {MAXIMO_FOTOS} fotos do produto (JPEG, PNG ou WEBP, até 5 MB
         cada). Elas ajudam na análise.
@@ -226,9 +219,11 @@ export default function EvidenciasDevolucao({
         <FormButton type="button" onClick={handleEnviar} disabled={!temParaEnviar || enviando}>
           {enviando ? "Enviando..." : "Enviar fotos"}
         </FormButton>
-        <FormButton type="button" variant="ghost" onClick={onConcluir} disabled={enviando}>
-          {algumaEnviada ? "Concluir" : "Continuar sem fotos"}
-        </FormButton>
+        {onConcluir && (
+          <FormButton type="button" variant="ghost" onClick={onConcluir} disabled={enviando}>
+            {algumaEnviada ? "Concluir" : "Continuar sem fotos"}
+          </FormButton>
+        )}
       </div>
     </section>
   );
