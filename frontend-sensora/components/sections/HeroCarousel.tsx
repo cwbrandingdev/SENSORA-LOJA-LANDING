@@ -35,6 +35,7 @@ export default function HeroCarousel() {
   return (
     <section
       aria-label="Destaques Sensora"
+      data-full-bleed
       className="relative w-full overflow-hidden bg-brand-navy"
     >
       <Carousel
