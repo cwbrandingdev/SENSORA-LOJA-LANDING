@@ -45,24 +45,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  function logout() {
+  // Limpa a sessão local SEM navegar. Sessão vencida não é motivo para tirar
+  // o visitante de uma página pública (home, loja...): o AuthProvider do
+  // Navbar roda em todas as páginas do site, e redirecionar aqui mandava
+  // para /login qualquer pessoa que tivesse logado há mais de 1h (validade
+  // do JWT). As áreas protegidas já redirecionam sozinhas quando
+  // isAuthenticated vira false (ProtectedLayout, ProtectedAccountLayout).
+  function encerrarSessao() {
     limparTimerExpiracao();
     removeToken();
     setIsAuthenticated(false);
     setPerfil(null);
     setUserId(null);
     setEmail(null);
+  }
+
+  // Logout explícito (botão "Sair"): limpa a sessão e leva para o login.
+  function logout() {
+    encerrarSessao();
     router.push(ROUTES.LOGIN);
   }
 
   function sincronizarComToken() {
     const token = getToken();
 
-    // Token presente mas com `exp` vencido (ou não decodificável) — mesmo
-    // caminho do 401 do interceptor: reaproveita logout() para não duplicar
-    // a limpeza de sessão/redirect (Task 17).
+    // Token presente mas com `exp` vencido (ou não decodificável) (Task 17).
     if (token && isTokenExpired(token)) {
-      logout();
+      encerrarSessao();
       return;
     }
 
@@ -80,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     limparTimerExpiracao();
     if (token && payload?.exp) {
       const msRestantes = payload.exp * 1000 - Date.now();
-      expiryTimerRef.current = setTimeout(logout, msRestantes);
+      expiryTimerRef.current = setTimeout(encerrarSessao, msRestantes);
     }
   }
 
