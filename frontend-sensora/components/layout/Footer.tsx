@@ -137,21 +137,22 @@ export default function Footer() {
             <p className="uppercase tracking-[0.2em]">Marketing Sensorial</p>
           </div>
         </div>
-        <div className="mx-auto max-w-7xl px-6 pb-6 text-center text-[11px] text-white/40 lg:px-10">
-          <p>Loja feita por agencia CWBranding</p>
+        <div className="mx-auto max-w-7xl px-6 pb-6 text-center text-[11px] text-white/40 lg:px-10 ">
+          <a
+            className="underline lg:no-underline hover:text-white hover:text-[12px] transition-all"
+            href="https://cwbranding.com.br/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Loja feita pela agencia CWBranding
+          </a>
         </div>
       </div>
     </footer>
   );
 }
 
-function FooterLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: ReactNode;
-}) {
+function FooterLink({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link
       href={href}
