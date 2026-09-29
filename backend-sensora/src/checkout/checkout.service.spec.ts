@@ -14,6 +14,7 @@ import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
+import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import {
   CheckoutService,
@@ -447,16 +448,19 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
   let prisma: {
     pedido: {
       findUnique: jest.Mock;
+      updateMany: jest.Mock;
     };
     $transaction: jest.Mock;
   };
   let produtosService: { removerEstoque: jest.Mock };
+  let asaasService: { resolverPaymentIdPorCheckout: jest.Mock };
   let txPedidoUpdateMany: jest.Mock;
   let txItemPedidoUpdate: jest.Mock;
 
   let pedidoFake: {
     id: number;
     status: StatusPedido;
+    asaasPaymentId: string | null;
     itens: { id: number; produtoId: number; quantidade: number }[];
   };
 
@@ -472,6 +476,7 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
     pedidoFake = {
       id: 1,
       status: StatusPedido.PENDENTE,
+      asaasPaymentId: null,
       itens: [
         { id: 100, produtoId: 10, quantidade: 2 },
         { id: 200, produtoId: 20, quantidade: 1 },
@@ -496,6 +501,24 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
     prisma = {
       pedido: {
         findUnique: jest.fn(() => pedidoFake),
+        // Gravação do asaasPaymentId após o pagamento: só grava se ainda
+        // estiver vazio (mesmo WHERE condicional usado no service).
+        updateMany: jest.fn(
+          ({
+            where,
+            data,
+          }: {
+            where: { id: number; asaasPaymentId: null };
+            data: { asaasPaymentId: string };
+          }) => {
+            const semPaymentId = pedidoFake.asaasPaymentId === null;
+            if (where.id === pedidoFake.id && semPaymentId) {
+              pedidoFake.asaasPaymentId = data.asaasPaymentId;
+              return { count: 1 };
+            }
+            return { count: 0 };
+          },
+        ),
       },
       $transaction: jest.fn(
         async (callback: (tx: unknown) => Promise<void>) => {
@@ -510,6 +533,13 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
 
     produtosService = {
       removerEstoque: jest.fn(() => ({})),
+    };
+
+    asaasService = {
+      resolverPaymentIdPorCheckout: jest.fn(() => ({
+        encontrado: true,
+        payment: { id: 'pay_123', status: 'CONFIRMED' },
+      })),
     };
 
     const configValues: Record<string, string> = {
@@ -528,13 +558,72 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: ProdutosService, useValue: produtosService },
         { provide: EnderecosService, useValue: {} },
-        { provide: AsaasService, useValue: {} },
+        { provide: AsaasService, useValue: asaasService },
         { provide: UsuariosService, useValue: {} },
         { provide: MelhorEnvioService, useValue: {} },
       ],
     }).compile();
 
     service = module.get(CheckoutService);
+  });
+
+  it('CHECKOUT_PAID grava o asaasPaymentId do pedido logo após o pagamento', async () => {
+    await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(construirEventoCheckoutPago('chk_123')),
+    );
+
+    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+    expect(asaasService.resolverPaymentIdPorCheckout).toHaveBeenCalledWith(
+      'chk_123',
+    );
+    expect(prisma.pedido.updateMany).toHaveBeenCalledWith({
+      where: { id: 1, asaasPaymentId: null },
+      data: { asaasPaymentId: 'pay_123' },
+    });
+    expect(pedidoFake.asaasPaymentId).toBe('pay_123');
+  });
+
+  it('CHECKOUT_PAID duplicado não consulta o Asaas de novo quando o asaasPaymentId já foi salvo', async () => {
+    const payload = Buffer.from(construirEventoCheckoutPago('chk_123'));
+    const headers = { asaasAccessToken: ASAAS_WEBHOOK_TOKEN };
+
+    await service.handleWebhook(headers, payload);
+    await service.handleWebhook(headers, payload);
+
+    expect(asaasService.resolverPaymentIdPorCheckout).toHaveBeenCalledTimes(1);
+    expect(pedidoFake.asaasPaymentId).toBe('pay_123');
+    expect(produtosService.removerEstoque).toHaveBeenCalledTimes(2);
+  });
+
+  it('CHECKOUT_PAID: falha ao consultar o Payment no Asaas não derruba o webhook nem desfaz o pagamento', async () => {
+    asaasService.resolverPaymentIdPorCheckout.mockRejectedValueOnce(
+      new Error('Asaas fora do ar'),
+    );
+
+    const resultado = await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(construirEventoCheckoutPago('chk_123')),
+    );
+
+    expect(resultado).toEqual({ received: true });
+    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+    expect(pedidoFake.asaasPaymentId).toBeNull();
+  });
+
+  it('CHECKOUT_PAID: Payment ainda não encontrado no Asaas não grava nada', async () => {
+    asaasService.resolverPaymentIdPorCheckout.mockResolvedValueOnce({
+      encontrado: false,
+    });
+
+    await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(construirEventoCheckoutPago('chk_123')),
+    );
+
+    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+    expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+    expect(pedidoFake.asaasPaymentId).toBeNull();
   });
 
   it('webhook válido: token correto -> pedido encontrado -> PAGO -> estoque reduzido', async () => {
@@ -1427,6 +1516,7 @@ describe('CheckoutService — restauração de estoque após reembolso (Etapa 5B
     id: number;
     asaasPaymentId: string | null;
     status: StatusPedido;
+    statusEnvio?: StatusEnvio;
   };
   let itensFake: {
     id: number;
@@ -1884,6 +1974,53 @@ describe('CheckoutService — restauração de estoque após reembolso (Etapa 5B
 
     expect(produtosFake.get(10)).toBe(6);
     expect(produtosService.adicionarEstoque).toHaveBeenCalledTimes(1);
+  });
+
+  // L — pedido já enviado: o produto está com o cliente e só volta ao
+  // estoque pelo fluxo de devolução (recebimento + conferência).
+  it('L: pedido ENVIADO fica REEMBOLSADO, mas o estoque não é restaurado automaticamente', async () => {
+    pedidoFake.statusEnvio = StatusEnvio.ENVIADO;
+    itensFake = [
+      {
+        id: 10,
+        pedidoId: 1,
+        produtoId: 100,
+        quantidade: 3,
+        estoqueBaixado: true,
+        estoqueRestaurado: false,
+      },
+    ];
+    produtosFake.set(100, 5);
+
+    await enviarPaymentRefunded();
+
+    expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSADO);
+    expect(itensFake[0].estoqueRestaurado).toBe(false);
+    expect(produtosFake.get(100)).toBe(5);
+    expect(produtosService.adicionarEstoque).not.toHaveBeenCalled();
+  });
+
+  // M — mesmo com o webhook reentregue, o pedido enviado continua sem
+  // restauração automática.
+  it('M: PAYMENT_REFUNDED reentregue para pedido ENVIADO também não restaura estoque', async () => {
+    pedidoFake.statusEnvio = StatusEnvio.ENVIADO;
+    itensFake = [
+      {
+        id: 10,
+        pedidoId: 1,
+        produtoId: 100,
+        quantidade: 3,
+        estoqueBaixado: true,
+        estoqueRestaurado: false,
+      },
+    ];
+    produtosFake.set(100, 5);
+
+    await enviarPaymentRefunded();
+    await enviarPaymentRefunded();
+
+    expect(produtosFake.get(100)).toBe(5);
+    expect(produtosService.adicionarEstoque).not.toHaveBeenCalled();
   });
 });
 

@@ -16,6 +16,7 @@ import { EnderecosService } from '../enderecos/enderecos.service';
 import { Endereco } from '../enderecos/entities/endereco.entity';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
+import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import {
   MelhorEnvioPacote,
@@ -587,6 +588,7 @@ export class CheckoutService {
     // com segurança: não marcam pedido como pago, não alteram estoque.
     if (body.event === 'CHECKOUT_PAID' && body.checkout?.id) {
       await this.confirmarPagamento({ asaasCheckoutId: body.checkout.id });
+      await this.salvarAsaasPaymentId(body.checkout.id);
     } else if (
       body.event &&
       CheckoutService.EVENTOS_REEMBOLSO_ASAAS.has(body.event)
@@ -606,6 +608,43 @@ export class CheckoutService {
     // reentregar por engano algo que já foi tratado (ou que nunca vai
     // encontrar Pedido nenhum, ver item 4 da Etapa 5B.5).
     return { received: true };
+  }
+
+  // O payload do CHECKOUT_PAID só traz o Checkout (chk_xxx), nunca o Payment
+  // (pay_xxx) usado por reembolso e pelos webhooks PAYMENT_*. Resolve aqui,
+  // logo após o pagamento, para as devoluções/reembolsos futuros não
+  // dependerem de descobrir o Payment de novo. Nunca derruba o webhook: se
+  // falhar, PedidosService.resolverPaymentId continua como alternativa.
+  // Idempotente: só grava se o pedido ainda não tiver asaasPaymentId.
+  private async salvarAsaasPaymentId(asaasCheckoutId: string): Promise<void> {
+    try {
+      const pedido = await this.prisma.pedido.findUnique({
+        where: { asaasCheckoutId },
+      });
+      if (!pedido || pedido.asaasPaymentId) {
+        return;
+      }
+
+      const resultado =
+        await this.asaasService.resolverPaymentIdPorCheckout(asaasCheckoutId);
+      if (!resultado.encontrado) {
+        this.logger.warn(
+          `Payment do checkout ${asaasCheckoutId} ainda não encontrado no Asaas — asaasPaymentId do pedido ${pedido.id} não foi salvo.`,
+        );
+        return;
+      }
+
+      await this.prisma.pedido.updateMany({
+        where: { id: pedido.id, asaasPaymentId: null },
+        data: { asaasPaymentId: resultado.payment.id },
+      });
+    } catch (erro) {
+      this.logger.warn(
+        `Não foi possível salvar o asaasPaymentId do checkout ${asaasCheckoutId}: ${
+          erro instanceof Error ? erro.message : String(erro)
+        }`,
+      );
+    }
   }
 
   // Etapa 5B.5 — trata os eventos de webhook de reembolso do Asaas
@@ -688,6 +727,17 @@ export class CheckoutService {
     if (resultado.count === 0 && !jaEstavaReembolsado) {
       this.logger.warn(
         `Webhook Asaas PAYMENT_REFUNDED para o pedido ${pedido.id}, mas o status atual é ${pedido.status} (esperado REEMBOLSO_SOLICITADO) — nenhuma transição aplicada; requer investigação manual.`,
+      );
+      return;
+    }
+
+    // Pedido já enviado: o produto saiu do estoque e está com o cliente.
+    // Ele só volta ao estoque depois de recebido e conferido (fluxo de
+    // devolução) — nunca automaticamente só porque o reembolso foi
+    // confirmado. Pedido não enviado segue restaurando como antes.
+    if ((pedido.statusEnvio as StatusEnvio) === StatusEnvio.ENVIADO) {
+      this.logger.log(
+        `Pedido ${pedido.id} reembolsado após o envio — estoque não restaurado automaticamente (aguarda recebimento da devolução).`,
       );
       return;
     }

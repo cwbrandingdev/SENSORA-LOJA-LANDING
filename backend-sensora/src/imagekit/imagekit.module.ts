@@ -5,5 +5,7 @@ import { ImagekitService } from './imagekit.service';
 @Module({
   controllers: [ImagekitController],
   providers: [ImagekitService],
+  // Usado por DevolucoesModule (evidências da devolução).
+  exports: [ImagekitService],
 })
 export class ImagekitModule {}

@@ -45,6 +45,7 @@ type PedidoFake = {
   data: string;
   status: string;
   total: number;
+  statusEnvio?: string;
 };
 
 function pedidoBase(status: string): PedidoFake {
@@ -415,4 +416,352 @@ test("L: reabrir a página com o pedido já REEMBOLSADO não oferece nova solici
   await expect(statusBadge(page, "Reembolsado")).toBeVisible();
   await expect(page.getByRole("button", { name: "Solicitar reembolso" })).toHaveCount(0);
   expect(chamadas.count).toBe(0);
+});
+
+// Etapa 4 (Devoluções) — pedido PAGO já ENVIADO troca o reembolso direto pela
+// solicitação de devolução (POST /pedidos/meus/:id/devolucoes).
+function pedidoEnviado(): PedidoFake {
+  return { ...pedidoBase("PAGO"), statusEnvio: "ENVIADO" };
+}
+
+// Captura o corpo enviado e responde com o status escolhido.
+async function mockDevolucao(
+  page: Page,
+  options: { status?: number; message?: string } = {},
+): Promise<{ corpos: unknown[] }> {
+  const { status = 201, message } = options;
+  const chamadas = { corpos: [] as unknown[] };
+  await page.route(`**/pedidos/meus/${PEDIDO_ID}/devolucoes`, async (route) => {
+    chamadas.corpos.push(route.request().postDataJSON());
+    if (status >= 300) {
+      await route.fulfill({ status, json: { statusCode: status, message } });
+      return;
+    }
+    await route.fulfill({
+      status,
+      json: {
+        id: 1,
+        pedidoId: PEDIDO_ID,
+        status: "SOLICITADA",
+        motivo: "Chegou quebrada",
+        descricao: null,
+        solicitadaEm: "2026-09-29T12:00:00.000Z",
+        itens: [{ id: 1, itemPedidoId: 1, quantidade: 2, precoUnitario: 59.9 }],
+      },
+    });
+  });
+  return chamadas;
+}
+
+test("M: pedido PAGO e ENVIADO mostra Solicitar devolução no lugar do reembolso", async ({
+  page,
+}) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+
+  await page.goto(PEDIDO_URL);
+
+  await expect(page.getByRole("button", { name: "Solicitar devolução" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Solicitar reembolso" })).toHaveCount(0);
+});
+
+test("N: pedido PAGO não enviado continua sem o botão de devolução", async ({ page }) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, {
+    current: { ...pedidoBase("PAGO"), statusEnvio: "NAO_ENVIADO" },
+  });
+
+  await page.goto(PEDIDO_URL);
+
+  await expect(page.getByRole("button", { name: "Solicitar reembolso" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Solicitar devolução" })).toHaveCount(0);
+});
+
+test("O: sem item selecionado ou sem motivo não chama a API", async ({ page }) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  const chamadas = await mockDevolucao(page);
+
+  await page.goto(PEDIDO_URL);
+  await page.getByRole("button", { name: "Solicitar devolução" }).click();
+  const dialog = page.getByRole("dialog");
+
+  await dialog.getByRole("button", { name: "Enviar solicitação" }).click();
+  await expect(dialog.getByRole("alert")).toHaveText(
+    "Selecione pelo menos um item para devolver.",
+  );
+
+  await dialog.getByRole("checkbox").check();
+  await dialog.getByRole("button", { name: "Enviar solicitação" }).click();
+  await expect(dialog.getByRole("alert")).toHaveText("Informe o motivo da devolução.");
+
+  expect(chamadas.corpos).toHaveLength(0);
+});
+
+test("P: quantidade limitada ao comprado e envio com o corpo correto", async ({ page }) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  const chamadas = await mockDevolucao(page);
+
+  await page.goto(PEDIDO_URL);
+  await page.getByRole("button", { name: "Solicitar devolução" }).click();
+  const dialog = page.getByRole("dialog");
+
+  await dialog.getByRole("checkbox").check();
+  const aumentar = dialog.getByRole("button", { name: "Aumentar quantidade" });
+  await aumentar.click();
+  // Comprou 2: o "+" trava em 2.
+  await expect(aumentar).toBeDisabled();
+
+  await dialog.getByLabel("Motivo").fill("  Chegou quebrada  ");
+  await dialog.getByLabel("Descrição (opcional)").fill("Tampa rachada");
+  await dialog.getByRole("button", { name: "Enviar solicitação" }).click();
+
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByText("Sua solicitação de devolução foi registrada e será analisada.", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  expect(chamadas.corpos).toEqual([
+    {
+      motivo: "Chegou quebrada",
+      descricao: "Tampa rachada",
+      itens: [{ itemPedidoId: 1, quantidade: 2 }],
+    },
+  ]);
+});
+
+test("Q: erro de validação do backend aparece no formulário", async ({ page }) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  await mockDevolucao(page, {
+    status: 400,
+    message: "Quantidade indisponível para devolução do item 1: máximo 1.",
+  });
+
+  await page.goto(PEDIDO_URL);
+  await page.getByRole("button", { name: "Solicitar devolução" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("checkbox").check();
+  await dialog.getByLabel("Motivo").fill("Chegou quebrada");
+  await dialog.getByRole("button", { name: "Enviar solicitação" }).click();
+
+  await expect(dialog.getByRole("alert")).toHaveText(
+    "Quantidade indisponível para devolução do item 1: máximo 1.",
+  );
+  await expect(dialog.getByRole("button", { name: "Enviar solicitação" })).toBeEnabled();
+});
+
+// Etapa 5 (Evidências) — fotos opcionais enviadas depois de criar a
+// devolução (POST/DELETE /pedidos/meus/:id/devolucoes/:devolucaoId/evidencias,
+// GET /pedidos/meus/:id/devolucoes/:devolucaoId). Tudo simulado via
+// page.route; a imagem de retorno é um PNG 1x1 em data URL.
+const PNG_1X1_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const PNG_1X1 = Buffer.from(PNG_1X1_BASE64, "base64");
+
+function fotoPng(nome: string) {
+  return { name: nome, mimeType: "image/png", buffer: PNG_1X1 };
+}
+
+type ChamadasEvidencias = {
+  envios: { contentType: string; temCampoFoto: boolean }[];
+  remocoes: number[];
+};
+
+// `falharEnvio`: número do envio (1, 2, ...) que responde erro 400.
+async function mockEvidencias(
+  page: Page,
+  options: { falharEnvio?: number } = {},
+): Promise<ChamadasEvidencias> {
+  const chamadas: ChamadasEvidencias = { envios: [], remocoes: [] };
+  await page.route(`**/pedidos/meus/${PEDIDO_ID}/devolucoes/1**`, async (route) => {
+    const request = route.request();
+    const url = request.url();
+
+    if (request.method() === "GET") {
+      await route.fulfill({
+        json: {
+          id: 1,
+          pedidoId: PEDIDO_ID,
+          status: "SOLICITADA",
+          motivo: "Chegou quebrada",
+          descricao: null,
+          solicitadaEm: "2026-09-29T12:00:00.000Z",
+          itens: [],
+          evidencias: [],
+        },
+      });
+      return;
+    }
+
+    if (request.method() === "POST" && url.endsWith("/evidencias")) {
+      chamadas.envios.push({
+        contentType: request.headers()["content-type"] ?? "",
+        temCampoFoto: (request.postDataBuffer() ?? Buffer.alloc(0))
+          .toString("latin1")
+          .includes('name="foto"'),
+      });
+      const numero = chamadas.envios.length;
+      if (numero === options.falharEnvio) {
+        await route.fulfill({
+          status: 400,
+          json: {
+            statusCode: 400,
+            message: "Formato não permitido. Envie uma foto JPEG, PNG ou WEBP.",
+          },
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 201,
+        json: {
+          id: 100 + numero,
+          url: `data:image/png;base64,${PNG_1X1_BASE64}`,
+          criadoEm: "2026-09-30T10:00:00.000Z",
+        },
+      });
+      return;
+    }
+
+    const remocao = url.match(/\/evidencias\/(\d+)$/);
+    if (request.method() === "DELETE" && remocao) {
+      chamadas.remocoes.push(Number(remocao[1]));
+      await route.fulfill({ status: 204 });
+      return;
+    }
+
+    await route.continue();
+  });
+  return chamadas;
+}
+
+// Cria a devolução pela tela e devolve o bloco de fotos que aparece depois.
+async function criarDevolucaoEAbrirFotos(page: Page) {
+  await page.goto(PEDIDO_URL);
+  await page.getByRole("button", { name: "Solicitar devolução" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("checkbox").check();
+  await dialog.getByLabel("Motivo").fill("Chegou quebrada");
+  await dialog.getByRole("button", { name: "Enviar solicitação" }).click();
+
+  const blocoFotos = page.getByRole("region", { name: "Fotos da devolução (opcional)" });
+  await expect(blocoFotos).toBeVisible();
+  return blocoFotos;
+}
+
+async function prepararPedidoEnviado(page: Page, options: { falharEnvio?: number } = {}) {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  await mockDevolucao(page);
+  return mockEvidencias(page, options);
+}
+
+test("R: depois de criar a devolução dá para continuar sem fotos", async ({ page }) => {
+  const chamadas = await prepararPedidoEnviado(page);
+  const blocoFotos = await criarDevolucaoEAbrirFotos(page);
+
+  await blocoFotos.getByRole("button", { name: "Continuar sem fotos" }).click();
+
+  await expect(blocoFotos).toHaveCount(0);
+  await expect(
+    page.getByText("Sua solicitação de devolução foi registrada e será analisada.", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  expect(chamadas.envios).toHaveLength(0);
+});
+
+test("S: seleção mostra prévias e recusa formato e tamanho inválidos", async ({ page }) => {
+  const chamadas = await prepararPedidoEnviado(page);
+  const blocoFotos = await criarDevolucaoEAbrirFotos(page);
+
+  await blocoFotos.locator('input[type="file"]').setInputFiles([
+    fotoPng("a.png"),
+    fotoPng("b.png"),
+    { name: "notas.txt", mimeType: "text/plain", buffer: Buffer.from("texto") },
+    { name: "grande.png", mimeType: "image/png", buffer: Buffer.alloc(5 * 1024 * 1024 + 1) },
+  ]);
+
+  await expect(blocoFotos.getByRole("img", { name: "Foto da devolução" })).toHaveCount(2);
+  await expect(blocoFotos.getByText("Pronta para enviar")).toHaveCount(2);
+  await expect(blocoFotos.getByRole("alert")).toContainText("notas.txt: use JPEG, PNG ou WEBP");
+  await expect(blocoFotos.getByRole("alert")).toContainText("grande.png: máximo de 5 MB");
+  expect(chamadas.envios).toHaveLength(0);
+});
+
+test("T: envia cada foto como multipart no campo foto e mostra Enviada", async ({ page }) => {
+  const chamadas = await prepararPedidoEnviado(page);
+  const blocoFotos = await criarDevolucaoEAbrirFotos(page);
+
+  await blocoFotos
+    .locator('input[type="file"]')
+    .setInputFiles([fotoPng("a.png"), fotoPng("b.png")]);
+  await blocoFotos.getByRole("button", { name: "Enviar fotos" }).click();
+
+  await expect(blocoFotos.getByText("Enviada", { exact: true })).toHaveCount(2);
+  expect(chamadas.envios).toHaveLength(2);
+  for (const envio of chamadas.envios) {
+    expect(envio.contentType).toMatch(/^multipart\/form-data; boundary=/);
+    expect(envio.temCampoFoto).toBe(true);
+  }
+  await expect(blocoFotos.getByRole("button", { name: "Concluir" })).toBeVisible();
+});
+
+test("U: erro em uma foto não perde as enviadas, e tentar de novo reenvia só a que falhou", async ({
+  page,
+}) => {
+  const chamadas = await prepararPedidoEnviado(page, { falharEnvio: 2 });
+  const blocoFotos = await criarDevolucaoEAbrirFotos(page);
+
+  await blocoFotos
+    .locator('input[type="file"]')
+    .setInputFiles([fotoPng("a.png"), fotoPng("b.png")]);
+  await blocoFotos.getByRole("button", { name: "Enviar fotos" }).click();
+
+  await expect(blocoFotos.getByText("Enviada", { exact: true })).toHaveCount(1);
+  await expect(
+    blocoFotos.getByText("Formato não permitido. Envie uma foto JPEG, PNG ou WEBP."),
+  ).toBeVisible();
+
+  await blocoFotos.getByRole("button", { name: "Enviar fotos" }).click();
+
+  await expect(blocoFotos.getByText("Enviada", { exact: true })).toHaveCount(2);
+  expect(chamadas.envios).toHaveLength(3);
+});
+
+test("V: remover antes do envio não chama a API; depois do envio chama o DELETE", async ({
+  page,
+}) => {
+  const chamadas = await prepararPedidoEnviado(page);
+  const blocoFotos = await criarDevolucaoEAbrirFotos(page);
+  const input = blocoFotos.locator('input[type="file"]');
+
+  await input.setInputFiles([fotoPng("a.png")]);
+  await blocoFotos.getByRole("button", { name: "Remover" }).click();
+  await expect(blocoFotos.getByRole("img", { name: "Foto da devolução" })).toHaveCount(0);
+  expect(chamadas.remocoes).toHaveLength(0);
+
+  await input.setInputFiles([fotoPng("b.png")]);
+  await blocoFotos.getByRole("button", { name: "Enviar fotos" }).click();
+  await expect(blocoFotos.getByText("Enviada", { exact: true })).toHaveCount(1);
+  await blocoFotos.getByRole("button", { name: "Remover" }).click();
+
+  await expect(blocoFotos.getByRole("img", { name: "Foto da devolução" })).toHaveCount(0);
+  expect(chamadas.remocoes).toEqual([101]);
+});
+
+test("W: no máximo 5 fotos — as excedentes são recusadas com aviso", async ({ page }) => {
+  await prepararPedidoEnviado(page);
+  const blocoFotos = await criarDevolucaoEAbrirFotos(page);
+
+  await blocoFotos
+    .locator('input[type="file"]')
+    .setInputFiles(["1", "2", "3", "4", "5", "6"].map((n) => fotoPng(`${n}.png`)));
+
+  await expect(blocoFotos.getByRole("img", { name: "Foto da devolução" })).toHaveCount(5);
+  await expect(blocoFotos.getByRole("alert")).toContainText("6.png: limite de 5 fotos");
+  // Com 5 fotos, o botão de adicionar some.
+  await expect(blocoFotos.getByText("Adicionar fotos")).toHaveCount(0);
 });

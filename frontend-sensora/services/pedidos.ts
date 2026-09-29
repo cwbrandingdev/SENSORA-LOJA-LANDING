@@ -1,9 +1,12 @@
 // Portado de frontend/services/pedidos.js — mesmos endpoints e métodos.
 import api from "./api";
 import type {
+  Devolucao,
+  EvidenciaDevolucao,
   Pedido,
   PedidoComItens,
   PedidoComItensDetalhado,
+  SolicitarDevolucaoPayload,
   UpdatePedidoPayload,
 } from "@/lib/types/loja";
 
@@ -41,6 +44,59 @@ export async function cancelarMeuPedido(id: number): Promise<Pedido> {
 export async function solicitarReembolsoMeuPedido(id: number): Promise<Pedido> {
   const response = await api.post<Pedido>(`/pedidos/meus/${id}/cancelar-pago`);
   return response.data;
+}
+
+// Etapa 4 (Devoluções) — POST /pedidos/meus/:id/devolucoes, para pedido
+// PAGO já ENVIADO. O backend valida dono, status, itens e quantidades
+// disponíveis; daqui só saem motivo, descrição e itens/quantidades.
+export async function solicitarDevolucaoMeuPedido(
+  id: number,
+  data: SolicitarDevolucaoPayload,
+): Promise<Devolucao> {
+  const response = await api.post<Devolucao>(`/pedidos/meus/${id}/devolucoes`, data);
+  return response.data;
+}
+
+// Etapa 5 (Evidências) — devolução do próprio cliente, com as fotos em URLs
+// assinadas de validade curta.
+export async function buscarMinhaDevolucao(
+  pedidoId: number,
+  devolucaoId: number,
+): Promise<Devolucao> {
+  const response = await api.get<Devolucao>(
+    `/pedidos/meus/${pedidoId}/devolucoes/${devolucaoId}`,
+  );
+  return response.data;
+}
+
+// Uma foto por requisição, no campo "foto". Pasta, nome e privacidade no
+// ImageKit são decididos pelo backend; formato e tamanho são conferidos lá.
+// "multipart/form-data" aqui faz o axios enviar o FormData como está (o
+// navegador completa o boundary) — com o padrão JSON do `api`, ele seria
+// convertido em JSON. Timeout maior: a foto pode ter até 5 MB.
+export async function enviarEvidenciaDevolucao(
+  pedidoId: number,
+  devolucaoId: number,
+  foto: File,
+): Promise<EvidenciaDevolucao> {
+  const formData = new FormData();
+  formData.append("foto", foto);
+  const response = await api.post<EvidenciaDevolucao>(
+    `/pedidos/meus/${pedidoId}/devolucoes/${devolucaoId}/evidencias`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" }, timeout: 60000 },
+  );
+  return response.data;
+}
+
+export async function removerEvidenciaDevolucao(
+  pedidoId: number,
+  devolucaoId: number,
+  evidenciaId: number,
+): Promise<void> {
+  await api.delete(
+    `/pedidos/meus/${pedidoId}/devolucoes/${devolucaoId}/evidencias/${evidenciaId}`,
+  );
 }
 
 export async function listarPedidos(): Promise<Pedido[]> {

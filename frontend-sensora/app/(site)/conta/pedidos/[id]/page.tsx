@@ -15,25 +15,37 @@ import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import EmptyState from "@/components/ui/EmptyState";
 import FormButton from "@/components/ui/FormButton";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import QuantityStepper from "@/components/ui/QuantityStepper";
 import Skeleton from "@/components/ui/Skeleton";
 import { BackLink } from "@/components/conta/AccountPageHeader";
 import StatusPedidoBadge from "@/components/conta/StatusPedidoBadge";
 import AcompanhamentoPedido from "@/components/conta/AcompanhamentoPedido";
+import EvidenciasDevolucao from "@/components/conta/EvidenciasDevolucao";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import {
   buscarMeuPedido,
   cancelarMeuPedido,
+  solicitarDevolucaoMeuPedido,
   solicitarReembolsoMeuPedido,
 } from "@/services/pedidos";
 import { ROUTES } from "@/lib/routes";
 import { ROTAS_LEGAIS } from "@/lib/empresa";
-import { StatusPedido, type Pedido, type PedidoComItensDetalhado } from "@/lib/types/loja";
+import {
+  StatusEnvio,
+  StatusPedido,
+  type Pedido,
+  type PedidoComItensDetalhado,
+} from "@/lib/types/loja";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
+
+// Mesmo estilo de campo das outras telas da conta (ex.: /conta/seguranca).
+const inputClass =
+  "w-full rounded-md border border-slate-300 px-3 py-2 text-sm transition-colors duration-200 focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy";
 
 // Etapa 6.5 (Frete) — o pedido só "tem endereço" para exibição quando os
 // campos essenciais do snapshot vieram preenchidos. Nunca renderiza um
@@ -65,6 +77,21 @@ export default function MeuPedidoDetalhePage() {
   const [modalCancelarAberto, setModalCancelarAberto] = useState(false);
   const [modalReembolsoAberto, setModalReembolsoAberto] = useState(false);
   const [solicitandoReembolso, setSolicitandoReembolso] = useState(false);
+
+  // Etapa 4 (Devoluções) — formulário da devolução. `quantidadesDevolucao`
+  // guarda, por id do item do pedido, quantas unidades devolver (0 ou
+  // ausente = item não selecionado).
+  const [modalDevolucaoAberto, setModalDevolucaoAberto] = useState(false);
+  const [enviandoDevolucao, setEnviandoDevolucao] = useState(false);
+  const [quantidadesDevolucao, setQuantidadesDevolucao] = useState<Record<number, number>>({});
+  const [motivoDevolucao, setMotivoDevolucao] = useState("");
+  const [descricaoDevolucao, setDescricaoDevolucao] = useState("");
+  const [erroDevolucao, setErroDevolucao] = useState<string | null>(null);
+  // Etapa 5 (Evidências) — id da devolução recém-criada, para enviar as
+  // fotos a ela; `fotosConcluidas` esconde o bloco de fotos quando o
+  // cliente termina (ou decide seguir sem fotos).
+  const [devolucaoRegistradaId, setDevolucaoRegistradaId] = useState<number | null>(null);
+  const [fotosConcluidas, setFotosConcluidas] = useState(false);
 
   useEffect(() => {
     // Id fora da URL não é um número válido — mesmo resultado prático de um
@@ -188,6 +215,87 @@ export default function MeuPedidoDetalhePage() {
     }
   }
 
+  // Etapa 4 (Devoluções) — só para pedido PAGO já ENVIADO (botão só existe
+  // nesse caso). O limite de quantidade na tela é o comprado; o saldo real
+  // (descontando devoluções anteriores) é sempre validado no backend, e a
+  // mensagem dele aparece no próprio formulário.
+  function handleAbrirModalDevolucao() {
+    setQuantidadesDevolucao({});
+    setMotivoDevolucao("");
+    setDescricaoDevolucao("");
+    setErroDevolucao(null);
+    setModalDevolucaoAberto(true);
+  }
+
+  function handleFecharModalDevolucao() {
+    if (enviandoDevolucao) return;
+    setModalDevolucaoAberto(false);
+  }
+
+  function alterarQuantidadeDevolucao(itemId: number, quantidade: number) {
+    setQuantidadesDevolucao((atual) => ({ ...atual, [itemId]: quantidade }));
+  }
+
+  async function handleConfirmarDevolucao() {
+    if (!dados || enviandoDevolucao) return;
+
+    const itens = dados.itens
+      .filter((item) => (quantidadesDevolucao[item.id] ?? 0) > 0)
+      .map((item) => ({
+        itemPedidoId: item.id,
+        quantidade: quantidadesDevolucao[item.id],
+      }));
+    const motivo = motivoDevolucao.trim();
+
+    if (itens.length === 0) {
+      setErroDevolucao("Selecione pelo menos um item para devolver.");
+      return;
+    }
+    if (!motivo) {
+      setErroDevolucao("Informe o motivo da devolução.");
+      return;
+    }
+
+    setErroDevolucao(null);
+    setEnviandoDevolucao(true);
+    try {
+      const devolucao = await solicitarDevolucaoMeuPedido(dados.pedido.id, {
+        motivo,
+        descricao: descricaoDevolucao.trim() || undefined,
+        itens,
+      });
+      setModalDevolucaoAberto(false);
+      setDevolucaoRegistradaId(devolucao.id);
+      setFotosConcluidas(false);
+      toast.success("Solicitação de devolução registrada.");
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 409) {
+        // O pedido mudou de situação (ex.: reembolso em andamento) — fecha
+        // o formulário e busca o estado atual, como no fluxo de reembolso.
+        toast.error(
+          getErrorMessage(err, "Este pedido não está mais disponível para devolução."),
+        );
+        setModalDevolucaoAberto(false);
+        buscarMeuPedido(dados.pedido.id)
+          .then(setDados)
+          .catch(() => {});
+      } else {
+        // Ex.: quantidade acima do saldo disponível — mostra a mensagem do
+        // backend no formulário, para o cliente ajustar e tentar de novo.
+        setErroDevolucao(
+          getErrorMessage(
+            err,
+            "Não foi possível registrar a devolução neste momento. Tente novamente.",
+          ),
+        );
+      }
+    } finally {
+      setEnviandoDevolucao(false);
+    }
+  }
+
+  const pedidoEnviado = dados?.pedido.statusEnvio === StatusEnvio.ENVIADO;
+
   return (
     <div className="mx-auto max-w-4xl px-6 pt-8 pb-24 sm:pb-32 lg:px-10">
       {/* Item 5/6/19 da Etapa 6.1 — sempre visível, mesmo durante
@@ -250,7 +358,9 @@ export default function MeuPedidoDetalhePage() {
                   aparece para PENDENTE/CANCELADO (fluxo acima) nem para
                   REEMBOLSO_SOLICITADO/REEMBOLSADO (já solicitado/concluído,
                   nunca uma segunda solicitação pela interface). */}
-              {dados.pedido.status === StatusPedido.PAGO && (
+              {/* Etapa 4 (Devoluções) — PAGO ainda não enviado continua com
+                  o reembolso; PAGO já enviado passa a pedir devolução. */}
+              {dados.pedido.status === StatusPedido.PAGO && !pedidoEnviado && (
                 <FormButton
                   type="button"
                   variant="danger"
@@ -259,8 +369,28 @@ export default function MeuPedidoDetalhePage() {
                   Solicitar reembolso
                 </FormButton>
               )}
+              {dados.pedido.status === StatusPedido.PAGO && pedidoEnviado && (
+                <FormButton type="button" onClick={handleAbrirModalDevolucao}>
+                  Solicitar devolução
+                </FormButton>
+              )}
             </div>
           </div>
+
+          {devolucaoRegistradaId !== null && (
+            <p className="mt-4 text-sm leading-relaxed text-slate-600">
+              Sua solicitação de devolução foi registrada e será analisada.
+              Avisaremos você sobre os próximos passos.
+            </p>
+          )}
+
+          {devolucaoRegistradaId !== null && !fotosConcluidas && (
+            <EvidenciasDevolucao
+              pedidoId={dados.pedido.id}
+              devolucaoId={devolucaoRegistradaId}
+              onConcluir={() => setFotosConcluidas(true)}
+            />
+          )}
 
           {dados.pedido.status === StatusPedido.REEMBOLSO_SOLICITADO && (
             <p className="mt-4 text-sm leading-relaxed text-slate-600">
@@ -391,6 +521,96 @@ export default function MeuPedidoDetalhePage() {
             confirming={solicitandoReembolso}
             onConfirm={handleConfirmarReembolso}
             onCancel={handleFecharModalReembolso}
+          />
+          <ConfirmDialog
+            open={modalDevolucaoAberto}
+            title="Solicitar devolução"
+            description={
+              <div className="flex flex-col gap-4">
+                <p>Selecione os itens e a quantidade que deseja devolver.</p>
+
+                <ul className="max-h-60 divide-y divide-slate-200 overflow-y-auto border-y border-slate-200">
+                  {dados.itens.map((item) => {
+                    const quantidade = quantidadesDevolucao[item.id] ?? 0;
+                    const selecionado = quantidade > 0;
+                    return (
+                      <li key={item.id} className="flex items-center justify-between gap-3 py-3">
+                        <label className="flex items-center gap-3 text-brand-navy">
+                          <input
+                            type="checkbox"
+                            checked={selecionado}
+                            onChange={() =>
+                              alterarQuantidadeDevolucao(item.id, selecionado ? 0 : 1)
+                            }
+                            disabled={enviandoDevolucao}
+                            className="h-4 w-4 accent-brand-navy"
+                          />
+                          <span>
+                            <span className="block font-medium">{item.produtoNome}</span>
+                            <span className="block text-xs text-slate-500">
+                              Comprado: {item.quantidade}
+                            </span>
+                          </span>
+                        </label>
+                        {selecionado && (
+                          <QuantityStepper
+                            value={quantidade}
+                            min={1}
+                            max={item.quantidade}
+                            disabled={enviandoDevolucao}
+                            onIncrease={() =>
+                              alterarQuantidadeDevolucao(
+                                item.id,
+                                Math.min(quantidade + 1, item.quantidade),
+                              )
+                            }
+                            onDecrease={() =>
+                              alterarQuantidadeDevolucao(item.id, Math.max(quantidade - 1, 1))
+                            }
+                          />
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                <label className="flex flex-col gap-1">
+                  <span className="font-medium text-slate-700">Motivo</span>
+                  <input
+                    type="text"
+                    value={motivoDevolucao}
+                    onChange={(event) => setMotivoDevolucao(event.target.value)}
+                    maxLength={200}
+                    disabled={enviandoDevolucao}
+                    className={inputClass}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="font-medium text-slate-700">Descrição (opcional)</span>
+                  <textarea
+                    value={descricaoDevolucao}
+                    onChange={(event) => setDescricaoDevolucao(event.target.value)}
+                    maxLength={2000}
+                    rows={3}
+                    disabled={enviandoDevolucao}
+                    className={inputClass}
+                  />
+                </label>
+
+                {erroDevolucao && (
+                  <p role="alert" className="text-sm text-red-600">
+                    {erroDevolucao}
+                  </p>
+                )}
+              </div>
+            }
+            confirmLabel="Enviar solicitação"
+            confirmingLabel="Enviando..."
+            confirmVariant="primary"
+            confirming={enviandoDevolucao}
+            onConfirm={handleConfirmarDevolucao}
+            onCancel={handleFecharModalDevolucao}
           />
         </>
       )}

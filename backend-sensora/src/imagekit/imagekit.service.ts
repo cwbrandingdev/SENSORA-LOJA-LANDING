@@ -1,4 +1,9 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import ImageKit from 'imagekit';
 import { ImagekitAuthParams } from './entities/imagekit-auth.entity';
@@ -20,6 +25,7 @@ export interface ImagekitVerificacaoOperacional {
 // chama GET /imagekit/auth — ver isConfigured()/gerarParametrosAutenticacao().
 @Injectable()
 export class ImagekitService {
+  private readonly logger = new Logger(ImagekitService.name);
   private readonly client: ImageKit | null;
   private readonly publicKey?: string;
   private readonly urlEndpoint?: string;
@@ -101,5 +107,66 @@ export class ImagekitService {
       publicKey: this.publicKey,
       urlEndpoint: this.urlEndpoint,
     };
+  }
+
+  // Evidências de devolução — upload feito pelo PRÓPRIO backend (o cliente
+  // nunca recebe credenciais de upload). Pasta, nome e `isPrivateFile` são
+  // sempre decididos aqui por quem chama, nunca pelo cliente. Arquivo
+  // privado: a URL original não abre sem assinatura (ver gerarUrlAssinada).
+  async enviarArquivoPrivado(
+    arquivo: Buffer,
+    nomeArquivo: string,
+    pasta: string,
+  ): Promise<{ fileId: string; caminho: string }> {
+    const client = this.clienteConfigurado();
+    try {
+      const resposta = await client.upload({
+        file: arquivo,
+        fileName: nomeArquivo,
+        folder: pasta,
+        isPrivateFile: true,
+        useUniqueFileName: true,
+      });
+      return { fileId: resposta.fileId, caminho: resposta.filePath };
+    } catch {
+      throw new BadGatewayException('Não foi possível enviar a imagem.');
+    }
+  }
+
+  // URL assinada com validade curta, gerada localmente (HMAC com a
+  // privateKey, sem chamada de rede). Nunca é gravada no banco.
+  gerarUrlAssinada(caminho: string, validadeSegundos: number): string {
+    return this.clienteConfigurado().url({
+      path: caminho,
+      signed: true,
+      expireSeconds: validadeSegundos,
+    });
+  }
+
+  // Arquivo que já não existe no ImageKit (404) conta como apagado — senão
+  // um registro cujo arquivo sumiu nunca mais poderia ser removido.
+  async apagarArquivo(fileId: string): Promise<void> {
+    const client = this.clienteConfigurado();
+    try {
+      await client.deleteFile(fileId);
+    } catch (erro) {
+      const statusCode = (
+        erro as { $ResponseMetadata?: { statusCode?: number } }
+      )?.$ResponseMetadata?.statusCode;
+      if (statusCode === 404) {
+        return;
+      }
+      this.logger.error(`Falha ao apagar o arquivo ${fileId} do ImageKit.`);
+      throw new BadGatewayException('Não foi possível apagar a imagem.');
+    }
+  }
+
+  private clienteConfigurado(): ImageKit {
+    if (!this.client) {
+      throw new InternalServerErrorException(
+        'ImageKit não está configurado neste ambiente.',
+      );
+    }
+    return this.client;
   }
 }

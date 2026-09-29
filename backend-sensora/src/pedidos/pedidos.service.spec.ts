@@ -37,6 +37,11 @@ const OUTRO_CLIENTE = {
   email: 'outro@sensora.dev',
   perfil: PerfilUsuario.CLIENTE,
 };
+const ADMIN = {
+  id: 99,
+  email: 'admin@sensora.dev',
+  perfil: PerfilUsuario.ADMIN,
+};
 
 function refund(overrides: Partial<AsaasRefund> = {}): AsaasRefund {
   return {
@@ -71,6 +76,7 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
     numero: string;
     data: Date;
     total: number;
+    statusEnvio: StatusEnvio;
   };
 
   beforeEach(async () => {
@@ -83,6 +89,7 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
       numero: 'PED-1',
       data: new Date('2026-09-01'),
       total: 39.9,
+      statusEnvio: StatusEnvio.NAO_ENVIADO,
     };
 
     prisma = {
@@ -98,13 +105,20 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
             where,
             data,
           }: {
-            where: { status: StatusPedido; usuarioId?: number };
+            where: {
+              status: StatusPedido;
+              usuarioId?: number;
+              statusEnvio?: StatusEnvio;
+            };
             data: { status: StatusPedido };
           }) => {
             const ownerOk =
               where.usuarioId === undefined ||
               where.usuarioId === pedidoFake.usuarioId;
-            if (ownerOk && where.status === pedidoFake.status) {
+            const envioOk =
+              where.statusEnvio === undefined ||
+              where.statusEnvio === pedidoFake.statusEnvio;
+            if (ownerOk && envioOk && where.status === pedidoFake.status) {
               pedidoFake.status = data.status;
               return { count: 1 };
             }
@@ -351,6 +365,65 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
 
     expect(resultado.status).toBe(StatusPedido.REEMBOLSO_SOLICITADO);
     expect(resultado.status).not.toBe(StatusPedido.REEMBOLSADO);
+  });
+
+  // R — PAGO + não enviado: o cliente continua podendo pedir o reembolso
+  // direto (comportamento preservado).
+  it('R: cliente com pedido PAGO e NAO_ENVIADO continua conseguindo o reembolso', async () => {
+    pedidoFake.asaasPaymentId = 'pay_123';
+    asaasService.estornarPagamento.mockResolvedValueOnce(refund());
+
+    const resultado = await service.solicitarReembolso(1, CLIENTE);
+
+    expect(resultado.status).toBe(StatusPedido.REEMBOLSO_SOLICITADO);
+    expect(asaasService.estornarPagamento).toHaveBeenCalledTimes(1);
+  });
+
+  // S — PAGO + enviado: o cliente não recebe reembolso direto; precisa
+  // passar pelo fluxo de devolução. Nada muda no pedido nem no Asaas.
+  it('S: cliente com pedido PAGO e ENVIADO recebe 409 e não chama o Asaas', async () => {
+    pedidoFake.asaasPaymentId = 'pay_123';
+    pedidoFake.statusEnvio = StatusEnvio.ENVIADO;
+
+    await expect(service.solicitarReembolso(1, CLIENTE)).rejects.toThrow(
+      'Pedido já enviado não pode ser reembolsado diretamente. Solicite a devolução.',
+    );
+
+    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+    expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+    expect(asaasService.consultarEstornos).not.toHaveBeenCalled();
+    expect(asaasService.estornarPagamento).not.toHaveBeenCalled();
+  });
+
+  // T — pedido marcado como enviado entre a leitura e o claim: o WHERE do
+  // claim também exige NAO_ENVIADO, então o reembolso direto não acontece.
+  it('T: pedido enviado entre a leitura e o claim também é bloqueado', async () => {
+    pedidoFake.asaasPaymentId = 'pay_123';
+    prisma.pedido.findUnique.mockImplementationOnce(() => ({
+      ...pedidoFake,
+      statusEnvio: StatusEnvio.NAO_ENVIADO,
+    }));
+    pedidoFake.statusEnvio = StatusEnvio.ENVIADO;
+
+    await expect(service.solicitarReembolso(1, CLIENTE)).rejects.toThrow(
+      ConflictException,
+    );
+
+    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+    expect(asaasService.estornarPagamento).not.toHaveBeenCalled();
+  });
+
+  // U — ADMIN continua podendo reembolsar um pedido enviado (decisão
+  // manual, ex.: extravio).
+  it('U: ADMIN consegue reembolsar pedido PAGO e ENVIADO', async () => {
+    pedidoFake.asaasPaymentId = 'pay_123';
+    pedidoFake.statusEnvio = StatusEnvio.ENVIADO;
+    asaasService.estornarPagamento.mockResolvedValueOnce(refund());
+
+    const resultado = await service.solicitarReembolso(1, ADMIN);
+
+    expect(resultado.status).toBe(StatusPedido.REEMBOLSO_SOLICITADO);
+    expect(asaasService.estornarPagamento).toHaveBeenCalledWith('pay_123');
   });
 });
 

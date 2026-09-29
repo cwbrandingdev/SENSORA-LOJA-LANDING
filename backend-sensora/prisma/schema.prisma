@@ -60,6 +60,10 @@ model Usuario {
   refreshTokens           RefreshToken[]
   pedidos                 Pedido[]
   enderecos               Endereco[]
+  // Devoluções: as solicitadas pelo próprio usuário (cliente) e as que ele
+  // analisou (ADMIN). Duas relações com Devolucao, por isso os nomes.
+  devolucoes              Devolucao[]    @relation("DevolucaoUsuario")
+  devolucoesAnalisadas    Devolucao[]    @relation("DevolucaoAnalisadoPor")
 }
 
 // Task 8 (Carrinho/Checkout) — endereços de entrega do próprio usuário
@@ -211,6 +215,9 @@ model Pedido {
   // os dois. Ver comentário completo em NotaFiscal, abaixo.
   notaFiscal NotaFiscal?
 
+  // Solicitações de devolução deste pedido (ver Devolucao, abaixo).
+  devolucoes Devolucao[]
+
   // Vistoria do Dashboard operacional (Admin) — DashboardService agora
   // agrega Pedido por status (contagem/soma de total) e ordena/filtra por
   // data para as métricas do painel, além do uso já existente de `status`
@@ -224,12 +231,12 @@ model Pedido {
 }
 
 model ItemPedido {
-  id                Int      @id @default(autoincrement())
+  id                Int             @id @default(autoincrement())
   pedidoId          Int
   produtoId         Int
   quantidade        Int
-  precoUnitario     Decimal  @db.Decimal(10, 2)
-  subtotal          Decimal  @db.Decimal(10, 2)
+  precoUnitario     Decimal         @db.Decimal(10, 2)
+  subtotal          Decimal         @db.Decimal(10, 2)
   // Etapa 5A.2 (achado da auditoria 5A.1) — rastreia POR ITEM se o estoque
   // deste item específico já foi efetivamente decrementado (via
   // ItensPedidoService.create no fluxo admin, ou via
@@ -252,9 +259,93 @@ model ItemPedido {
   // (PedidosService.cancelar continua sem alteração de comportamento) —
   // só a coluna existe, com default false, preparando a idempotência da
   // restauração de estoque no reembolso (5B.6).
-  estoqueRestaurado Boolean  @default(false)
-  pedido            Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-  produto           Produto  @relation(fields: [produtoId], references: [id])
+  estoqueRestaurado Boolean         @default(false)
+  pedido            Pedido          @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto           Produto         @relation(fields: [produtoId], references: [id])
+  itensDevolucao    ItemDevolucao[]
+}
+
+// Solicitação de devolução de um pedido já pago/enviado. Ciclo de vida em
+// `status` (ver StatusDevolucao) — eixo próprio, independente de
+// Pedido.status (financeiro) e Pedido.statusEnvio (logístico), mesmo
+// raciocínio já usado para separar esses dois.
+//
+// Histórico nunca é apagado por cascata:
+// - pedido: onDelete Restrict — um Pedido com devolução não pode ser
+//   excluído (hoje só PENDENTE pode ser excluído, e ele nunca tem devolução).
+// - usuario/analisadoPor: onDelete SetNull — mesmo padrão de Pedido.usuario:
+//   excluir o Usuario mantém a devolução.
+//
+// Regras comerciais (prazo, frete, motivos aceitos, produtos não
+// devolvíveis) ainda não foram definidas e ficam fora do schema.
+model Devolucao {
+  id                Int             @id @default(autoincrement())
+  pedidoId          Int
+  usuarioId         Int?
+  // Texto livre: a lista de motivos aceitos ainda não foi definida.
+  motivo            String
+  descricao         String?
+  status            StatusDevolucao @default(SOLICITADA)
+  solicitadaEm      DateTime        @default(now())
+  // Preenchidos quando a devolução é aprovada ou recusada.
+  analisadaEm       DateTime?
+  observacaoAnalise String?
+  analisadoPorId    Int?
+  atualizadoEm      DateTime        @updatedAt
+
+  pedido       Pedido               @relation(fields: [pedidoId], references: [id], onDelete: Restrict)
+  usuario      Usuario?             @relation("DevolucaoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+  analisadoPor Usuario?             @relation("DevolucaoAnalisadoPor", fields: [analisadoPorId], references: [id], onDelete: SetNull)
+  itens        ItemDevolucao[]
+  evidencias   EvidenciaDevolucao[]
+
+  // pedidoId/usuarioId: devoluções de um pedido e "minhas devoluções" do
+  // cliente. status/solicitadaEm: fila e ordenação da listagem do Admin.
+  @@index([pedidoId])
+  @@index([usuarioId])
+  @@index([status])
+  @@index([solicitadaEm])
+}
+
+// Item do pedido incluído numa devolução. `quantidade` nunca pode passar da
+// quantidade comprada em ItemPedido (somando todas as devoluções do mesmo
+// item) — validado no service quando a criação for implementada.
+// `precoUnitario` é copiado de ItemPedido.precoUnitario na criação (mesmo
+// nome), para o valor a devolver nunca depender do preço atual do Produto.
+model ItemDevolucao {
+  id            Int     @id @default(autoincrement())
+  devolucaoId   Int
+  itemPedidoId  Int
+  quantidade    Int
+  precoUnitario Decimal @db.Decimal(10, 2)
+
+  // Cascade só a partir da própria Devolucao (item não existe sem ela);
+  // Restrict no ItemPedido para nunca perder o item devolvido.
+  devolucao  Devolucao  @relation(fields: [devolucaoId], references: [id], onDelete: Cascade)
+  itemPedido ItemPedido @relation(fields: [itemPedidoId], references: [id], onDelete: Restrict)
+
+  // Um mesmo ItemPedido aparece no máximo uma vez por devolução.
+  // itemPedidoId: somar o que já foi devolvido de um item.
+  @@unique([devolucaoId, itemPedidoId])
+  @@index([itemPedidoId])
+}
+
+// Foto enviada pelo cliente como evidência da devolução. O arquivo fica
+// PRIVADO no ImageKit: aqui só ficam o fileId (para apagar) e o caminho
+// (para gerar uma URL assinada de validade curta na hora de exibir) —
+// nunca uma URL pública. Máximo de 5 por devolução (DevolucoesService).
+model EvidenciaDevolucao {
+  id          Int      @id @default(autoincrement())
+  devolucaoId Int
+  fileId      String
+  caminho     String
+  criadoEm    DateTime @default(now())
+
+  // Cascade só a partir da própria Devolucao, mesmo padrão de ItemDevolucao.
+  devolucao Devolucao @relation(fields: [devolucaoId], references: [id], onDelete: Cascade)
+
+  // devolucaoId: listar e contar as fotos de uma devolução.
+  @@index([devolucaoId])
 }
 
 // Infraestrutura Fiscal (preparação arquitetural) — modelo intencionalmente
@@ -389,6 +480,25 @@ enum StatusPedido {
 enum StatusEnvio {
   NAO_ENVIADO
   ENVIADO
+}
+
+// Ciclo de vida de uma Devolucao (quarto eixo, independente dos status do
+// Pedido). Caminho normal: SOLICITADA -> EM_ANALISE -> APROVADA ->
+// AGUARDANDO_ENVIO -> ENVIADA -> RECEBIDA -> EM_CONFERENCIA -> CONCLUIDA.
+// RECUSADA e CANCELADA encerram a devolução.
+enum StatusDevolucao {
+  SOLICITADA
+  EM_ANALISE
+  APROVADA
+  RECUSADA
+  // Cliente precisa postar o produto de volta.
+  AGUARDANDO_ENVIO
+  // Cliente postou o produto (mesmo termo de StatusEnvio.ENVIADO).
+  ENVIADA
+  RECEBIDA
+  EM_CONFERENCIA
+  CONCLUIDA
+  CANCELADA
 }
 
 // Infraestrutura Fiscal (preparação arquitetural) — terceiro eixo

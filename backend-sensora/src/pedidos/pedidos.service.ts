@@ -27,6 +27,9 @@ import { Pedido } from './entities/pedido.entity';
 import { StatusEnvio } from './enums/status-envio.enum';
 import { StatusPedido } from './enums/status-pedido.enum';
 
+const PEDIDO_ENVIADO_MENSAGEM =
+  'Pedido já enviado não pode ser reembolsado diretamente. Solicite a devolução.';
+
 @Injectable()
 export class PedidosService {
   constructor(
@@ -352,6 +355,16 @@ export class PedidosService {
       );
     }
 
+    // Pedido já enviado: o produto está com o cliente, então o reembolso só
+    // pode acontecer pelo fluxo de devolução (análise, recebimento e
+    // conferência), nunca direto por aqui. Só o ADMIN continua podendo
+    // reembolsar um pedido enviado (ex.: extravio), como decisão manual.
+    const podeReembolsarEnviado = user.perfil === PerfilUsuario.ADMIN;
+    const enviado = pedidoAtual.statusEnvio === StatusEnvio.ENVIADO;
+    if (enviado && !podeReembolsarEnviado) {
+      throw new ConflictException(PEDIDO_ENVIADO_MENSAGEM);
+    }
+
     // Claim atômico via updateMany condicionado (mesmo padrão de
     // `cancelar()`): o Postgres serializa duas requisições simultâneas para
     // o mesmo pedido — só uma vê `count === 1` e pode prosseguir para o
@@ -361,9 +374,14 @@ export class PedidosService {
     // roda inteiramente depois, fora de qualquer transação Prisma.
     const ownerFilter =
       user.perfil === PerfilUsuario.ADMIN ? {} : { usuarioId: user.id };
+    // Repete a regra de envio no próprio WHERE: se o pedido for marcado
+    // como enviado entre o findOne() acima e aqui, o claim não acontece.
+    const envioFilter = podeReembolsarEnviado
+      ? {}
+      : { statusEnvio: StatusEnvio.NAO_ENVIADO };
 
     const claim = await this.prisma.pedido.updateMany({
-      where: { id, ...ownerFilter, status: StatusPedido.PAGO },
+      where: { id, ...ownerFilter, ...envioFilter, status: StatusPedido.PAGO },
       data: { status: StatusPedido.REEMBOLSO_SOLICITADO },
     });
 
@@ -379,6 +397,11 @@ export class PedidosService {
         atual.status === StatusPedido.REEMBOLSADO
       ) {
         return this.paraPedido(atual);
+      }
+      const enviadoAgora =
+        (atual.statusEnvio as StatusEnvio) === StatusEnvio.ENVIADO;
+      if (enviadoAgora && !podeReembolsarEnviado) {
+        throw new ConflictException(PEDIDO_ENVIADO_MENSAGEM);
       }
       throw new ConflictException(
         `Pedido com status ${atual.status} não pode ser reembolsado.`,

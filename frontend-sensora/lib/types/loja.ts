@@ -433,6 +433,41 @@ export type PedidoComItensDetalhado = {
   total: number;
 };
 
+// Etapa 4 (Devoluções) — corpo de POST /pedidos/meus/:id/devolucoes. Só
+// item e quantidade: preço, usuário e status são decididos pelo backend
+// (ver backend-sensora/src/devolucoes/dto/create-devolucao.dto.ts).
+export type SolicitarDevolucaoPayload = {
+  motivo: string;
+  descricao?: string;
+  itens: { itemPedidoId: number; quantidade: number }[];
+};
+
+// Etapa 5 (Evidências) — foto da devolução. `url` é assinada e expira em
+// poucos minutos: serve para exibir agora, não para guardar.
+export type EvidenciaDevolucao = {
+  id: number;
+  url: string;
+  criadoEm: string;
+};
+
+// Resposta de POST /pedidos/meus/:id/devolucoes
+// (backend-sensora/src/devolucoes/entities/devolucao.entity.ts).
+export type Devolucao = {
+  id: number;
+  pedidoId: number;
+  status: string;
+  motivo: string;
+  descricao: string | null;
+  solicitadaEm: string;
+  itens: {
+    id: number;
+    itemPedidoId: number;
+    quantidade: number;
+    precoUnitario: number;
+  }[];
+  evidencias: EvidenciaDevolucao[];
+};
+
 // Etapa 8.1 (HIGH-01 — preço arbitrário de ItemPedido) — `precoUnitario`
 // removido deste payload de propósito: o backend (CreateItemPedidoDto) não
 // whitelist mais este campo; o preço é sempre derivado do Produto real
