@@ -12,17 +12,27 @@ import type {
   Prisma,
 } from '../../generated/prisma/client';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
+import { escaparHtml } from '../common/utils/html.util';
 import { ImagekitService } from '../imagekit/imagekit.service';
+import { MailService } from '../mail/mail.service';
 import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDevolucaoDto } from './dto/create-devolucao.dto';
 import {
   Devolucao,
+  DevolucaoAnalise,
+  DevolucaoResumoAdmin,
   DevolucoesDoPedido,
   EvidenciaDevolucao,
 } from './entities/devolucao.entity';
 import { StatusDevolucao } from './enums/status-devolucao.enum';
+
+// Status em que o Admin ainda pode aprovar ou recusar.
+const STATUS_AGUARDANDO_ANALISE = [
+  StatusDevolucao.SOLICITADA,
+  StatusDevolucao.EM_ANALISE,
+];
 
 // Devoluções recusadas ou canceladas não "gastam" a quantidade do item —
 // ela volta a ficar disponível para uma nova solicitação.
@@ -68,6 +78,7 @@ export class DevolucoesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly imagekitService: ImagekitService,
+    private readonly mailService: MailService,
   ) {}
 
   // Cliente solicita a devolução de itens de um pedido já enviado. Tudo que
@@ -327,6 +338,261 @@ export class DevolucoesService {
     await this.prisma.evidenciaDevolucao.deleteMany({
       where: { id: evidencia.id },
     });
+  }
+
+  // ---------------------------------------------------------------------
+  // Etapa 7 — análise pelo ADMIN (rotas em DevolucoesAdminController).
+  // Aprovar/recusar só decidem: nenhum reembolso, nenhum estoque.
+  // ---------------------------------------------------------------------
+
+  // Fila do Admin, mais recentes primeiro. Sem fotos: nenhuma URL assinada
+  // é gerada aqui (só no detalhe).
+  async listarParaAdmin(
+    status?: StatusDevolucao,
+  ): Promise<DevolucaoResumoAdmin[]> {
+    const devolucoes = await this.prisma.devolucao.findMany({
+      where: status ? { status } : {},
+      orderBy: [{ solicitadaEm: 'desc' }, { id: 'desc' }],
+      include: {
+        pedido: {
+          select: { numero: true, clienteNome: true, clienteEmail: true },
+        },
+        usuario: { select: { nome: true, email: true } },
+        itens: { select: { quantidade: true } },
+        _count: { select: { evidencias: true } },
+      },
+    });
+
+    return devolucoes.map((devolucao) => ({
+      id: devolucao.id,
+      pedidoId: devolucao.pedidoId,
+      pedidoNumero: devolucao.pedido.numero,
+      clienteNome: devolucao.usuario?.nome ?? devolucao.pedido.clienteNome,
+      clienteEmail: devolucao.usuario?.email ?? devolucao.pedido.clienteEmail,
+      status: devolucao.status as StatusDevolucao,
+      solicitadaEm: devolucao.solicitadaEm,
+      analisadaEm: devolucao.analisadaEm,
+      quantidadeItens: devolucao.itens.reduce(
+        (soma, item) => soma + item.quantidade,
+        0,
+      ),
+      quantidadeFotos: devolucao._count.evidencias,
+    }));
+  }
+
+  // Tudo que o Admin precisa para decidir, com as fotos em URL assinada de
+  // 10 minutos (nunca fileId/caminho).
+  async buscarParaAnalise(devolucaoId: number): Promise<DevolucaoAnalise> {
+    const devolucao = await this.prisma.devolucao.findUnique({
+      where: { id: devolucaoId },
+      include: {
+        pedido: true,
+        usuario: { select: { nome: true, email: true } },
+        analisadoPor: { select: { nome: true } },
+        itens: {
+          include: {
+            itemPedido: {
+              select: {
+                quantidade: true,
+                produto: { select: { nome: true } },
+              },
+            },
+          },
+        },
+        evidencias: { orderBy: { id: 'asc' } },
+      },
+    });
+    if (!devolucao) {
+      throw new NotFoundException('Devolução não encontrada');
+    }
+
+    const { pedido } = devolucao;
+    return {
+      id: devolucao.id,
+      status: devolucao.status as StatusDevolucao,
+      motivo: devolucao.motivo,
+      descricao: devolucao.descricao,
+      solicitadaEm: devolucao.solicitadaEm,
+      analisadaEm: devolucao.analisadaEm,
+      observacaoAnalise: devolucao.observacaoAnalise,
+      analisadoPorNome: devolucao.analisadoPor?.nome ?? null,
+      pedido: {
+        id: pedido.id,
+        numero: pedido.numero,
+        data: pedido.data,
+        status: pedido.status,
+        statusEnvio: pedido.statusEnvio,
+        enviadoEm: pedido.enviadoEm,
+        total: Number(pedido.total),
+      },
+      cliente: {
+        nome: devolucao.usuario?.nome ?? pedido.clienteNome,
+        email: devolucao.usuario?.email ?? pedido.clienteEmail,
+      },
+      itens: devolucao.itens.map((item) => ({
+        id: item.id,
+        itemPedidoId: item.itemPedidoId,
+        produtoNome: item.itemPedido.produto.nome,
+        quantidade: item.quantidade,
+        quantidadeComprada: item.itemPedido.quantidade,
+        precoUnitario: Number(item.precoUnitario),
+      })),
+      evidencias: devolucao.evidencias.map((evidencia) =>
+        this.paraEvidencia(evidencia),
+      ),
+    };
+  }
+
+  async aprovar(
+    devolucaoId: number,
+    adminId: number,
+    observacao?: string,
+  ): Promise<DevolucaoAnalise> {
+    return this.decidir(
+      devolucaoId,
+      StatusDevolucao.APROVADA,
+      adminId,
+      observacao?.trim() || null,
+    );
+  }
+
+  // Na recusa a observação é obrigatória (vai no e-mail ao cliente).
+  async recusar(
+    devolucaoId: number,
+    adminId: number,
+    observacao: string,
+  ): Promise<DevolucaoAnalise> {
+    const observacaoLimpa = observacao?.trim();
+    if (!observacaoLimpa) {
+      throw new BadRequestException('Informe o motivo da recusa.');
+    }
+    return this.decidir(
+      devolucaoId,
+      StatusDevolucao.RECUSADA,
+      adminId,
+      observacaoLimpa,
+    );
+  }
+
+  // Uma única atualização atômica, condicionada ao estado atual (mesmo
+  // padrão de PedidosService.cancelar/solicitarReembolso): só muda se a
+  // devolução ainda aguarda análise E o pedido continua PAGO + ENVIADO.
+  // Duas decisões simultâneas: o Postgres serializa, só uma vê count = 1.
+  // Também espera a trava do upload de fotos (SELECT ... FOR UPDATE na
+  // devolução), então nenhuma foto entra depois da decisão.
+  private async decidir(
+    devolucaoId: number,
+    novoStatus: StatusDevolucao.APROVADA | StatusDevolucao.RECUSADA,
+    adminId: number,
+    observacao: string | null,
+  ): Promise<DevolucaoAnalise> {
+    const resultado = await this.prisma.devolucao.updateMany({
+      where: {
+        id: devolucaoId,
+        status: { in: STATUS_AGUARDANDO_ANALISE },
+        pedido: { status: StatusPedido.PAGO, statusEnvio: StatusEnvio.ENVIADO },
+      },
+      data: {
+        status: novoStatus,
+        analisadaEm: new Date(),
+        analisadoPorId: adminId,
+        observacaoAnalise: observacao,
+      },
+    });
+
+    if (resultado.count === 0) {
+      await this.explicarDecisaoRecusada(devolucaoId);
+    }
+
+    // Só depois de a decisão estar gravada; falha no e-mail não a desfaz.
+    await this.avisarClienteDaDecisao(devolucaoId);
+
+    return this.buscarParaAnalise(devolucaoId);
+  }
+
+  // A decisão não foi aplicada: relê o estado atual para responder o motivo
+  // certo (404, status que já não permite análise ou pedido que mudou).
+  private async explicarDecisaoRecusada(devolucaoId: number): Promise<never> {
+    const atual = await this.prisma.devolucao.findUnique({
+      where: { id: devolucaoId },
+      include: { pedido: { select: { status: true, statusEnvio: true } } },
+    });
+    if (!atual) {
+      throw new NotFoundException('Devolução não encontrada');
+    }
+    if (!STATUS_AGUARDANDO_ANALISE.includes(atual.status as StatusDevolucao)) {
+      throw new ConflictException(
+        `Devolução com status ${atual.status} não pode mais ser analisada.`,
+      );
+    }
+    throw new ConflictException(
+      `O pedido desta devolução não está mais pago e enviado (status ${atual.pedido.status}, envio ${atual.pedido.statusEnvio}); a devolução não pode ser analisada.`,
+    );
+  }
+
+  // E-mail ao cliente sobre a decisão. Destinatário: e-mail do usuário da
+  // devolução ou, se ele não existir mais, o e-mail gravado no pedido.
+  // Todo texto variável é escapado antes de entrar no HTML. Nunca lança.
+  private async avisarClienteDaDecisao(devolucaoId: number): Promise<void> {
+    try {
+      const devolucao = await this.prisma.devolucao.findUnique({
+        where: { id: devolucaoId },
+        include: {
+          usuario: { select: { nome: true, email: true } },
+          pedido: {
+            select: { numero: true, clienteNome: true, clienteEmail: true },
+          },
+        },
+      });
+      if (!devolucao) {
+        return;
+      }
+
+      const destinatario =
+        devolucao.usuario?.email ?? devolucao.pedido.clienteEmail;
+      if (!destinatario) {
+        this.logger.warn(
+          `Devolução ${devolucaoId} sem e-mail de cliente — aviso da decisão não enviado.`,
+        );
+        return;
+      }
+
+      const nome = escaparHtml(
+        devolucao.usuario?.nome ?? devolucao.pedido.clienteNome ?? 'cliente',
+      );
+      const numero = escaparHtml(devolucao.pedido.numero);
+      const detalhes =
+        `<p>Motivo informado: ${escaparHtml(devolucao.motivo)}</p>` +
+        (devolucao.descricao
+          ? `<p>Descrição: ${escaparHtml(devolucao.descricao)}</p>`
+          : '');
+
+      const aprovada =
+        (devolucao.status as StatusDevolucao) === StatusDevolucao.APROVADA;
+      const html = aprovada
+        ? `<p>Olá, ${nome}.</p>` +
+          `<p>Sua solicitação de devolução do pedido ${numero} foi aprovada.</p>` +
+          detalhes +
+          '<p>As instruções para enviar o produto de volta serão disponibilizadas em breve.</p>'
+        : `<p>Olá, ${nome}.</p>` +
+          `<p>Sua solicitação de devolução do pedido ${numero} não foi aprovada.</p>` +
+          detalhes +
+          `<p>Motivo da recusa: ${escaparHtml(devolucao.observacaoAnalise ?? '')}</p>` +
+          '<p>Se tiver dúvidas, é só responder este e-mail.</p>';
+
+      await this.mailService.enviarEmail({
+        to: destinatario,
+        subject: aprovada
+          ? `Devolução aprovada — pedido ${devolucao.pedido.numero}`
+          : `Devolução não aprovada — pedido ${devolucao.pedido.numero}`,
+        html,
+      });
+    } catch (erro) {
+      this.logger.error(
+        `Falha ao avisar o cliente sobre a decisão da devolução ${devolucaoId}.`,
+        erro instanceof Error ? erro.stack : String(erro),
+      );
+    }
   }
 
   // Regra única do saldo (usada por `criar` e `listarDoPedido`): quanto de

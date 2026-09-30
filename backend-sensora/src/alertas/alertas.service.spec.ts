@@ -17,10 +17,15 @@ import { LIMIAR_DIAS_PEDIDO_SEM_ENVIO } from './constants/alertas.constants';
 function criarPrismaMock(overrides: {
   produtoCount?: jest.Mock;
   pedidoCount?: jest.Mock;
+  devolucaoCount?: jest.Mock;
 }) {
   return {
     produto: { count: overrides.produtoCount ?? jest.fn() },
     pedido: { count: overrides.pedidoCount ?? jest.fn() },
+    // Etapa 7 — por padrão nenhuma devolução aguardando análise.
+    devolucao: {
+      count: overrides.devolucaoCount ?? jest.fn().mockResolvedValue(0),
+    },
   };
 }
 
@@ -28,6 +33,7 @@ async function criarService(opts: {
   produtoCount: jest.Mock;
   pedidoCount: jest.Mock;
   estaConectado: jest.Mock;
+  devolucaoCount?: jest.Mock;
 }): Promise<AlertasService> {
   const module: TestingModule = await Test.createTestingModule({
     providers: [
@@ -37,6 +43,7 @@ async function criarService(opts: {
         useValue: criarPrismaMock({
           produtoCount: opts.produtoCount,
           pedidoCount: opts.pedidoCount,
+          devolucaoCount: opts.devolucaoCount,
         }),
       },
       {
@@ -254,5 +261,44 @@ describe('AlertasService — obterAlertas', () => {
         'REEMBOLSO_SOLICITADO',
       ].sort(),
     );
+  });
+
+  // Etapa 7 — devoluções aguardando a decisão do Admin.
+  describe('DEVOLUCAO_SOLICITADA', () => {
+    it('conta SOLICITADA + EM_ANALISE: severidade warning, link para a fila de devoluções', async () => {
+      const devolucaoCount = jest.fn().mockResolvedValue(3);
+      const service = await criarService({
+        produtoCount: jest.fn().mockResolvedValue(0),
+        pedidoCount: jest.fn().mockResolvedValue(0),
+        estaConectado: jest.fn().mockResolvedValue(true),
+        devolucaoCount,
+      });
+
+      await expect(service.obterAlertas()).resolves.toEqual([
+        {
+          tipo: 'DEVOLUCAO_SOLICITADA',
+          severidade: 'warning',
+          titulo: 'Devoluções aguardando análise',
+          quantidade: 3,
+          link: '/workspace-x/devolucoes',
+        },
+      ]);
+      expect(devolucaoCount).toHaveBeenCalledWith({
+        where: { status: { in: ['SOLICITADA', 'EM_ANALISE'] } },
+      });
+    });
+
+    it('nenhuma devolução aguardando: o alerta não aparece', async () => {
+      const service = await criarService({
+        produtoCount: jest.fn().mockResolvedValue(0),
+        pedidoCount: jest.fn().mockResolvedValue(0),
+        estaConectado: jest.fn().mockResolvedValue(true),
+        devolucaoCount: jest.fn().mockResolvedValue(0),
+      });
+
+      const alertas = await service.obterAlertas();
+
+      expect(alertas.map((a) => a.tipo)).not.toContain('DEVOLUCAO_SOLICITADA');
+    });
   });
 });

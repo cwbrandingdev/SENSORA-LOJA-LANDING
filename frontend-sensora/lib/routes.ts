@@ -31,6 +31,8 @@ export const ROUTES = {
   // Central de Integrações (Admin) — ADMIN-only (ver Sidebar.tsx e
   // app/workspace-x/integracoes/page.tsx), mesmo padrão de USUARIOS acima.
   INTEGRACOES: `${ADMIN_ROUTE}/integracoes`,
+  // Etapa 7 — fila e análise das devoluções (ADMIN-only).
+  DEVOLUCOES: `${ADMIN_ROUTE}/devolucoes`,
   LOJA: "/loja",
   LOJA_PRODUTOS: "/loja/produtos",
   LOJA_CARRINHO: "/loja/carrinho",

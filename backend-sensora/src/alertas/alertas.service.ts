@@ -4,8 +4,10 @@ import { LIMIAR_ESTOQUE_BAIXO } from '../dashboard/constants/dashboard.constants
 import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
 import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
+import { StatusDevolucao } from '../devolucoes/enums/status-devolucao.enum';
 import {
   LIMIAR_DIAS_PEDIDO_SEM_ENVIO,
+  LINK_DEVOLUCOES,
   LINK_INTEGRACOES,
   LINK_PEDIDOS,
   LINK_PRODUTOS,
@@ -37,6 +39,7 @@ export class AlertasService {
       reembolsosSolicitados,
       pedidosAguardandoEnvio,
       melhorEnvioConectado,
+      devolucoesAguardandoAnalise,
     ] = await Promise.all([
       this.prisma.produto.count({
         where: { ativo: true, quantidade: 0 },
@@ -58,6 +61,14 @@ export class AlertasService {
         },
       }),
       this.melhorEnvioService.estaConectado(),
+      // Etapa 7 — devoluções esperando a decisão do Admin.
+      this.prisma.devolucao.count({
+        where: {
+          status: {
+            in: [StatusDevolucao.SOLICITADA, StatusDevolucao.EM_ANALISE],
+          },
+        },
+      }),
     ]);
 
     const alertas: Alerta[] = [];
@@ -95,6 +106,16 @@ export class AlertasService {
         titulo: `Pedidos pagos há mais de ${LIMIAR_DIAS_PEDIDO_SEM_ENVIO} dias aguardando envio`,
         quantidade: pedidosAguardandoEnvio,
         link: LINK_PEDIDOS,
+      });
+    }
+
+    if (devolucoesAguardandoAnalise > 0) {
+      alertas.push({
+        tipo: 'DEVOLUCAO_SOLICITADA',
+        severidade: 'warning',
+        titulo: 'Devoluções aguardando análise',
+        quantidade: devolucoesAguardandoAnalise,
+        link: LINK_DEVOLUCOES,
       });
     }
 

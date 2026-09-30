@@ -18,3 +18,4 @@ export const LIMIAR_DIAS_PEDIDO_SEM_ENVIO = 3;
 export const LINK_PRODUTOS = '/workspace-x/produtos';
 export const LINK_PEDIDOS = '/workspace-x/pedidos';
 export const LINK_INTEGRACOES = '/workspace-x/integracoes';
+export const LINK_DEVOLUCOES = '/workspace-x/devolucoes';

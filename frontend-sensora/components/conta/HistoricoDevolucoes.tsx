@@ -6,20 +6,11 @@
 // podem ser adicionadas/removidas (EvidenciasDevolucao); depois disso, só
 // aparecem para consulta.
 import EvidenciasDevolucao from "@/components/conta/EvidenciasDevolucao";
-import type { Devolucao, ItemPedidoDetalhado } from "@/lib/types/loja";
-
-const ROTULOS_STATUS: Record<string, string> = {
-  SOLICITADA: "Solicitada",
-  EM_ANALISE: "Em análise",
-  APROVADA: "Aprovada",
-  RECUSADA: "Recusada",
-  AGUARDANDO_ENVIO: "Aguardando envio",
-  ENVIADA: "Enviada",
-  RECEBIDA: "Recebida",
-  EM_CONFERENCIA: "Em conferência",
-  CONCLUIDA: "Concluída",
-  CANCELADA: "Cancelada",
-};
+import {
+  ROTULOS_STATUS_DEVOLUCAO,
+  type Devolucao,
+  type ItemPedidoDetalhado,
+} from "@/lib/types/loja";
 
 function formatarData(data: string): string {
   return new Date(data).toLocaleDateString("pt-BR", {
@@ -60,7 +51,7 @@ export default function HistoricoDevolucoes({
                 {devolucao.analisadaEm && ` · Analisada em ${formatarData(devolucao.analisadaEm)}`}
               </p>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-brand-navy">
-                {ROTULOS_STATUS[devolucao.status] ?? devolucao.status}
+                {ROTULOS_STATUS_DEVOLUCAO[devolucao.status] ?? devolucao.status}
               </span>
             </div>
 

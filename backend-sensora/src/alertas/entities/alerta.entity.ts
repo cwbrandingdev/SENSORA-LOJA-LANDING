@@ -9,7 +9,8 @@ export type AlertaTipo =
   | 'ESTOQUE_BAIXO'
   | 'REEMBOLSO_SOLICITADO'
   | 'PEDIDO_AGUARDANDO_ENVIO'
-  | 'MELHOR_ENVIO_DESCONECTADO';
+  | 'MELHOR_ENVIO_DESCONECTADO'
+  | 'DEVOLUCAO_SOLICITADA';
 
 // Duas severidades bastam para os 4 alertas desta etapa (mesmos tons já
 // usados pelo componente Badge do frontend — nenhum tom novo é criado

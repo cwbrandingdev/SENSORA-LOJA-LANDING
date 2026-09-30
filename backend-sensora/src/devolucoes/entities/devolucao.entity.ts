@@ -35,3 +35,50 @@ export class DevolucoesDoPedido {
   devolucoes: Devolucao[];
   itensDisponiveis: { itemPedidoId: number; quantidadeDisponivel: number }[];
 }
+
+// Etapa 7 — fila do Admin (GET /admin/devolucoes). Resumo leve: sem fotos
+// (nenhuma URL assinada é gerada na fila) e sem dados internos.
+export class DevolucaoResumoAdmin {
+  id: number;
+  pedidoId: number;
+  pedidoNumero: string;
+  clienteNome: string | null;
+  clienteEmail: string | null;
+  status: StatusDevolucao;
+  solicitadaEm: Date;
+  analisadaEm: Date | null;
+  quantidadeItens: number; // soma das unidades pedidas
+  quantidadeFotos: number;
+}
+
+// Etapa 7 — detalhe para análise do Admin (GET /admin/devolucoes/:id). As
+// fotos vêm em URL assinada de validade curta, nunca fileId/caminho.
+export class DevolucaoAnalise {
+  id: number;
+  status: StatusDevolucao;
+  motivo: string;
+  descricao: string | null;
+  solicitadaEm: Date;
+  analisadaEm: Date | null;
+  observacaoAnalise: string | null;
+  analisadoPorNome: string | null;
+  pedido: {
+    id: number;
+    numero: string;
+    data: Date;
+    status: string;
+    statusEnvio: string;
+    enviadoEm: Date | null;
+    total: number;
+  };
+  cliente: { nome: string | null; email: string | null };
+  itens: {
+    id: number;
+    itemPedidoId: number;
+    produtoNome: string;
+    quantidade: number;
+    quantidadeComprada: number;
+    precoUnitario: number;
+  }[];
+  evidencias: EvidenciaDevolucao[];
+}

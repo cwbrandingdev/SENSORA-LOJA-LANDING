@@ -477,6 +477,84 @@ export type DevolucoesDoPedido = {
   itensDisponiveis: { itemPedidoId: number; quantidadeDisponivel: number }[];
 };
 
+// Rótulos em português dos status da devolução (o enum fica no backend,
+// StatusDevolucao). Usado pela tela do cliente e pelo Workspace-X.
+export const ROTULOS_STATUS_DEVOLUCAO: Record<string, string> = {
+  SOLICITADA: "Solicitada",
+  EM_ANALISE: "Em análise",
+  APROVADA: "Aprovada",
+  RECUSADA: "Recusada",
+  AGUARDANDO_ENVIO: "Aguardando envio",
+  ENVIADA: "Enviada",
+  RECEBIDA: "Recebida",
+  EM_CONFERENCIA: "Em conferência",
+  CONCLUIDA: "Concluída",
+  CANCELADA: "Cancelada",
+};
+
+// Etapa 7 — cor do Badge de cada status no Workspace-X (mesmos tons de
+// components/ui/Badge.tsx). Aguardando análise = warning.
+export const TOM_STATUS_DEVOLUCAO: Record<
+  string,
+  "neutral" | "success" | "warning" | "danger" | "info"
+> = {
+  SOLICITADA: "warning",
+  EM_ANALISE: "warning",
+  APROVADA: "success",
+  RECUSADA: "danger",
+  AGUARDANDO_ENVIO: "info",
+  ENVIADA: "info",
+  RECEBIDA: "info",
+  EM_CONFERENCIA: "info",
+  CONCLUIDA: "success",
+  CANCELADA: "neutral",
+};
+
+// Etapa 7 — fila do Admin (GET /admin/devolucoes).
+export type DevolucaoResumoAdmin = {
+  id: number;
+  pedidoId: number;
+  pedidoNumero: string;
+  clienteNome: string | null;
+  clienteEmail: string | null;
+  status: string;
+  solicitadaEm: string;
+  analisadaEm: string | null;
+  quantidadeItens: number;
+  quantidadeFotos: number;
+};
+
+// Etapa 7 — detalhe para análise (GET /admin/devolucoes/:id).
+export type DevolucaoAnalise = {
+  id: number;
+  status: string;
+  motivo: string;
+  descricao: string | null;
+  solicitadaEm: string;
+  analisadaEm: string | null;
+  observacaoAnalise: string | null;
+  analisadoPorNome: string | null;
+  pedido: {
+    id: number;
+    numero: string;
+    data: string;
+    status: StatusPedido;
+    statusEnvio: StatusEnvio;
+    enviadoEm: string | null;
+    total: number;
+  };
+  cliente: { nome: string | null; email: string | null };
+  itens: {
+    id: number;
+    itemPedidoId: number;
+    produtoNome: string;
+    quantidade: number;
+    quantidadeComprada: number;
+    precoUnitario: number;
+  }[];
+  evidencias: EvidenciaDevolucao[];
+};
+
 // Etapa 8.1 (HIGH-01 — preço arbitrário de ItemPedido) — `precoUnitario`
 // removido deste payload de propósito: o backend (CreateItemPedidoDto) não
 // whitelist mais este campo; o preço é sempre derivado do Produto real
@@ -589,7 +667,8 @@ export type AlertaTipo =
   | "ESTOQUE_BAIXO"
   | "REEMBOLSO_SOLICITADO"
   | "PEDIDO_AGUARDANDO_ENVIO"
-  | "MELHOR_ENVIO_DESCONECTADO";
+  | "MELHOR_ENVIO_DESCONECTADO"
+  | "DEVOLUCAO_SOLICITADA";
 
 export type AlertaSeveridade = "warning" | "danger";
 

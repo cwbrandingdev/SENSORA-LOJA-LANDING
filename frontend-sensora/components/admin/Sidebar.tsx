@@ -28,6 +28,7 @@ import {
   ClipboardList,
   UserCog,
   Plug,
+  Undo2,
   Home,
   Search,
   type LucideIcon,
@@ -73,10 +74,20 @@ export function useAdminNav() {
   // asaas.controller.ts/mail.controller.ts/imagekit.controller.ts) + o
   // guard de página em app/workspace-x/integracoes/page.tsx — isto aqui é só a
   // camada visual, não esconder o item bastaria para bloquear VENDEDOR.
+  // Etapa 7 — "Devoluções" também é ADMIN-only (análise das devoluções;
+  // o backend responde 403 ao VENDEDOR), entra no grupo "Vendas".
+  const [catalogo, vendas] = baseGroups;
   const groups: SidebarGroup[] =
     perfil === PerfilUsuario.ADMIN
       ? [
-          ...baseGroups,
+          catalogo,
+          {
+            ...vendas,
+            links: [
+              ...vendas.links,
+              { href: ROUTES.DEVOLUCOES, label: "Devoluções", icon: Undo2 },
+            ],
+          },
           {
             label: "Sistema",
             links: [
