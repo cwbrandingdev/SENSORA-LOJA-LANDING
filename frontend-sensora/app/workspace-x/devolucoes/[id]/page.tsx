@@ -2,11 +2,13 @@
 
 // Etapa 7 — análise de uma devolução (GET /admin/devolucoes/:id) e decisão
 // (aprovar/recusar). ADMIN-only no backend. Aprovar/recusar só decidem:
-// nenhum reembolso e nenhum estoque são tocados nesta etapa.
+// nenhum reembolso e nenhum estoque são tocados nesta etapa. Etapa 8: depois
+// de aprovada, a seção Logística de devolução (LogisticaDevolucao).
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { isAxiosError } from "axios";
+import LogisticaDevolucao from "@/components/admin/LogisticaDevolucao";
 import Badge from "@/components/ui/Badge";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EmptyState from "@/components/ui/EmptyState";
@@ -257,6 +259,12 @@ export default function DevolucaoAnalisePage() {
           </dl>
         </section>
       </div>
+
+      <LogisticaDevolucao
+        devolucao={devolucao}
+        onAtualizada={setDevolucao}
+        onRecarregar={recarregar}
+      />
 
       <section className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-left text-sm" aria-label="Itens da devolução">

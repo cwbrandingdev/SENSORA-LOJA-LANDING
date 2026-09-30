@@ -438,6 +438,13 @@ type DevolucaoFake = {
   analisadaEm: string | null;
   itens: { id: number; itemPedidoId: number; quantidade: number; precoUnitario: number }[];
   evidencias: { id: number; url: string; criadoEm: string }[];
+  envio?: {
+    transportadora: string;
+    servico: string;
+    codigoDevolucao: string | null;
+    codigoRastreio: string | null;
+    postadaEm: string | null;
+  } | null;
 };
 
 type HistoricoFake = {
@@ -986,4 +993,146 @@ test("AC: nova devolução com histórico existente aparece no topo após recarr
   await expect(blocosDeDevolucao(page)).toHaveCount(3);
   await expect(blocosDeDevolucao(page).nth(0)).toContainText("Motivo: Tampa solta");
   expect(chamadas.listagens).toBe(listagensAntes + 1);
+});
+
+// Etapa 8 — logística reversa no histórico do cliente: o fluxo principal é o
+// código de devolução (apresentado nos Correios, sem etiqueta). O documento
+// do envio é secundário e só é pedido no clique (gerado na hora).
+const ENVIO_DEVOLUCAO = {
+  transportadora: "Correios",
+  servico: "PAC",
+  codigoDevolucao: "1234567890",
+  codigoRastreio: null,
+  postadaEm: null,
+};
+
+test("AD: AGUARDANDO_ENVIO mostra instruções, código de devolução e envio; sem etiqueta como requisito; documento só no clique", async ({
+  page,
+}) => {
+  await seedSession(page);
+  // Registra o window.open em vez de abrir outra aba.
+  await page.addInitScript(() => {
+    (window as unknown as { aberturas: string[] }).aberturas = [];
+    window.open = ((url: string) => {
+      (window as unknown as { aberturas: string[] }).aberturas.push(url);
+      return null;
+    }) as typeof window.open;
+  });
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  await mockDevolucao(page, {
+    historico: {
+      devolucoes: [
+        devolucaoFake({
+          status: "AGUARDANDO_ENVIO",
+          analisadaEm: "2026-09-21T12:00:00.000Z",
+          envio: ENVIO_DEVOLUCAO,
+        }),
+      ],
+      itensDisponiveis: [{ itemPedidoId: 1, quantidadeDisponivel: 1 }],
+    },
+  });
+  let pedidosDeDocumento = 0;
+  await page.route(`**/pedidos/meus/${PEDIDO_ID}/devolucoes/1/documento`, async (route) => {
+    pedidosDeDocumento += 1;
+    await route.fulfill({ json: { url: "https://melhorenvio.com.br/imprimir/abc123" } });
+  });
+
+  await page.goto(PEDIDO_URL);
+  const bloco = blocosDeDevolucao(page).nth(0);
+
+  await expect(bloco).toContainText("Aguardando envio");
+  await expect(bloco).toContainText("Como devolver");
+  await expect(bloco).toContainText("apresente o código de devolução");
+  await expect(bloco).toContainText("Não é preciso imprimir etiqueta");
+  await expect(bloco).toContainText("O frete já foi pago pela loja.");
+  await expect(bloco).toContainText("1234567890");
+  await expect(bloco).toContainText("Correios PAC");
+  // Rastreio ainda não disponível: não aparece.
+  await expect(bloco).not.toContainText("Código de rastreio");
+  await expect(bloco.getByRole("button", { name: "Imprimir etiqueta" })).toHaveCount(0);
+  expect(pedidosDeDocumento).toBe(0);
+
+  await bloco.getByRole("button", { name: /Ver documento do envio/ }).click();
+
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { aberturas: string[] }).aberturas))
+    .toEqual(["https://melhorenvio.com.br/imprimir/abc123"]);
+  expect(pedidosDeDocumento).toBe(1);
+});
+
+test("AE: depois de enviada, só o código de rastreio (sem código de devolução nem documento)", async ({ page }) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  await mockDevolucao(page, {
+    historico: {
+      devolucoes: [
+        devolucaoFake({
+          status: "ENVIADA",
+          analisadaEm: "2026-09-21T12:00:00.000Z",
+          envio: {
+            ...ENVIO_DEVOLUCAO,
+            codigoRastreio: "ME2600000001BR",
+            postadaEm: "2026-09-23T12:00:00.000Z",
+          },
+        }),
+      ],
+      itensDisponiveis: [{ itemPedidoId: 1, quantidadeDisponivel: 1 }],
+    },
+  });
+
+  await page.goto(PEDIDO_URL);
+  const bloco = blocosDeDevolucao(page).nth(0);
+
+  await expect(bloco).toContainText("Enviada");
+  await expect(bloco).toContainText("Código de rastreio: ME2600000001BR");
+  await expect(bloco).not.toContainText("1234567890");
+  await expect(bloco).not.toContainText("Como devolver");
+  await expect(bloco.getByRole("button", { name: /documento/ })).toHaveCount(0);
+});
+
+test("AF: aprovada sem etiqueta ainda: nada de envio aparece", async ({ page }) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  await mockDevolucao(page, {
+    historico: {
+      devolucoes: [
+        devolucaoFake({ status: "APROVADA", analisadaEm: "2026-09-21T12:00:00.000Z", envio: null }),
+      ],
+      itensDisponiveis: [{ itemPedidoId: 1, quantidadeDisponivel: 1 }],
+    },
+  });
+
+  await page.goto(PEDIDO_URL);
+  const bloco = blocosDeDevolucao(page).nth(0);
+
+  await expect(bloco).toContainText("Aprovada");
+  await expect(bloco).not.toContainText("Código de rastreio");
+  await expect(bloco).not.toContainText("Código de devolução");
+  await expect(bloco).not.toContainText("Como devolver");
+});
+
+test("AG: AGUARDANDO_ENVIO com o código ainda não liberado: avisa que está sendo emitido, nunca inventa código", async ({
+  page,
+}) => {
+  await seedSession(page);
+  await mockBuscarMeuPedido(page, { current: pedidoEnviado() });
+  await mockDevolucao(page, {
+    historico: {
+      devolucoes: [
+        devolucaoFake({
+          status: "AGUARDANDO_ENVIO",
+          analisadaEm: "2026-09-21T12:00:00.000Z",
+          envio: { ...ENVIO_DEVOLUCAO, codigoDevolucao: null },
+        }),
+      ],
+      itensDisponiveis: [{ itemPedidoId: 1, quantidadeDisponivel: 1 }],
+    },
+  });
+
+  await page.goto(PEDIDO_URL);
+  const bloco = blocosDeDevolucao(page).nth(0);
+
+  await expect(bloco).toContainText("Código de devolução");
+  await expect(bloco).toContainText("Sendo emitido pelos Correios");
+  await expect(bloco).toContainText("Correios PAC");
 });

@@ -1,13 +1,19 @@
 import { isAxiosError } from "axios";
 
-// Contrato explícito com o backend (ver MelhorEnvioService.comCodigoDeFrete
+// Contrato explícito com o backend (ver MelhorEnvioService.comCodigoSeguro
 // e AllExceptionsFilter, backend-sensora) — só estes códigos identificam uma
 // mensagem 5xx que o backend já sanitizou e produziu deliberadamente para
 // aparecer na tela (nunca stack trace/SQL/segredo). Qualquer 5xx sem um
 // destes códigos continua caindo no fallback genérico, exatamente como
 // antes. Mantenha sincronizado com CODIGO_ERRO_FRETE_MELHOR_ENVIO no
 // backend caso precise alterar o valor.
-const CODIGOS_ERRO_SEGUROS = new Set(["FRETE_MELHOR_ENVIO_INDISPONIVEL"]);
+// Etapa 8 — LOGISTICA_MELHOR_ENVIO_INDISPONIVEL: mensagens seguras da
+// logística reversa (ex.: saldo insuficiente), sincronizado com
+// CODIGO_ERRO_LOGISTICA_MELHOR_ENVIO no backend.
+const CODIGOS_ERRO_SEGUROS = new Set([
+  "FRETE_MELHOR_ENVIO_INDISPONIVEL",
+  "LOGISTICA_MELHOR_ENVIO_INDISPONIVEL",
+]);
 
 // Extrai uma mensagem segura para exibir ao usuário: usa a mensagem
 // específica que o backend devolveu (ex.: 409 de categoria com produtos
@@ -32,7 +38,7 @@ export function getErrorMessage(error: unknown, fallback: string): string {
     // Etapa 6.5 (Frete, achado da auditoria) — exceção a essa regra: um 5xx
     // com um `code` reconhecido em CODIGOS_ERRO_SEGUROS já foi
     // deliberadamente sanitizado pelo backend para o fluxo de frete (ver
-    // MelhorEnvioService.comCodigoDeFrete) — sem isso, o cliente nunca via
+    // MelhorEnvioService.comCodigoSeguro) — sem isso, o cliente nunca via
     // o motivo real (Melhor Envio fora do ar, loja não conectada etc.), só
     // "Não foi possível calcular o frete. Tente novamente." mesmo quando o
     // backend já tinha uma mensagem específica e segura para mostrar.

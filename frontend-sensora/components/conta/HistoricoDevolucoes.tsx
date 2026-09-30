@@ -4,13 +4,19 @@
 // na ordem que o backend devolve). Só exibe o que recebe: quem carrega os
 // dados é a página do pedido. Enquanto a devolução está SOLICITADA, as fotos
 // podem ser adicionadas/removidas (EvidenciasDevolucao); depois disso, só
-// aparecem para consulta.
+// aparecem para consulta. Etapa 8: com a logística reversa gerada,
+// instruções e o código de devolução enquanto aguarda o envio; depois, o
+// código de rastreio (quando houver).
+import { useState } from "react";
 import EvidenciasDevolucao from "@/components/conta/EvidenciasDevolucao";
+import { useToast } from "@/context/ToastContext";
+import { getErrorMessage } from "@/lib/errors";
 import {
   ROTULOS_STATUS_DEVOLUCAO,
   type Devolucao,
   type ItemPedidoDetalhado,
 } from "@/lib/types/loja";
+import { urlDocumentoEnvioMinhaDevolucao } from "@/services/pedidos";
 
 function formatarData(data: string): string {
   return new Date(data).toLocaleDateString("pt-BR", {
@@ -18,6 +24,84 @@ function formatarData(data: string): string {
     month: "long",
     year: "numeric",
   });
+}
+
+// Logística reversa: o cliente devolve apresentando o código de devolução
+// nos Correios — não precisa de etiqueta. O documento do envio é só um
+// recurso secundário (URL pedida ao backend no clique, gerada na hora, nunca
+// guardada).
+function EnvioDaDevolucao({ pedidoId, devolucao }: { pedidoId: number; devolucao: Devolucao }) {
+  const toast = useToast();
+  const [abrindo, setAbrindo] = useState(false);
+  const { envio } = devolucao;
+  if (!envio) return null;
+
+  async function handleDocumento() {
+    if (abrindo) return;
+    setAbrindo(true);
+    try {
+      const url = await urlDocumentoEnvioMinhaDevolucao(pedidoId, devolucao.id);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Não foi possível abrir o documento. Tente novamente."));
+    } finally {
+      setAbrindo(false);
+    }
+  }
+
+  const rastreio = envio.codigoRastreio && (
+    <p className="text-sm text-slate-600">
+      Código de rastreio:{" "}
+      <span className="font-mono text-brand-navy">{envio.codigoRastreio}</span>
+    </p>
+  );
+
+  if (devolucao.status !== "AGUARDANDO_ENVIO") {
+    return rastreio ? <div className="mt-3">{rastreio}</div> : null;
+  }
+
+  return (
+    <div className="mt-4 flex flex-col gap-3 rounded-md bg-slate-50 p-4">
+      <p className="text-sm font-medium text-brand-navy">Como devolver</p>
+      <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-600">
+        <li>Embale o(s) produto(s) acima.</li>
+        <li>
+          Leve o pacote a uma agência dos Correios e apresente o código de devolução. Não é preciso
+          imprimir etiqueta.
+        </li>
+        <li>O frete já foi pago pela loja. O código tem prazo de validade: poste o quanto antes.</li>
+      </ol>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+        <dt className="text-slate-500">Código de devolução</dt>
+        <dd>
+          {envio.codigoDevolucao ? (
+            <span className="font-mono text-base font-semibold text-brand-navy">
+              {envio.codigoDevolucao}
+            </span>
+          ) : (
+            <span className="text-slate-600">
+              Sendo emitido pelos Correios. Volte a esta página em alguns minutos.
+            </span>
+          )}
+        </dd>
+        <dt className="text-slate-500">Envio</dt>
+        <dd className="text-slate-700">
+          {envio.transportadora} {envio.servico}
+        </dd>
+      </dl>
+      {rastreio}
+      <div>
+        <button
+          type="button"
+          onClick={handleDocumento}
+          disabled={abrindo}
+          className="text-sm text-slate-600 underline underline-offset-2 hover:text-brand-navy disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {abrindo ? "Abrindo..." : "Ver documento do envio (opcional)"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 type HistoricoDevolucoesProps = {
@@ -69,6 +153,8 @@ export default function HistoricoDevolucoes({
                 </li>
               ))}
             </ul>
+
+            <EnvioDaDevolucao pedidoId={pedidoId} devolucao={devolucao} />
 
             {devolucao.status === "SOLICITADA" ? (
               <EvidenciasDevolucao

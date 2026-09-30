@@ -86,6 +86,19 @@ export async function enviarEvidenciaDevolucao(
   return response.data;
 }
 
+// Etapa 8 — recurso secundário: URL do documento do envio da devolução,
+// gerada na hora pelo backend (só o dono, só enquanto a devolução aguarda o
+// envio). Nunca guardada. O fluxo principal é o código de devolução.
+export async function urlDocumentoEnvioMinhaDevolucao(
+  pedidoId: number,
+  devolucaoId: number,
+): Promise<string> {
+  const response = await api.get<{ url: string }>(
+    `/pedidos/meus/${pedidoId}/devolucoes/${devolucaoId}/documento`,
+  );
+  return response.data.url;
+}
+
 export async function removerEvidenciaDevolucao(
   pedidoId: number,
   devolucaoId: number,

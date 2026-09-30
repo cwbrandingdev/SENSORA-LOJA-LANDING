@@ -450,6 +450,18 @@ export type EvidenciaDevolucao = {
   criadoEm: string;
 };
 
+// Etapa 8 — o que o cliente vê da logística reversa (só depois de gerada;
+// nunca o id no Melhor Envio, o custo nem a situação crua do provedor).
+// codigoDevolucao: o código que ele apresenta nos Correios (pode chegar um
+// pouco depois); codigoRastreio: rastreio do objeto, quando houver.
+export type EnvioDevolucaoCliente = {
+  transportadora: string;
+  servico: string;
+  codigoDevolucao: string | null;
+  codigoRastreio: string | null;
+  postadaEm: string | null;
+};
+
 // Resposta de POST /pedidos/meus/:id/devolucoes
 // (backend-sensora/src/devolucoes/entities/devolucao.entity.ts).
 export type Devolucao = {
@@ -467,6 +479,7 @@ export type Devolucao = {
     precoUnitario: number;
   }[];
   evidencias: EvidenciaDevolucao[];
+  envio: EnvioDevolucaoCliente | null;
 };
 
 // Etapa 6 — resposta de GET /pedidos/meus/:id/devolucoes: histórico do
@@ -534,6 +547,7 @@ export type DevolucaoAnalise = {
   analisadaEm: string | null;
   observacaoAnalise: string | null;
   analisadoPorNome: string | null;
+  recebidaEm: string | null;
   pedido: {
     id: number;
     numero: string;
@@ -553,6 +567,32 @@ export type DevolucaoAnalise = {
     precoUnitario: number;
   }[];
   evidencias: EvidenciaDevolucao[];
+  envio: EnvioDevolucaoAdmin | null;
+};
+
+// Etapa 8 — logística da devolução vista pelo ADMIN. compradaEm/geradaEm
+// nulos mostram em que passo uma geração interrompida parou.
+export type EnvioDevolucaoAdmin = {
+  servicoId: number;
+  transportadora: string;
+  servico: string;
+  custo: number;
+  compradaEm: string | null;
+  geradaEm: string | null;
+  codigoDevolucao: string | null;
+  codigoRastreio: string | null;
+  postadaEm: string | null;
+  situacaoRastreio: string | null;
+  rastreioAtualizadoEm: string | null;
+};
+
+// Etapa 8 — opção de frete da devolução (GET /admin/devolucoes/:id/frete-devolucao).
+export type OpcaoFreteDevolucao = {
+  id: number;
+  transportadora: string;
+  servico: string;
+  preco: number;
+  prazoDias: number;
 };
 
 // Etapa 8.1 (HIGH-01 — preço arbitrário de ItemPedido) — `precoUnitario`

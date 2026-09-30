@@ -97,9 +97,17 @@ function analise(extras: Record<string, unknown> = {}) {
       },
     ],
     evidencias: [{ id: 7, url: PNG_1X1, criadoEm: "2026-09-25T12:05:00.000Z" }],
+    recebidaEm: null,
+    envio: null,
     ...extras,
   };
 }
+
+// Etapa 8 — cotação da logística reversa (só PAC/SEDEX).
+const OPCOES_FRETE = [
+  { id: 1, transportadora: "Correios", servico: "PAC", preco: 25.35, prazoDias: 6 },
+  { id: 2, transportadora: "Correios", servico: "SEDEX", preco: 41.2, prazoDias: 2 },
+];
 
 // GET /admin/devolucoes(?status=) — filtra a fila como o backend.
 async function mockFila(page: Page): Promise<{ statusPedidos: (string | null)[] }> {
@@ -123,6 +131,11 @@ async function mockDetalhe(
 
   await page.route("**/admin/devolucoes/1**", async (route) => {
     const request = route.request();
+    // Etapa 8 — depois de aprovada, a seção de logística cota o frete.
+    if (request.url().endsWith("/frete-devolucao")) {
+      await route.fulfill({ json: OPCOES_FRETE });
+      return;
+    }
     if (request.method() === "GET") {
       await route.fulfill({ json: atual });
       return;
@@ -374,5 +387,294 @@ test.describe("Admin — Devoluções (Etapa 7)", () => {
     await expect(page).toHaveURL(/\/workspace-x\/devolucoes$/);
     await expect(page.getByRole("heading", { name: "Devoluções" })).toBeVisible();
     await expect(linhaDaFila(page, "PED-10")).toBeVisible();
+  });
+});
+
+// Etapa 8 — logística de devolução no detalhe (/admin/devolucoes/1/...),
+// com estado. `falharGeracao`: a primeira geração responde erro (saldo) e,
+// como no backend, deixa a geração em andamento (envio sem geradaEm).
+// `custoMudou`: a primeira geração responde 409 porque o envio criado no
+// Melhor Envio custa mais do que o confirmado (nada é cobrado).
+const ENVIO_GERADO = {
+  servicoId: 2,
+  transportadora: "Correios",
+  servico: "SEDEX",
+  custo: 40.9,
+  compradaEm: "2026-09-30T13:00:00.000Z",
+  geradaEm: "2026-09-30T13:01:00.000Z",
+  codigoDevolucao: "1234567890",
+  codigoRastreio: "ME2600000001BR",
+  postadaEm: null,
+  situacaoRastreio: null,
+  rastreioAtualizadoEm: null,
+};
+
+async function mockLogistica(
+  page: Page,
+  inicial: Record<string, unknown>,
+  options: { falharGeracao?: boolean; custoMudou?: boolean } = {},
+) {
+  let atual = analise({ analisadaEm: "2026-09-26T09:00:00.000Z", ...inicial });
+  let falhar = options.falharGeracao ?? false;
+  let custoMudou = options.custoMudou ?? false;
+  const chamadas = { geracoes: [] as unknown[], documentos: 0, cotacoes: 0 };
+
+  await page.route("**/admin/devolucoes/1**", async (route) => {
+    const request = route.request();
+    const url = request.url();
+    const metodo = request.method();
+
+    if (url.endsWith("/frete-devolucao")) {
+      chamadas.cotacoes += 1;
+      await route.fulfill({ json: OPCOES_FRETE });
+    } else if (url.endsWith("/logistica") && metodo === "POST") {
+      chamadas.geracoes.push(request.postDataJSON());
+      if (custoMudou) {
+        custoMudou = false;
+        atual = analise({
+          ...atual,
+          envio: {
+            ...ENVIO_GERADO,
+            custo: 45.5,
+            compradaEm: null,
+            geradaEm: null,
+            codigoDevolucao: null,
+            codigoRastreio: null,
+          },
+        });
+        await route.fulfill({
+          status: 409,
+          json: {
+            statusCode: 409,
+            message:
+              "O custo do envio informado pelo Melhor Envio é R$ 45,50, maior que o confirmado (R$ 41,20). Nada foi cobrado; confirme o novo valor para continuar.",
+          },
+        });
+        return;
+      }
+      if (falhar) {
+        falhar = false;
+        atual = analise({
+          ...atual,
+          envio: {
+            ...ENVIO_GERADO,
+            compradaEm: null,
+            geradaEm: null,
+            codigoDevolucao: null,
+            codigoRastreio: null,
+          },
+        });
+        await route.fulfill({
+          status: 502,
+          json: {
+            statusCode: 502,
+            message: "Saldo insuficiente na carteira do Melhor Envio para comprar o envio da devolução.",
+            code: "LOGISTICA_MELHOR_ENVIO_INDISPONIVEL",
+          },
+        });
+        return;
+      }
+      atual = analise({ ...atual, status: "AGUARDANDO_ENVIO", envio: ENVIO_GERADO });
+      await route.fulfill({ json: atual });
+    } else if (url.endsWith("/documento")) {
+      chamadas.documentos += 1;
+      await route.fulfill({ json: { url: "https://melhorenvio.com.br/imprimir/abc123" } });
+    } else if (url.endsWith("/rastreio")) {
+      atual = analise({
+        ...atual,
+        status: "ENVIADA",
+        envio: {
+          ...ENVIO_GERADO,
+          postadaEm: "2026-10-01T12:00:00.000Z",
+          situacaoRastreio: "posted",
+          rastreioAtualizadoEm: "2026-10-01T13:00:00.000Z",
+        },
+      });
+      await route.fulfill({ json: atual });
+    } else if (url.endsWith("/recebida")) {
+      atual = analise({ ...atual, status: "RECEBIDA", recebidaEm: "2026-10-03T10:00:00.000Z" });
+      await route.fulfill({ json: atual });
+    } else {
+      await route.fulfill({ json: atual });
+    }
+  });
+  return chamadas;
+}
+
+function secaoLogistica(page: Page) {
+  return page.getByRole("region", { name: "Logística de devolução" });
+}
+
+test.describe("Workspace-X — Logística de devolução (Etapa 8)", () => {
+  test("APROVADA: cota, ADMIN escolhe o serviço, confirma o custo e gera o código de devolução", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    const chamadas = await mockLogistica(page, { status: "APROVADA" });
+
+    await page.goto(DETALHE_URL);
+    const secao = secaoLogistica(page);
+    await expect(secao.getByRole("radio")).toHaveCount(2);
+    await expect(secao).toContainText("Correios PAC");
+    await expect(secao).toContainText("R$ 25,35");
+    await expect(secao).toContainText("Correios SEDEX");
+    await expect(secao).toContainText("R$ 41,20");
+
+    const gerar = secao.getByRole("button", { name: "Gerar código de devolução" });
+    await expect(gerar).toBeDisabled();
+    await secao.getByRole("radio", { name: /SEDEX/ }).check();
+    await gerar.click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText("R$ 41,20");
+    await expect(dialog).toContainText("carteira do Melhor Envio");
+    expect(chamadas.geracoes).toHaveLength(0);
+    await dialog.getByRole("button", { name: "Gerar código de devolução" }).click();
+
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(chamadas.geracoes).toEqual([{ servicoId: 2, custoConfirmado: 41.2 }]);
+    await expect(page.getByText("Aguardando envio", { exact: true })).toBeVisible();
+    await expect(secao).toContainText("Código de devolução");
+    await expect(secao).toContainText("1234567890");
+    await expect(secao).toContainText("ME2600000001BR");
+    await expect(secao).toContainText("R$ 40,90");
+    await expect(secao.getByRole("button", { name: "Documento do envio" })).toBeVisible();
+    await expect(secao.getByRole("button", { name: "Atualizar rastreio" })).toBeVisible();
+    await expect(secao.getByRole("button", { name: "Confirmar recebimento" })).toHaveCount(0);
+    // O documento do envio (secundário) não é pedido enquanto ninguém clica.
+    expect(chamadas.documentos).toBe(0);
+  });
+
+  test("cancelar a confirmação não gera nada", async ({ page }) => {
+    await seedSession(page);
+    const chamadas = await mockLogistica(page, { status: "APROVADA" });
+
+    await page.goto(DETALHE_URL);
+    const secao = secaoLogistica(page);
+    await secao.getByRole("radio", { name: /PAC/ }).check();
+    await secao.getByRole("button", { name: "Gerar código de devolução" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Voltar" }).click();
+
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(chamadas.geracoes).toHaveLength(0);
+  });
+
+  test("erro na geração (saldo): mostra a mensagem e retoma com o mesmo serviço", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    const chamadas = await mockLogistica(page, { status: "APROVADA" }, { falharGeracao: true });
+
+    await page.goto(DETALHE_URL);
+    const secao = secaoLogistica(page);
+    await secao.getByRole("radio", { name: /SEDEX/ }).check();
+    await secao.getByRole("button", { name: "Gerar código de devolução" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Gerar código de devolução" }).click();
+
+    await expect(
+      page.getByText("Saldo insuficiente na carteira do Melhor Envio para comprar o envio da devolução."),
+    ).toBeVisible();
+    await expect(secao).toContainText("começou mas não terminou");
+    await expect(secao.getByRole("radio")).toHaveCount(0);
+
+    await secao.getByRole("button", { name: "Gerar código de devolução" }).click();
+    await expect(page.getByRole("dialog")).toContainText("R$ 40,90");
+    await page.getByRole("dialog").getByRole("button", { name: "Gerar código de devolução" }).click();
+
+    await expect(secao).toContainText("ME2600000001BR");
+    expect(chamadas.geracoes).toEqual([
+      { servicoId: 2, custoConfirmado: 41.2 },
+      { servicoId: 2, custoConfirmado: 40.9 },
+    ]);
+  });
+
+  test("custo do envio maior que o confirmado: nada é cobrado, mostra o novo valor e o ADMIN confirma de novo", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    const chamadas = await mockLogistica(page, { status: "APROVADA" }, { custoMudou: true });
+
+    await page.goto(DETALHE_URL);
+    const secao = secaoLogistica(page);
+    await secao.getByRole("radio", { name: /SEDEX/ }).check();
+    await secao.getByRole("button", { name: "Gerar código de devolução" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Gerar código de devolução" })
+      .click();
+
+    await expect(page.getByText(/maior que o confirmado \(R\$ 41,20\)/)).toBeVisible();
+    await expect(secao).toContainText("R$ 45,50");
+
+    await secao.getByRole("button", { name: "Gerar código de devolução" }).click();
+    await expect(page.getByRole("dialog")).toContainText("R$ 45,50");
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Gerar código de devolução" })
+      .click();
+
+    await expect(secao).toContainText("1234567890");
+    expect(chamadas.geracoes).toEqual([
+      { servicoId: 2, custoConfirmado: 41.2 },
+      { servicoId: 2, custoConfirmado: 45.5 },
+    ]);
+  });
+
+  test("Documento do envio (secundário) pede a URL na hora e abre em outra aba", async ({ page }) => {
+    await seedSession(page);
+    await page.addInitScript(() => {
+      (window as unknown as { aberturas: string[] }).aberturas = [];
+      window.open = ((url: string) => {
+        (window as unknown as { aberturas: string[] }).aberturas.push(url);
+        return null;
+      }) as typeof window.open;
+    });
+    const chamadas = await mockLogistica(page, {
+      status: "AGUARDANDO_ENVIO",
+      envio: ENVIO_GERADO,
+    });
+
+    await page.goto(DETALHE_URL);
+    await secaoLogistica(page).getByRole("button", { name: "Documento do envio" }).click();
+
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { aberturas: string[] }).aberturas))
+      .toEqual(["https://melhorenvio.com.br/imprimir/abc123"]);
+    expect(chamadas.documentos).toBe(1);
+    expect(chamadas.cotacoes).toBe(0);
+  });
+
+  test("rastreio mostra a postagem (ENVIADA) e o ADMIN confirma o recebimento (RECEBIDA)", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await mockLogistica(page, { status: "AGUARDANDO_ENVIO", envio: ENVIO_GERADO });
+
+    await page.goto(DETALHE_URL);
+    const secao = secaoLogistica(page);
+    await secao.getByRole("button", { name: "Atualizar rastreio" }).click();
+
+    await expect(page.getByText("Enviada", { exact: true })).toBeVisible();
+    await expect(secao).toContainText("posted");
+
+    await secao.getByRole("button", { name: "Confirmar recebimento" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Confirmar recebimento" })
+      .click();
+
+    await expect(page.getByText("Recebida", { exact: true })).toBeVisible();
+    await expect(secao.getByRole("button", { name: "Confirmar recebimento" })).toHaveCount(0);
+    await expect(secao.getByRole("button", { name: "Atualizar rastreio" })).toHaveCount(0);
+  });
+
+  test("devolução ainda em análise não mostra a logística nem cota frete", async ({ page }) => {
+    await seedSession(page);
+    const chamadas = await mockLogistica(page, { status: "SOLICITADA", analisadaEm: null });
+
+    await page.goto(DETALHE_URL);
+    await expect(page.getByRole("button", { name: "Aprovar" })).toBeVisible();
+    await expect(secaoLogistica(page)).toHaveCount(0);
+    expect(chamadas.cotacoes).toBe(0);
   });
 });
