@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
+import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MelhorEnvioTokenCryptoService } from './melhor-envio-token-crypto.service';
 
@@ -18,9 +19,53 @@ export interface MelhorEnvioPacote {
 }
 
 export interface MelhorEnvioCotacaoInput {
+  // Sem cepOrigem, a origem é a loja (MELHOR_ENVIO_CEP_ORIGEM) — o checkout
+  // nunca informa. A logística reversa informa o CEP do cliente.
+  cepOrigem?: string;
   cepDestino: string;
   pacote: MelhorEnvioPacote;
   valorDeclarado: number;
+}
+
+// Etapa 8 — quem devolve o produto (o cliente), remetente da reversa.
+export interface MelhorEnvioRemetente {
+  nome: string;
+  cpf: string;
+  telefone: string;
+  email: string;
+  rua: string;
+  numero: string;
+  complemento: string | null;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  cep: string;
+}
+
+export interface MelhorEnvioReversaInput {
+  servicoId: number;
+  remetente: MelhorEnvioRemetente;
+  itens: { nome: string; quantidade: number; valorUnitario: number }[];
+  pacote: MelhorEnvioPacote;
+  valorDeclarado: number;
+}
+
+// Situação de um envio no Melhor Envio (GET /api/v2/me/orders/{id}), já nos
+// termos do projeto. `status` é o valor cru do Melhor Envio (guardado como
+// última situação); pago/gerado/postado já interpretam status + datas.
+// codigoDevolucao = `authorization_code` (o código que o cliente apresenta
+// nos Correios na logística reversa); codigoRastreio = `tracking` (rastreio
+// do objeto). São conceitos diferentes e nunca se substituem.
+export interface MelhorEnvioSituacao {
+  status: string;
+  pago: boolean;
+  gerado: boolean;
+  postado: boolean;
+  pagoEm: Date | null;
+  geradoEm: Date | null;
+  postadoEm: Date | null;
+  codigoDevolucao: string | null;
+  codigoRastreio: string | null;
 }
 
 export interface MelhorEnvioOpcao {
@@ -43,12 +88,19 @@ export class MelhorEnvioNaoConectadoError extends InternalServerErrorException {
 // CODIGOS_ERRO_SEGUROS) — identifica, na resposta HTTP, mensagens de erro
 // que já são seguras e foram produzidas deliberadamente por este serviço
 // para o fluxo de cotação de frete (nunca stack trace/SQL/segredo). Só
-// `cotar()` (abaixo, via `comCodigoDeFrete`) anexa este código — os mesmos
+// `cotar()` (abaixo, via `comCodigoSeguro`) anexa este código — os mesmos
 // erros lançados pelo fluxo de OAuth (trocarCodigoPorToken/conectar) nunca
 // o recebem, preservando o comportamento atual desse fluxo. Mantenha o
 // valor sincronizado com a constante equivalente em
 // frontend-sensora/lib/errors.ts caso precise alterá-lo.
 export const CODIGO_ERRO_FRETE_MELHOR_ENVIO = 'FRETE_MELHOR_ENVIO_INDISPONIVEL';
+
+// Etapa 8 — mesmo contrato, para as mensagens seguras da logística reversa
+// (criar/comprar/gerar/imprimir/rastrear): sem ele, o ADMIN veria só a
+// mensagem genérica em vez de "Saldo insuficiente…". Mantenha sincronizado
+// com frontend-sensora/lib/errors.ts.
+export const CODIGO_ERRO_LOGISTICA_MELHOR_ENVIO =
+  'LOGISTICA_MELHOR_ENVIO_INDISPONIVEL';
 
 interface TokenResponse {
   access_token: string;
@@ -90,6 +142,43 @@ const MENSAGEM_COTACAO_RECUSADA = 'O Melhor Envio recusou a cotação';
 // expira no meio de uma requisição em voo.
 const MARGEM_EXPIRACAO_MS = 60_000;
 
+// Etapa 8 — escopos pedidos na conexão: cotação (checkout) e o ciclo da
+// logística reversa (carrinho, compra, geração do código de devolução,
+// consulta do envio e, como recurso secundário, impressão do documento do
+// envio). Trocar esta lista exige reconectar a conta.
+const ESCOPO_PADRAO = [
+  'shipping-calculate',
+  'cart-read',
+  'cart-write',
+  'orders-read',
+  'shipping-checkout',
+  'shipping-generate',
+  'shipping-print',
+].join(' ');
+
+// Status do Melhor Envio que já passaram de cada ponto do ciclo.
+const STATUS_PAGOS = ['paid', 'released', 'generated', 'posted', 'delivered'];
+const STATUS_GERADOS = ['generated', 'posted', 'delivered'];
+const STATUS_POSTADOS = ['posted', 'delivered'];
+
+// A logística reversa do Melhor Envio só aceita Correios PAC (1) e SEDEX (2).
+const SERVICOS_LOGISTICA_REVERSA = [1, 2];
+
+// Dados da loja (destinatária da reversa). O CEP continua em
+// MELHOR_ENVIO_CEP_ORIGEM; LOJA_COMPLEMENTO é o único opcional.
+const VARIAVEIS_LOJA = [
+  'LOJA_NOME',
+  'LOJA_DOCUMENTO',
+  'LOJA_TELEFONE',
+  'LOJA_EMAIL',
+  'LOJA_RUA',
+  'LOJA_NUMERO',
+  'LOJA_BAIRRO',
+  'LOJA_CIDADE',
+  'LOJA_UF',
+  'MELHOR_ENVIO_CEP_ORIGEM',
+];
+
 // Cliente HTTP fino para a API do Melhor Envio (sem SDK oficial em Node —
 // fetch nativo, mesmo padrão do AsaasService), cobrindo OAuth2 (Parte 2 da
 // etapa) e cotação de frete (Parte 3). Isolado de propósito: nenhuma outra
@@ -108,12 +197,6 @@ export class MelhorEnvioService {
   private readonly cepOrigem?: string;
   private readonly pacotePadrao: MelhorEnvioPacote;
 
-  // Estado do fluxo "authorize" (Parte 2) — só precisa sobreviver entre a
-  // chamada que gera a URL de autorização (disparada manualmente por um
-  // ADMIN) e o callback que o Melhor Envio chama alguns segundos/minutos
-  // depois. Guardado em memória, não no banco: é só proteção CSRF do fluxo
-  // de conexão (não é dado de negócio), e um restart do backend nesse
-  // intervalo raríssimo só obriga o admin a clicar em "Conectar" de novo.
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
@@ -140,8 +223,7 @@ export class MelhorEnvioService {
       'MELHOR_ENVIO_REDIRECT_URI',
     );
     this.scope =
-      this.configService.get<string>('MELHOR_ENVIO_SCOPE') ??
-      'shipping-calculate';
+      this.configService.get<string>('MELHOR_ENVIO_SCOPE') ?? ESCOPO_PADRAO;
     this.userAgent = this.configService.get<string>('MELHOR_ENVIO_USER_AGENT');
     this.cepOrigem = this.configService.get<string>('MELHOR_ENVIO_CEP_ORIGEM');
     // Etapa 6.5 (achado da auditoria 6.5): Produto não tem peso/dimensões
@@ -395,7 +477,10 @@ export class MelhorEnvioService {
   // refresh_token em garantirAccessToken abaixo), então criptografar aqui
   // cobre os dois caminhos de uma vez — nenhum caminho secundário grava
   // token sem passar por encrypt().
-  private async persistirToken(resposta: TokenResponse): Promise<void> {
+  private async persistirToken(
+    resposta: TokenResponse,
+    client: Prisma.TransactionClient = this.prisma,
+  ): Promise<void> {
     const expiresAt = new Date(Date.now() + resposta.expires_in * 1000);
     const accessTokenCriptografado = this.tokenCrypto.encrypt(
       resposta.access_token,
@@ -403,7 +488,7 @@ export class MelhorEnvioService {
     const refreshTokenCriptografado = this.tokenCrypto.encrypt(
       resposta.refresh_token,
     );
-    await this.prisma.melhorEnvioToken.upsert({
+    await client.melhorEnvioToken.upsert({
       where: { id: 1 },
       create: {
         id: 1,
@@ -430,21 +515,49 @@ export class MelhorEnvioService {
       );
     }
 
-    if (token.expiresAt.getTime() - MARGEM_EXPIRACAO_MS > Date.now()) {
+    if (!this.expirando(token.expiresAt)) {
       return this.tokenCrypto.decrypt(token.accessToken);
     }
 
     // Renova ANTES de qualquer chamada de cotação, nunca reativamente após
     // um 401 — evita depender de retry específico de status na chamada de
     // cotação em si.
-    const resposta = await this.requestToken({
-      grant_type: 'refresh_token',
-      client_id: this.clientId!,
-      client_secret: this.clientSecret!,
-      refresh_token: this.tokenCrypto.decrypt(token.refreshToken),
-    });
-    await this.persistirToken(resposta);
-    return resposta.access_token;
+    //
+    // Etapa 8 — a renovação trava a linha do token até gravar o novo: duas
+    // requisições simultâneas com o token vencendo renovam uma de cada vez,
+    // e a segunda, ao reler, já encontra o token novo e não renova de novo
+    // (o refresh_token antigo deixa de valer depois de usado).
+    return this.prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "MelhorEnvioToken" WHERE id = 1 FOR UPDATE`;
+        const atual = await tx.melhorEnvioToken.findUnique({
+          where: { id: 1 },
+        });
+        if (!atual) {
+          throw new MelhorEnvioNaoConectadoError(
+            'A loja ainda não está conectada ao Melhor Envio.',
+          );
+        }
+        if (!this.expirando(atual.expiresAt)) {
+          return this.tokenCrypto.decrypt(atual.accessToken);
+        }
+
+        const resposta = await this.requestToken({
+          grant_type: 'refresh_token',
+          client_id: this.clientId!,
+          client_secret: this.clientSecret!,
+          refresh_token: this.tokenCrypto.decrypt(atual.refreshToken),
+        });
+        await this.persistirToken(resposta, tx);
+        return resposta.access_token;
+      },
+      // A transação espera a resposta do /oauth/token.
+      { timeout: 20_000 },
+    );
+  }
+
+  private expirando(expiresAt: Date): boolean {
+    return expiresAt.getTime() - MARGEM_EXPIRACAO_MS <= Date.now();
   }
 
   private async requestToken(
@@ -499,7 +612,7 @@ export class MelhorEnvioService {
   // ---- Cotação (Parte 3) --------------------------------------------------
 
   // Ponto único chamado pelo CheckoutController/CheckoutService — nunca lança
-  // a exceção original diretamente: `comCodigoDeFrete` decide se ela recebe
+  // a exceção original diretamente: `comCodigoSeguro` decide se ela recebe
   // o código explícito de erro seguro (ver CODIGO_ERRO_FRETE_MELHOR_ENVIO)
   // antes de propagar. O fluxo de OAuth (trocarCodigoPorToken/conectar) não
   // passa por aqui, então nunca é afetado por essa etiquetagem.
@@ -507,7 +620,7 @@ export class MelhorEnvioService {
     try {
       return await this.executarCotacao(input);
     } catch (erro) {
-      throw this.comCodigoDeFrete(erro);
+      throw this.comCodigoSeguro(erro, CODIGO_ERRO_FRETE_MELHOR_ENVIO);
     }
   }
 
@@ -517,23 +630,23 @@ export class MelhorEnvioService {
   // Qualquer outra exceção (ex.: InternalServerErrorException genérica de
   // configuração ausente) atravessa sem alteração, continuando a cair no
   // fallback do frontend — nunca vira "segura" por engano.
-  private comCodigoDeFrete(erro: unknown): unknown {
+  private comCodigoSeguro(erro: unknown, code: string): unknown {
     if (erro instanceof MelhorEnvioNaoConectadoError) {
       return new MelhorEnvioNaoConectadoError({
         message: this.extrairMensagem(erro),
-        code: CODIGO_ERRO_FRETE_MELHOR_ENVIO,
+        code,
       });
     }
     if (erro instanceof MelhorEnvioIndisponivelError) {
       return new MelhorEnvioIndisponivelError({
         message: this.extrairMensagem(erro),
-        code: CODIGO_ERRO_FRETE_MELHOR_ENVIO,
+        code,
       });
     }
     if (erro instanceof MelhorEnvioErroHttpError) {
       return new MelhorEnvioErroHttpError({
         message: this.extrairMensagem(erro),
-        code: CODIGO_ERRO_FRETE_MELHOR_ENVIO,
+        code,
       });
     }
     return erro;
@@ -584,7 +697,9 @@ export class MelhorEnvioService {
           'User-Agent': this.userAgent,
         },
         body: JSON.stringify({
-          from: { postal_code: this.normalizarCep(this.cepOrigem) },
+          from: {
+            postal_code: this.normalizarCep(input.cepOrigem ?? this.cepOrigem),
+          },
           to: { postal_code: this.normalizarCep(input.cepDestino) },
           package: {
             height: input.pacote.alturaCm,
@@ -606,9 +721,10 @@ export class MelhorEnvioService {
     }
 
     if (!response.ok) {
-      const corpoErro = await response.text().catch(() => '<corpo ilegível>');
+      // Só rota e status: o corpo pode repetir dados da requisição (CEP do
+      // cliente na cotação da logística reversa).
       this.logger.error(
-        `Melhor Envio recusou POST /shipment/calculate -> ${response.status} ${response.statusText}: ${corpoErro}`,
+        `Melhor Envio recusou POST /shipment/calculate -> ${response.status} ${response.statusText}`,
       );
       throw new MelhorEnvioErroHttpError(MENSAGEM_COTACAO_RECUSADA);
     }
@@ -660,5 +776,335 @@ export class MelhorEnvioService {
     }
 
     return { id, transportadora, servico, preco, prazoDias };
+  }
+
+  // ---- Logística reversa (Etapa 8) -----------------------------------------
+  //
+  // Na logística reversa dos Correios o cliente NÃO usa etiqueta: apresenta
+  // na agência o código de devolução (`authorization_code`). Ciclo: criar a
+  // reversa no carrinho (POST /api/v2/me/cart/reverse) -> comprar com o saldo
+  // da carteira (/shipment/checkout) -> gerar (/shipment/generate, é o que
+  // libera o código) -> consultar (GET /orders/{id}: código de devolução,
+  // rastreio, datas). A impressão (/shipment/print) é só um recurso
+  // secundário. Cada método faz UMA chamada; quem decide a ordem e o que já
+  // foi feito é DevolucoesService. Os payloads do Melhor Envio ficam só aqui.
+  // Erros nunca registram o corpo da resposta (pode repetir CPF/endereço do
+  // cliente) — só rota e status.
+
+  // Nomes (nunca valores) das variáveis da loja que ainda faltam.
+  get dadosLojaFaltando(): string[] {
+    return VARIAVEIS_LOJA.filter(
+      (nome) => !this.configService.get<string>(nome)?.trim(),
+    );
+  }
+
+  // Mesmo pacote do checkout: o padrão, com o peso escalado pela quantidade.
+  pacoteParaQuantidade(quantidade: number): MelhorEnvioPacote {
+    return {
+      ...this.pacotePadrao,
+      pesoGramas: this.pacotePadrao.pesoGramas * Math.max(quantidade, 1),
+    };
+  }
+
+  // Cotação do cliente (origem) para a loja (destino), só com os serviços
+  // que a reversa aceita.
+  async cotarReversa(
+    cepCliente: string,
+    pacote: MelhorEnvioPacote,
+    valorDeclarado: number,
+  ): Promise<MelhorEnvioOpcao[]> {
+    const opcoes = await this.cotar({
+      cepOrigem: cepCliente,
+      cepDestino: this.cepOrigem ?? '',
+      pacote,
+      valorDeclarado,
+    });
+    return opcoes.filter((opcao) =>
+      SERVICOS_LOGISTICA_REVERSA.includes(opcao.id),
+    );
+  }
+
+  // Cria a reversa no carrinho do Melhor Envio (ainda sem cobrança).
+  // Devolve o id do envio e o preço do item no carrinho (`price`, o valor
+  // que a compra vai debitar). Um `service_id` diferente do pedido é recusado
+  // antes de qualquer cobrança.
+  async criarReversa(
+    input: MelhorEnvioReversaInput,
+  ): Promise<{ id: string; preco: number | null }> {
+    const faltando = this.dadosLojaFaltando;
+    if (faltando.length > 0) {
+      throw new InternalServerErrorException(
+        `Dados da loja incompletos: defina ${faltando.join(', ')}.`,
+      );
+    }
+    const loja = (nome: string) => this.configService.get<string>(nome)!.trim();
+    const documentoLoja = loja('LOJA_DOCUMENTO').replace(/\D/g, '');
+    const { remetente, pacote } = input;
+
+    const resposta = await this.chamarApi('POST', '/api/v2/me/cart/reverse', {
+      service: input.servicoId,
+      new_sender_mail: remetente.email,
+      new_sender_phone: remetente.telefone,
+      insurance_value: input.valorDeclarado,
+      from: {
+        name: remetente.nome,
+        document: remetente.cpf,
+        phone: remetente.telefone,
+        email: remetente.email,
+        address: remetente.rua,
+        number: remetente.numero,
+        ...(remetente.complemento ? { complement: remetente.complemento } : {}),
+        district: remetente.bairro,
+        city: remetente.cidade,
+        state_abbr: remetente.uf,
+        postal_code: this.normalizarCep(remetente.cep),
+        country_id: 'BR',
+      },
+      to: {
+        name: loja('LOJA_NOME'),
+        // CNPJ vai em company_document; CPF em document.
+        ...(documentoLoja.length === 14
+          ? { company_document: documentoLoja }
+          : { document: documentoLoja }),
+        phone: loja('LOJA_TELEFONE'),
+        email: loja('LOJA_EMAIL'),
+        address: loja('LOJA_RUA'),
+        number: loja('LOJA_NUMERO'),
+        ...(this.configService.get<string>('LOJA_COMPLEMENTO')?.trim()
+          ? { complement: loja('LOJA_COMPLEMENTO') }
+          : {}),
+        district: loja('LOJA_BAIRRO'),
+        city: loja('LOJA_CIDADE'),
+        state_abbr: loja('LOJA_UF'),
+        postal_code: this.normalizarCep(loja('MELHOR_ENVIO_CEP_ORIGEM')),
+        country_id: 'BR',
+      },
+      products: input.itens.map((item) => ({
+        name: item.nome,
+        quantity: item.quantidade,
+        unitary_value: item.valorUnitario,
+        weight: this.pacotePadrao.pesoGramas / 1000,
+      })),
+      package: {
+        height: pacote.alturaCm,
+        width: pacote.larguraCm,
+        length: pacote.comprimentoCm,
+        weight: pacote.pesoGramas / 1000,
+      },
+      options: { own_hand: false, receipt: false },
+    });
+
+    if (!resposta.ok) {
+      throw this.falha(
+        'POST /cart/reverse',
+        resposta.status,
+        `O Melhor Envio recusou a criação da logística reversa (HTTP ${resposta.status}). Confira os dados do cliente e da loja.`,
+      );
+    }
+    const corpo = resposta.corpo as {
+      id?: unknown;
+      price?: unknown;
+      service_id?: unknown;
+    } | null;
+    if (typeof corpo?.id !== 'string' || !corpo.id) {
+      throw this.erroLogistica('Resposta inesperada do Melhor Envio');
+    }
+    if (
+      corpo.service_id !== undefined &&
+      corpo.service_id !== null &&
+      Number(corpo.service_id) !== input.servicoId
+    ) {
+      this.logger.error(
+        `Melhor Envio criou a reversa ${corpo.id} com o serviço ${JSON.stringify(corpo.service_id)} em vez de ${input.servicoId}`,
+      );
+      throw this.erroLogistica(
+        'O Melhor Envio criou o envio com outro serviço de frete. Nada foi cobrado; tente novamente.',
+      );
+    }
+    const preco = Number(corpo.price);
+    return { id: corpo.id, preco: Number.isFinite(preco) ? preco : null };
+  }
+
+  // Compra o envio com o saldo da carteira. "Já foi pago" conta como sucesso
+  // (o Melhor Envio nunca cobra o mesmo envio duas vezes).
+  async comprarEnvio(id: string): Promise<void> {
+    const resposta = await this.chamarApi(
+      'POST',
+      '/api/v2/me/shipment/checkout',
+      { orders: [id] },
+    );
+    if (resposta.ok) {
+      return;
+    }
+    const texto = JSON.stringify(resposta.corpo ?? '');
+    if (/já foram pagas|already paid/i.test(texto)) {
+      return;
+    }
+    if (/saldo|balance/i.test(texto)) {
+      this.logger.error(
+        `Melhor Envio recusou POST /shipment/checkout -> ${resposta.status} (saldo insuficiente)`,
+      );
+      throw this.erroLogistica(
+        'Saldo insuficiente na carteira do Melhor Envio para comprar o envio da devolução.',
+      );
+    }
+    throw this.falha(
+      'POST /shipment/checkout',
+      resposta.status,
+      'O Melhor Envio recusou a compra do envio da devolução.',
+    );
+  }
+
+  // Gera o envio já pago. Na reversa é esta geração que libera o código de
+  // devolução (lido depois em consultarEnvio).
+  async gerarEnvio(id: string): Promise<void> {
+    const resposta = await this.chamarApi(
+      'POST',
+      '/api/v2/me/shipment/generate',
+      { orders: [id] },
+    );
+    const resultado = (
+      resposta.corpo as Record<string, { status?: unknown }> | null
+    )?.[id];
+    if (!resposta.ok || resultado?.status !== true) {
+      throw this.falha(
+        'POST /shipment/generate',
+        resposta.status,
+        'O Melhor Envio não gerou o código de devolução.',
+      );
+    }
+  }
+
+  // Recurso secundário: URL do documento do envio (impressão do Melhor
+  // Envio), gerada agora. Modo público: o cliente abre sem ter conta no
+  // Melhor Envio. Nunca é guardada — quem chama só repassa.
+  async urlImpressao(id: string): Promise<string> {
+    const resposta = await this.chamarApi('POST', '/api/v2/me/shipment/print', {
+      mode: 'public',
+      orders: [id],
+    });
+    const url = (resposta.corpo as { url?: unknown } | null)?.url;
+    if (
+      !resposta.ok ||
+      typeof url !== 'string' ||
+      !url.startsWith('https://')
+    ) {
+      throw this.falha(
+        'POST /shipment/print',
+        resposta.status,
+        'O Melhor Envio não devolveu o documento do envio.',
+      );
+    }
+    return url;
+  }
+
+  // Situação atual do envio (pago? gerado? postado? código de devolução e
+  // rastreio) — usada antes de repetir a compra ou a geração e para
+  // atualizar o rastreio. GET /orders/{id} é o único endpoint documentado
+  // que devolve o `authorization_code`.
+  async consultarEnvio(id: string): Promise<MelhorEnvioSituacao> {
+    const resposta = await this.chamarApi(
+      'GET',
+      `/api/v2/me/orders/${encodeURIComponent(id)}`,
+    );
+    if (!resposta.ok) {
+      throw this.falha(
+        'GET /orders/:id',
+        resposta.status,
+        'Não foi possível consultar o envio no Melhor Envio.',
+      );
+    }
+    return this.paraSituacao(resposta.corpo);
+  }
+
+  // Chamada autenticada genérica. Não lança por status HTTP (quem chama
+  // decide); lança só por falha de rede, conexão ou configuração.
+  private async chamarApi(
+    metodo: 'GET' | 'POST',
+    caminho: string,
+    corpo?: unknown,
+  ): Promise<{ ok: boolean; status: number; corpo: unknown }> {
+    if (!this.userAgent) {
+      throw new InternalServerErrorException(
+        'MELHOR_ENVIO_USER_AGENT não configurado',
+      );
+    }
+    let accessToken: string;
+    try {
+      accessToken = await this.garantirAccessToken();
+    } catch (erro) {
+      throw this.comCodigoSeguro(erro, CODIGO_ERRO_LOGISTICA_MELHOR_ENVIO);
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${caminho}`, {
+        method: metodo,
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': this.userAgent,
+        },
+        ...(corpo === undefined ? {} : { body: JSON.stringify(corpo) }),
+      });
+    } catch {
+      throw new MelhorEnvioIndisponivelError({
+        message: 'Não foi possível se comunicar com o Melhor Envio',
+        code: CODIGO_ERRO_LOGISTICA_MELHOR_ENVIO,
+      });
+    }
+
+    const dados: unknown = await response.json().catch(() => null);
+    return { ok: response.ok, status: response.status, corpo: dados };
+  }
+
+  // Registra só rota e status (nunca o corpo) e devolve o erro seguro.
+  private falha(
+    rota: string,
+    status: number,
+    mensagem: string,
+  ): MelhorEnvioErroHttpError {
+    this.logger.error(`Melhor Envio recusou ${rota} -> ${status}`);
+    return this.erroLogistica(mensagem);
+  }
+
+  // Erro com mensagem segura, que o frontend pode mostrar ao ADMIN.
+  private erroLogistica(mensagem: string): MelhorEnvioErroHttpError {
+    return new MelhorEnvioErroHttpError({
+      message: mensagem,
+      code: CODIGO_ERRO_LOGISTICA_MELHOR_ENVIO,
+    });
+  }
+
+  private paraSituacao(dados: unknown): MelhorEnvioSituacao {
+    const envio = (dados ?? {}) as Record<string, unknown>;
+    const texto = (valor: unknown) =>
+      typeof valor === 'string' && valor ? valor : null;
+    const status = texto(envio.status) ?? 'desconhecido';
+    const pagoEm = this.paraData(envio.paid_at);
+    const geradoEm = this.paraData(envio.generated_at);
+    const postadoEm = this.paraData(envio.posted_at);
+    return {
+      status,
+      pago: pagoEm !== null || STATUS_PAGOS.includes(status),
+      gerado: geradoEm !== null || STATUS_GERADOS.includes(status),
+      postado: postadoEm !== null || STATUS_POSTADOS.includes(status),
+      pagoEm,
+      geradoEm,
+      postadoEm,
+      codigoDevolucao: texto(envio.authorization_code),
+      codigoRastreio: texto(envio.tracking),
+    };
+  }
+
+  // O Melhor Envio devolve "AAAA-MM-DD HH:MM:SS" sem fuso — horário de
+  // Brasília (-03:00).
+  private paraData(valor: unknown): Date | null {
+    if (typeof valor !== 'string' || !valor) {
+      return null;
+    }
+    const data = new Date(`${valor.replace(' ', 'T')}-03:00`);
+    return Number.isNaN(data.getTime()) ? null : data;
   }
 }

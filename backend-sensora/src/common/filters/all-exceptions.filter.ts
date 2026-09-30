@@ -10,7 +10,7 @@ import { Request, Response } from 'express';
 
 interface HttpExceptionResponseObject {
   message: string | string[];
-  // Contrato explícito e opcional (ver MelhorEnvioService.comCodigoDeFrete e
+  // Contrato explícito e opcional (ver MelhorEnvioService.comCodigoSeguro e
   // frontend-sensora/lib/errors.ts) — presente só quando a exceção original
   // marcou deliberadamente sua mensagem como segura para exibição, mesmo com
   // status >= 500. Nunca inventado aqui: só repassado quando a própria

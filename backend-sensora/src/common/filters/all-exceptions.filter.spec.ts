@@ -3,7 +3,7 @@ import { AllExceptionsFilter } from './all-exceptions.filter';
 
 // Achado da auditoria (Etapa 6.5, Frete) — cobre especificamente o que
 // mudou neste filtro: repassar `code` (quando a própria exceção já o
-// incluiu na resposta, ver MelhorEnvioService.comCodigoDeFrete) sem alterar
+// incluiu na resposta, ver MelhorEnvioService.comCodigoSeguro) sem alterar
 // o comportamento pré-existente (mensagem/status de HttpException comuns,
 // e o 500 genérico para exceções não-HTTP nunca ganham `code`).
 describe('AllExceptionsFilter', () => {

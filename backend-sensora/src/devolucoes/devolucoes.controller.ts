@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -28,6 +29,7 @@ import { CreateDevolucaoDto } from './dto/create-devolucao.dto';
 import {
   Devolucao,
   DevolucoesDoPedido,
+  DocumentoEnvioDevolucao,
   EvidenciaDevolucao,
 } from './entities/devolucao.entity';
 
@@ -66,6 +68,20 @@ export class DevolucoesController {
     @CurrentUser() user: UsuarioAutenticado,
   ): Promise<Devolucao> {
     return this.devolucoesService.buscar(id, devolucaoId, user);
+  }
+
+  // Etapa 8 — recurso secundário: documento do envio da devolução (o fluxo
+  // principal é o código de devolução, que já vem na resposta da devolução).
+  // URL gerada agora e nunca guardada (nem em cache). Só o dono da
+  // devolução; de outra pessoa: 404.
+  @Get('meus/:id/devolucoes/:devolucaoId/documento')
+  @Header('Cache-Control', 'no-store')
+  documento(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('devolucaoId', ParseIntPipe) devolucaoId: number,
+    @CurrentUser() user: UsuarioAutenticado,
+  ): Promise<DocumentoEnvioDevolucao> {
+    return this.devolucoesService.documentoParaCliente(id, devolucaoId, user);
   }
 
   // Uma foto por requisição, no campo "foto" (multipart). O limite de 5 MB

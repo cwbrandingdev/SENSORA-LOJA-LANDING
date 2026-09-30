@@ -5,16 +5,23 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import type {
-  Devolucao as DevolucaoPrisma,
-  EvidenciaDevolucao as EvidenciaDevolucaoPrisma,
-  ItemDevolucao as ItemDevolucaoPrisma,
+import {
   Prisma,
+  type Devolucao as DevolucaoPrisma,
+  type EnvioDevolucao as EnvioDevolucaoPrisma,
+  type EvidenciaDevolucao as EvidenciaDevolucaoPrisma,
+  type ItemDevolucao as ItemDevolucaoPrisma,
 } from '../../generated/prisma/client';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { escaparHtml } from '../common/utils/html.util';
 import { ImagekitService } from '../imagekit/imagekit.service';
 import { MailService } from '../mail/mail.service';
+import {
+  MelhorEnvioService,
+  type MelhorEnvioOpcao,
+  type MelhorEnvioRemetente,
+  type MelhorEnvioReversaInput,
+} from '../melhor-envio/melhor-envio.service';
 import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,6 +31,7 @@ import {
   DevolucaoAnalise,
   DevolucaoResumoAdmin,
   DevolucoesDoPedido,
+  DocumentoEnvioDevolucao,
   EvidenciaDevolucao,
 } from './entities/devolucao.entity';
 import { StatusDevolucao } from './enums/status-devolucao.enum';
@@ -45,6 +53,26 @@ const STATUS_QUE_NAO_CONTAM = [
 export const MAXIMO_EVIDENCIAS = 5;
 export const TAMANHO_MAXIMO_EVIDENCIA = 5 * 1024 * 1024; // 5 MB
 const VALIDADE_URL_EVIDENCIA_SEGUNDOS = 10 * 60;
+
+// Etapa 8 — o que a logística reversa precisa ler da devolução: endereço do
+// pedido, CPF/telefone atuais do cliente, itens com o nome do produto e o
+// envio já criado (se houver).
+const INCLUDE_LOGISTICA = {
+  pedido: true,
+  usuario: {
+    select: { nome: true, email: true, cpf: true, telefone: true },
+  },
+  itens: {
+    include: {
+      itemPedido: { select: { produto: { select: { nome: true } } } },
+    },
+  },
+  envio: true,
+} satisfies Prisma.DevolucaoInclude;
+
+type DevolucaoLogistica = Prisma.DevolucaoGetPayload<{
+  include: typeof INCLUDE_LOGISTICA;
+}>;
 
 // Arquivo recebido pelo FileInterceptor (multer, em memória). Só os campos
 // usados aqui — nome e tipo informados pelo navegador são ignorados.
@@ -79,6 +107,7 @@ export class DevolucoesService {
     private readonly prisma: PrismaService,
     private readonly imagekitService: ImagekitService,
     private readonly mailService: MailService,
+    private readonly melhorEnvioService: MelhorEnvioService,
   ) {}
 
   // Cliente solicita a devolução de itens de um pedido já enviado. Tudo que
@@ -206,7 +235,11 @@ export class DevolucoesService {
       // usuarioId: defesa extra, além do dono do pedido conferido acima.
       where: { pedidoId, usuarioId: user.id },
       orderBy: [{ solicitadaEm: 'desc' }, { id: 'desc' }],
-      include: { itens: true, evidencias: { orderBy: { id: 'asc' } } },
+      include: {
+        itens: true,
+        evidencias: { orderBy: { id: 'asc' } },
+        envio: true,
+      },
     });
 
     const jaDevolvido = await this.quantidadesJaDevolvidas(
@@ -235,7 +268,11 @@ export class DevolucoesService {
   ): Promise<Devolucao> {
     const devolucao = await this.prisma.devolucao.findUnique({
       where: { id: devolucaoId },
-      include: { itens: true, evidencias: { orderBy: { id: 'asc' } } },
+      include: {
+        itens: true,
+        evidencias: { orderBy: { id: 'asc' } },
+        envio: true,
+      },
     });
     return this.paraDevolucao(
       this.devolucaoDoCliente(devolucao, pedidoId, user),
@@ -400,13 +437,14 @@ export class DevolucoesService {
           },
         },
         evidencias: { orderBy: { id: 'asc' } },
+        envio: true,
       },
     });
     if (!devolucao) {
       throw new NotFoundException('Devolução não encontrada');
     }
 
-    const { pedido } = devolucao;
+    const { pedido, envio } = devolucao;
     return {
       id: devolucao.id,
       status: devolucao.status as StatusDevolucao,
@@ -416,6 +454,7 @@ export class DevolucoesService {
       analisadaEm: devolucao.analisadaEm,
       observacaoAnalise: devolucao.observacaoAnalise,
       analisadoPorNome: devolucao.analisadoPor?.nome ?? null,
+      recebidaEm: devolucao.recebidaEm,
       pedido: {
         id: pedido.id,
         numero: pedido.numero,
@@ -440,6 +479,21 @@ export class DevolucoesService {
       evidencias: devolucao.evidencias.map((evidencia) =>
         this.paraEvidencia(evidencia),
       ),
+      envio: envio
+        ? {
+            servicoId: envio.servicoId,
+            transportadora: envio.transportadora,
+            servico: envio.servico,
+            custo: Number(envio.custo),
+            compradaEm: envio.compradaEm,
+            geradaEm: envio.geradaEm,
+            codigoDevolucao: envio.codigoDevolucao,
+            codigoRastreio: envio.codigoRastreio,
+            postadaEm: envio.postadaEm,
+            situacaoRastreio: envio.situacaoRastreio,
+            rastreioAtualizadoEm: envio.rastreioAtualizadoEm,
+          }
+        : null,
     };
   }
 
@@ -595,6 +649,476 @@ export class DevolucoesService {
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Etapa 8 — logística reversa. Só ADMIN inicia: o envio é pago com o
+  // saldo da carteira do Melhor Envio. O cliente não usa etiqueta: apresenta
+  // nos Correios o código de devolução. Fluxo: APROVADA -> (envio gerado)
+  // AGUARDANDO_ENVIO -> (consulta mostra postagem) ENVIADA -> (ADMIN
+  // confirma) RECEBIDA.
+  // ---------------------------------------------------------------------
+
+  // Opções de frete do cliente para a loja, para o ADMIN escolher.
+  async cotarFreteDevolucao(devolucaoId: number): Promise<MelhorEnvioOpcao[]> {
+    const devolucao = await this.carregarParaLogistica(devolucaoId);
+    this.garantirAprovada(devolucao);
+    const carga = this.cargaDaDevolucao(devolucao);
+    return this.melhorEnvioService.cotarReversa(
+      this.remetenteDaDevolucao(devolucao).cep,
+      carga.pacote,
+      carga.valorDeclarado,
+    );
+  }
+
+  // Gera (ou retoma) a logística reversa. Cada passo concluído fica gravado
+  // em EnvioDevolucao e nunca é repetido: criar a reversa (idExterno) ->
+  // comprar (compradaEm) -> gerar (geradaEm, libera o código de devolução).
+  // Antes de comprar ou gerar, pergunta ao Melhor Envio o que já foi feito —
+  // uma tentativa anterior pode ter caído depois da chamada e antes de gravar.
+  //
+  // `custoConfirmado` é o valor que o ADMIN viu e aceitou: a compra nunca
+  // debita mais do que isso. Se o preço do envio criado no Melhor Envio for
+  // maior, nada é cobrado e o ADMIN confirma o novo valor.
+  //
+  // Dois ADMINs ao mesmo tempo: o @unique de devolucaoId deixa só um criar o
+  // envio (o outro continua o mesmo), cada passo grava com updateMany
+  // condicionado a "ainda não feito", e o Melhor Envio recusa pagar o mesmo
+  // envio duas vezes (tratado como sucesso em comprarEnvio).
+  async gerarLogistica(
+    devolucaoId: number,
+    servicoId: number,
+    custoConfirmado: number,
+  ): Promise<DevolucaoAnalise> {
+    const devolucao = await this.carregarParaLogistica(devolucaoId);
+    this.garantirAprovada(devolucao);
+    if (devolucao.envio && devolucao.envio.servicoId !== servicoId) {
+      throw new ConflictException(
+        `Já existe uma logística em andamento com ${devolucao.envio.transportadora} ${devolucao.envio.servico}; continue com esse serviço.`,
+      );
+    }
+
+    // Tudo validado antes da primeira chamada ao Melhor Envio.
+    const remetente = this.remetenteDaDevolucao(devolucao);
+    // 409 (não 500) para a lista do que falta chegar à tela do ADMIN.
+    const faltandoLoja = this.melhorEnvioService.dadosLojaFaltando;
+    if (faltandoLoja.length > 0) {
+      throw new ConflictException(
+        `Dados da loja incompletos para gerar a logística reversa: defina ${faltandoLoja.join(', ')}.`,
+      );
+    }
+    const carga = this.cargaDaDevolucao(devolucao);
+
+    let envio =
+      devolucao.envio ??
+      (await this.criarEnvio(devolucaoId, servicoId, remetente.cep, carga));
+
+    if (!envio.idExterno) {
+      const criado = await this.melhorEnvioService.criarReversa({
+        servicoId: envio.servicoId,
+        remetente,
+        ...carga,
+      });
+      // Gravado logo em seguida: uma nova tentativa continua deste id.
+      const gravado = await this.prisma.envioDevolucao.updateMany({
+        where: { id: envio.id, idExterno: null },
+        data: {
+          idExterno: criado.id,
+          ...(criado.preco !== null ? { custo: criado.preco } : {}),
+        },
+      });
+      if (gravado.count === 0) {
+        // Outro ADMIN gravou a reversa dele primeiro. Esta fica no carrinho
+        // do Melhor Envio sem ser paga (sem cobrança).
+        this.logger.warn(
+          `Reversa ${criado.id} ficou sem uso no carrinho do Melhor Envio (devolução ${devolucaoId}).`,
+        );
+      }
+      envio = await this.buscarEnvio(envio.id);
+    }
+    const idExterno = envio.idExterno!;
+
+    if (!envio.compradaEm || !envio.geradaEm) {
+      let situacao = await this.melhorEnvioService.consultarEnvio(idExterno);
+
+      if (!envio.compradaEm) {
+        if (!situacao.pago) {
+          this.garantirCustoConfirmado(Number(envio.custo), custoConfirmado);
+          await this.melhorEnvioService.comprarEnvio(idExterno);
+          // Só conta como comprado com o pagamento confirmado pelo Melhor
+          // Envio. Sem confirmação, compradaEm fica nulo e a próxima
+          // tentativa consulta de novo antes de comprar (o Melhor Envio não
+          // cobra o mesmo envio duas vezes).
+          situacao = await this.melhorEnvioService.consultarEnvio(idExterno);
+          if (!situacao.pago) {
+            throw new ConflictException(
+              'O Melhor Envio ainda não confirmou o pagamento do envio. Tente novamente em instantes: a nova tentativa confere o pagamento antes de comprar de novo.',
+            );
+          }
+        }
+        await this.prisma.envioDevolucao.updateMany({
+          where: { id: envio.id, compradaEm: null },
+          data: { compradaEm: situacao.pagoEm ?? new Date() },
+        });
+      }
+
+      if (!envio.geradaEm) {
+        if (!situacao.gerado) {
+          await this.melhorEnvioService.gerarEnvio(idExterno);
+          // Relê para pegar o código de devolução e o rastreio.
+          situacao = await this.melhorEnvioService.consultarEnvio(idExterno);
+        }
+        await this.prisma.envioDevolucao.updateMany({
+          where: { id: envio.id, geradaEm: null },
+          data: {
+            geradaEm: situacao.geradoEm ?? new Date(),
+            codigoDevolucao: situacao.codigoDevolucao,
+            codigoRastreio: situacao.codigoRastreio,
+          },
+        });
+      }
+    }
+
+    // Só quem fizer a transição avisa o cliente (uma vez).
+    const transicao = await this.prisma.devolucao.updateMany({
+      where: { id: devolucaoId, status: StatusDevolucao.APROVADA },
+      data: { status: StatusDevolucao.AGUARDANDO_ENVIO },
+    });
+    if (transicao.count === 1) {
+      await this.avisarClienteCodigoDisponivel(devolucaoId);
+    }
+
+    return this.buscarParaAnalise(devolucaoId);
+  }
+
+  // Recurso secundário: URL do documento do envio para o ADMIN, gerada
+  // agora (nunca guardada).
+  async documentoParaAdmin(
+    devolucaoId: number,
+  ): Promise<DocumentoEnvioDevolucao> {
+    const devolucao = await this.prisma.devolucao.findUnique({
+      where: { id: devolucaoId },
+      include: { envio: true },
+    });
+    if (!devolucao) {
+      throw new NotFoundException('Devolução não encontrada');
+    }
+    return this.urlDoDocumento(devolucao.envio);
+  }
+
+  // Recurso secundário: URL do documento do envio para o cliente dono da
+  // devolução, só enquanto ele precisa postar (AGUARDANDO_ENVIO). Gerada
+  // agora, nunca guardada.
+  async documentoParaCliente(
+    pedidoId: number,
+    devolucaoId: number,
+    user: UsuarioAutenticado,
+  ): Promise<DocumentoEnvioDevolucao> {
+    const devolucao = await this.prisma.devolucao.findUnique({
+      where: { id: devolucaoId },
+      include: { envio: true },
+    });
+    const daCliente = this.devolucaoDoCliente(devolucao, pedidoId, user);
+    if (
+      (daCliente.status as StatusDevolucao) !== StatusDevolucao.AGUARDANDO_ENVIO
+    ) {
+      throw new ConflictException(
+        'O documento do envio não está disponível para esta devolução.',
+      );
+    }
+    return this.urlDoDocumento(daCliente.envio);
+  }
+
+  // Consulta o envio, guarda a última situação (e o código de devolução ou o
+  // rastreio, se só agora ficaram disponíveis) e, se o pacote já foi
+  // postado, move AGUARDANDO_ENVIO -> ENVIADA (condicionado ao status, como
+  // na Etapa 7: com duas consultas simultâneas, só uma muda).
+  async atualizarRastreio(devolucaoId: number): Promise<DevolucaoAnalise> {
+    const devolucao = await this.prisma.devolucao.findUnique({
+      where: { id: devolucaoId },
+      include: { envio: true },
+    });
+    if (!devolucao) {
+      throw new NotFoundException('Devolução não encontrada');
+    }
+    const envio = devolucao.envio;
+    if (!envio?.geradaEm || !envio.idExterno) {
+      throw new ConflictException(
+        'Esta devolução ainda não tem a logística reversa gerada.',
+      );
+    }
+
+    const situacao = await this.melhorEnvioService.consultarEnvio(
+      envio.idExterno,
+    );
+    await this.prisma.envioDevolucao.update({
+      where: { id: envio.id },
+      data: {
+        situacaoRastreio: situacao.status,
+        codigoDevolucao: situacao.codigoDevolucao ?? envio.codigoDevolucao,
+        codigoRastreio: situacao.codigoRastreio ?? envio.codigoRastreio,
+        postadaEm: situacao.postadoEm ?? envio.postadaEm,
+        rastreioAtualizadoEm: new Date(),
+      },
+    });
+
+    if (situacao.postado) {
+      await this.prisma.devolucao.updateMany({
+        where: { id: devolucaoId, status: StatusDevolucao.AGUARDANDO_ENVIO },
+        data: { status: StatusDevolucao.ENVIADA },
+      });
+    }
+
+    return this.buscarParaAnalise(devolucaoId);
+  }
+
+  // O ADMIN confirma que o produto chegou: só ENVIADA -> RECEBIDA, numa
+  // única atualização condicionada ao status atual.
+  async confirmarRecebimento(devolucaoId: number): Promise<DevolucaoAnalise> {
+    const resultado = await this.prisma.devolucao.updateMany({
+      where: { id: devolucaoId, status: StatusDevolucao.ENVIADA },
+      data: { status: StatusDevolucao.RECEBIDA, recebidaEm: new Date() },
+    });
+
+    if (resultado.count === 0) {
+      const atual = await this.prisma.devolucao.findUnique({
+        where: { id: devolucaoId },
+      });
+      if (!atual) {
+        throw new NotFoundException('Devolução não encontrada');
+      }
+      throw new ConflictException(
+        `Devolução com status ${atual.status} não pode ser marcada como recebida.`,
+      );
+    }
+
+    return this.buscarParaAnalise(devolucaoId);
+  }
+
+  private async carregarParaLogistica(
+    devolucaoId: number,
+  ): Promise<DevolucaoLogistica> {
+    const devolucao = await this.prisma.devolucao.findUnique({
+      where: { id: devolucaoId },
+      include: INCLUDE_LOGISTICA,
+    });
+    if (!devolucao) {
+      throw new NotFoundException('Devolução não encontrada');
+    }
+    return devolucao;
+  }
+
+  private garantirAprovada(devolucao: DevolucaoLogistica): void {
+    if ((devolucao.status as StatusDevolucao) === StatusDevolucao.APROVADA) {
+      return;
+    }
+    throw new ConflictException(
+      devolucao.envio?.geradaEm
+        ? 'A logística reversa desta devolução já foi gerada.'
+        : `Devolução com status ${devolucao.status} não pode ter logística reversa gerada.`,
+    );
+  }
+
+  // Remetente da reversa: o cliente, com o endereço de entrega do pedido e
+  // o CPF/telefone atuais da conta. Nada é inventado: falta algo, bloqueia.
+  private remetenteDaDevolucao(
+    devolucao: DevolucaoLogistica,
+  ): MelhorEnvioRemetente {
+    const { usuario, pedido } = devolucao;
+    if (!usuario) {
+      throw new ConflictException(
+        'A conta do cliente desta devolução não existe mais; não é possível gerar a logística reversa.',
+      );
+    }
+    if (!usuario.cpf) {
+      throw new ConflictException(
+        'O cliente não tem CPF cadastrado. Peça para ele completar em Minha Conta > Dados pessoais antes de gerar a logística reversa.',
+      );
+    }
+    if (!usuario.telefone) {
+      throw new ConflictException(
+        'O cliente não tem telefone cadastrado. Peça para ele completar em Minha Conta > Dados pessoais antes de gerar a logística reversa.',
+      );
+    }
+    if (
+      !pedido.enderecoCep ||
+      !pedido.enderecoRua ||
+      !pedido.enderecoNumero ||
+      !pedido.enderecoBairro ||
+      !pedido.enderecoCidade ||
+      !pedido.enderecoEstado
+    ) {
+      throw new ConflictException(
+        'O pedido desta devolução não tem o endereço de entrega completo registrado.',
+      );
+    }
+    return {
+      nome: usuario.nome,
+      cpf: usuario.cpf,
+      telefone: usuario.telefone,
+      email: usuario.email,
+      rua: pedido.enderecoRua,
+      numero: pedido.enderecoNumero,
+      complemento: pedido.enderecoComplemento,
+      bairro: pedido.enderecoBairro,
+      cidade: pedido.enderecoCidade,
+      uf: pedido.enderecoEstado,
+      cep: pedido.enderecoCep,
+    };
+  }
+
+  // Itens, pacote e valor declarado da reversa, a partir dos itens devolvidos.
+  private cargaDaDevolucao(
+    devolucao: DevolucaoLogistica,
+  ): Omit<MelhorEnvioReversaInput, 'servicoId' | 'remetente'> {
+    const itens = devolucao.itens.map((item) => ({
+      nome: item.itemPedido.produto.nome,
+      quantidade: item.quantidade,
+      valorUnitario: Number(item.precoUnitario),
+    }));
+    const quantidade = itens.reduce((soma, item) => soma + item.quantidade, 0);
+    const valorDeclarado = itens.reduce(
+      (soma, item) => soma + item.quantidade * item.valorUnitario,
+      0,
+    );
+    return {
+      itens,
+      pacote: this.melhorEnvioService.pacoteParaQuantidade(quantidade),
+      valorDeclarado: Math.round(valorDeclarado * 100) / 100,
+    };
+  }
+
+  // Cria o EnvioDevolucao com o serviço escolhido, conferido numa cotação
+  // nova (nunca preço/nome vindos do navegador). Se outro ADMIN criou ao
+  // mesmo tempo, o @unique recusa este e o dele é usado.
+  private async criarEnvio(
+    devolucaoId: number,
+    servicoId: number,
+    cepCliente: string,
+    carga: Omit<MelhorEnvioReversaInput, 'servicoId' | 'remetente'>,
+  ): Promise<EnvioDevolucaoPrisma> {
+    const opcoes = await this.melhorEnvioService.cotarReversa(
+      cepCliente,
+      carga.pacote,
+      carga.valorDeclarado,
+    );
+    const opcao = opcoes.find((item) => item.id === servicoId);
+    if (!opcao) {
+      throw new BadRequestException(
+        'Serviço de frete indisponível para esta devolução. Atualize as opções e escolha outro.',
+      );
+    }
+
+    try {
+      return await this.prisma.envioDevolucao.create({
+        data: {
+          devolucaoId,
+          servicoId: opcao.id,
+          transportadora: opcao.transportadora,
+          servico: opcao.servico,
+          custo: opcao.preco,
+        },
+      });
+    } catch (erro) {
+      if (
+        erro instanceof Prisma.PrismaClientKnownRequestError &&
+        erro.code === 'P2002'
+      ) {
+        const existente = await this.prisma.envioDevolucao.findUnique({
+          where: { devolucaoId },
+        });
+        if (existente && existente.servicoId === servicoId) {
+          return existente;
+        }
+        throw new ConflictException(
+          'Outro administrador já iniciou a logística desta devolução com outro serviço.',
+        );
+      }
+      throw erro;
+    }
+  }
+
+  private async buscarEnvio(id: number): Promise<EnvioDevolucaoPrisma> {
+    const envio = await this.prisma.envioDevolucao.findUnique({
+      where: { id },
+    });
+    return envio!;
+  }
+
+  // A compra nunca debita mais do que o ADMIN confirmou (1 centavo de
+  // tolerância para arredondamento). Nada foi cobrado quando isto lança.
+  private garantirCustoConfirmado(custo: number, confirmado: number): void {
+    if (custo <= confirmado + 0.01) {
+      return;
+    }
+    const real = (valor: number) => `R$ ${valor.toFixed(2).replace('.', ',')}`;
+    throw new ConflictException(
+      `O custo do envio informado pelo Melhor Envio é ${real(custo)}, maior que o confirmado (${real(confirmado)}). Nada foi cobrado; confirme o novo valor para continuar.`,
+    );
+  }
+
+  private async urlDoDocumento(
+    envio: EnvioDevolucaoPrisma | null,
+  ): Promise<DocumentoEnvioDevolucao> {
+    if (!envio?.geradaEm || !envio.idExterno) {
+      throw new ConflictException(
+        'Esta devolução ainda não tem a logística reversa gerada.',
+      );
+    }
+    return {
+      url: await this.melhorEnvioService.urlImpressao(envio.idExterno),
+    };
+  }
+
+  // E-mail ao cliente quando a logística reversa fica pronta. Não leva o
+  // código de devolução nem nenhuma URL: só avisa que as instruções e o
+  // código estão na conta. Nunca lança.
+  private async avisarClienteCodigoDisponivel(
+    devolucaoId: number,
+  ): Promise<void> {
+    try {
+      const devolucao = await this.prisma.devolucao.findUnique({
+        where: { id: devolucaoId },
+        include: {
+          usuario: { select: { nome: true, email: true } },
+          pedido: {
+            select: { numero: true, clienteNome: true, clienteEmail: true },
+          },
+        },
+      });
+      if (!devolucao) {
+        return;
+      }
+
+      const destinatario =
+        devolucao.usuario?.email ?? devolucao.pedido.clienteEmail;
+      if (!destinatario) {
+        this.logger.warn(
+          `Devolução ${devolucaoId} sem e-mail de cliente — aviso do código de devolução não enviado.`,
+        );
+        return;
+      }
+
+      const nome = escaparHtml(
+        devolucao.usuario?.nome ?? devolucao.pedido.clienteNome ?? 'cliente',
+      );
+      const numero = escaparHtml(devolucao.pedido.numero);
+
+      await this.mailService.enviarEmail({
+        to: destinatario,
+        subject: `Código de devolução disponível — pedido ${devolucao.pedido.numero}`,
+        html:
+          `<p>Olá, ${nome}.</p>` +
+          `<p>Sua devolução do pedido ${numero} foi aprovada e o envio de volta já está pago pela loja.</p>` +
+          `<p>Acesse Minha Conta &gt; Meus pedidos &gt; pedido ${numero} para ver o código de devolução e as instruções. Não é preciso imprimir etiqueta: basta apresentar o código em uma agência dos Correios.</p>` +
+          '<p>Se tiver dúvidas, é só responder este e-mail.</p>',
+      });
+    } catch (erro) {
+      this.logger.error(
+        `Falha ao avisar o cliente sobre o código da devolução ${devolucaoId}.`,
+        erro instanceof Error ? erro.stack : String(erro),
+      );
+    }
+  }
+
   // Regra única do saldo (usada por `criar` e `listarDoPedido`): quanto de
   // cada ItemPedido já está em devoluções que consomem saldo — todas, menos
   // RECUSADA e CANCELADA. Recebe o client para rodar dentro da transação
@@ -676,8 +1200,11 @@ export class DevolucoesService {
     devolucao: DevolucaoPrisma & {
       itens: ItemDevolucaoPrisma[];
       evidencias?: EvidenciaDevolucaoPrisma[];
+      envio?: EnvioDevolucaoPrisma | null;
     },
   ): Devolucao {
+    // O cliente só vê o envio depois de a logística reversa estar gerada.
+    const envio = devolucao.envio?.geradaEm ? devolucao.envio : null;
     return {
       id: devolucao.id,
       pedidoId: devolucao.pedidoId,
@@ -695,6 +1222,15 @@ export class DevolucoesService {
       evidencias: (devolucao.evidencias ?? []).map((evidencia) =>
         this.paraEvidencia(evidencia),
       ),
+      envio: envio
+        ? {
+            transportadora: envio.transportadora,
+            servico: envio.servico,
+            codigoDevolucao: envio.codigoDevolucao,
+            codigoRastreio: envio.codigoRastreio,
+            postadaEm: envio.postadaEm,
+          }
+        : null,
     };
   }
 }

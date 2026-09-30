@@ -1,8 +1,9 @@
 import { Reflector } from '@nestjs/core';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ADMIN_ONLY_ROLES, STAFF_ROLES } from '../common/constants/roles.constants';
+import { ADMIN_ONLY_ROLES } from '../common/constants/roles.constants';
 import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
 import { MelhorEnvioController } from './melhor-envio.controller';
 import { MelhorEnvioService } from './melhor-envio.service';
 
@@ -10,8 +11,8 @@ import { MelhorEnvioService } from './melhor-envio.service';
 // controller. Prova duas coisas: (1) `status`/`verificar` são thin wrappers
 // sobre MelhorEnvioService (nunca reimplementam a lógica), e (2) `status`
 // passou de STAFF_ROLES para ADMIN_ONLY_ROLES (mudança pedida pela
-// vistoria), enquanto `conectar`/`callback` continuam exatamente como
-// estavam — mesmo padrão de verificação por metadata de
+// vistoria) — e `conectar` também, na Etapa 8 —, enquanto `callback`
+// continua exatamente como estava — mesmo padrão de verificação por metadata de
 // asaas.controller.spec.ts/imagekit.controller.spec.ts.
 describe('MelhorEnvioController (Central de Integrações)', () => {
   it('status delega para MelhorEnvioService.obterStatusConexao() sem transformar o resultado', async () => {
@@ -89,12 +90,29 @@ describe('MelhorEnvioController (Central de Integrações)', () => {
     expect(roles).toEqual(ADMIN_ONLY_ROLES);
   });
 
-  it('conectar continua STAFF_ROLES — intocado por esta vistoria', () => {
+  it('conectar é ADMIN_ONLY_ROLES (Etapa 8): VENDEDOR não conecta/reconecta a conta', () => {
     const roles = Reflect.getMetadata(
       ROLES_KEY,
       MelhorEnvioController.prototype.conectar,
     ) as unknown[];
-    expect(roles).toEqual(STAFF_ROLES);
+    expect(roles).toEqual(ADMIN_ONLY_ROLES);
+    expect(roles).not.toContain(PerfilUsuario.VENDEDOR);
+  });
+
+  it('RolesGuard (real): VENDEDOR autenticado é negado em conectar', () => {
+    const guard = new RolesGuard(new Reflector());
+    const { conectar } = Object.getOwnPropertyDescriptors(
+      MelhorEnvioController.prototype,
+    );
+    const context = {
+      getHandler: () => conectar.value as object,
+      getClass: () => MelhorEnvioController,
+      switchToHttp: () => ({
+        getRequest: () => ({ user: { id: 1, perfil: 'VENDEDOR' } }),
+      }),
+    } as never;
+
+    expect(() => guard.canActivate(context)).toThrow();
   });
 
   it('callback continua sem JwtAuthGuard/RolesGuard — intocado por esta vistoria', () => {

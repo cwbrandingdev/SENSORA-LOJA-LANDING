@@ -7,6 +7,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AsaasService } from '../asaas/asaas.service';
 import { ImagekitService } from '../imagekit/imagekit.service';
 import { MailService } from '../mail/mail.service';
+import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
 import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { PrismaService } from '../prisma/prisma.service';
@@ -210,6 +211,7 @@ describe('DevolucoesService — análise pelo ADMIN (Etapa 7)', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: ImagekitService, useValue: imagekit },
         { provide: MailService, useValue: mail },
+        { provide: MelhorEnvioService, useValue: {} },
         { provide: AsaasService, useValue: asaas },
         { provide: ProdutosService, useValue: produtos },
       ],

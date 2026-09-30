@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -17,14 +18,17 @@ import { ADMIN_ONLY_ROLES } from '../common/constants/roles.constants';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import type { MelhorEnvioOpcao } from '../melhor-envio/melhor-envio.service';
 import { DevolucoesService } from './devolucoes.service';
 import {
   AprovarDevolucaoDto,
   RecusarDevolucaoDto,
 } from './dto/analisar-devolucao.dto';
+import { GerarLogisticaDto } from './dto/gerar-logistica.dto';
 import {
   DevolucaoAnalise,
   DevolucaoResumoAdmin,
+  DocumentoEnvioDevolucao,
 } from './entities/devolucao.entity';
 import { StatusDevolucao } from './enums/status-devolucao.enum';
 
@@ -71,5 +75,58 @@ export class DevolucoesAdminController {
     @CurrentUser() user: UsuarioAutenticado,
   ): Promise<DevolucaoAnalise> {
     return this.devolucoesService.recusar(id, user.id, dto.observacao);
+  }
+
+  // Etapa 8 — logística reversa. Tudo só ADMIN (herdado da classe): o envio
+  // é pago com o saldo da carteira do Melhor Envio.
+
+  // Opções de frete do cliente para a loja (só PAC/SEDEX, os aceitos pela
+  // reversa do Melhor Envio).
+  @Get(':id/frete-devolucao')
+  cotarFrete(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<MelhorEnvioOpcao[]> {
+    return this.devolucoesService.cotarFreteDevolucao(id);
+  }
+
+  // Gera ou retoma a logística reversa (código de devolução) com o serviço
+  // escolhido, sem nunca debitar mais do que o custo confirmado.
+  @Post(':id/logistica')
+  @HttpCode(HttpStatus.OK)
+  gerarLogistica(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: GerarLogisticaDto,
+  ): Promise<DevolucaoAnalise> {
+    return this.devolucoesService.gerarLogistica(
+      id,
+      dto.servicoId,
+      dto.custoConfirmado,
+    );
+  }
+
+  // Recurso secundário: documento do envio. URL gerada agora e nunca
+  // guardada (nem em cache).
+  @Get(':id/documento')
+  @Header('Cache-Control', 'no-store')
+  documento(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<DocumentoEnvioDevolucao> {
+    return this.devolucoesService.documentoParaAdmin(id);
+  }
+
+  @Post(':id/rastreio')
+  @HttpCode(HttpStatus.OK)
+  atualizarRastreio(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<DevolucaoAnalise> {
+    return this.devolucoesService.atualizarRastreio(id);
+  }
+
+  @Post(':id/recebida')
+  @HttpCode(HttpStatus.OK)
+  confirmarRecebimento(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<DevolucaoAnalise> {
+    return this.devolucoesService.confirmarRecebimento(id);
   }
 }

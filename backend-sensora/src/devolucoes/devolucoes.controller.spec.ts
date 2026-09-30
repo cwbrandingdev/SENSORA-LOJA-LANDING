@@ -94,6 +94,38 @@ describe('DevolucoesController — POST /pedidos/meus/:id/devolucoes', () => {
       ForbiddenException,
     );
   });
+
+  // Etapa 8 — a rota do documento herda o CLIENTE-only da classe (testado
+  // acima); o dono é conferido no service (404 para outra pessoa).
+  it('GET meus/:id/devolucoes/:devolucaoId/documento delega com os ids da URL e o usuário do token, sem cache', async () => {
+    const devolucoesService = {
+      documentoParaCliente: jest
+        .fn()
+        .mockResolvedValue({ url: 'https://melhorenvio.com.br/imprimir/x' }),
+    };
+    const controller = new DevolucoesController(
+      devolucoesService as unknown as DevolucoesService,
+    );
+
+    await expect(controller.documento(10, 5, cliente)).resolves.toEqual({
+      url: 'https://melhorenvio.com.br/imprimir/x',
+    });
+    expect(devolucoesService.documentoParaCliente).toHaveBeenCalledWith(
+      10,
+      5,
+      cliente,
+    );
+    const { documento } = Object.getOwnPropertyDescriptors(
+      DevolucoesController.prototype,
+    );
+    expect(
+      Reflect.getMetadata('__headers__', documento.value as object),
+    ).toEqual([{ name: 'Cache-Control', value: 'no-store' }]);
+    // Sem @Roles próprio: herda o CLIENTE-only da classe.
+    expect(
+      Reflect.getMetadata(ROLES_KEY, documento.value as object),
+    ).toBeUndefined();
+  });
 });
 
 // Upload das evidências pela camada HTTP de verdade (FileInterceptor/multer

@@ -7,6 +7,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { ImagekitService } from '../imagekit/imagekit.service';
 import { MailService } from '../mail/mail.service';
+import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
 import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { PrismaService } from '../prisma/prisma.service';
@@ -208,6 +209,7 @@ describe('DevolucoesService — criar (Etapa 3)', () => {
         // A criação não usa o ImageKit.
         { provide: ImagekitService, useValue: {} },
         { provide: MailService, useValue: {} },
+        { provide: MelhorEnvioService, useValue: {} },
       ],
     }).compile();
 
@@ -252,6 +254,7 @@ describe('DevolucoesService — criar (Etapa 3)', () => {
       analisadaEm: null,
       itens: [{ id: 1, itemPedidoId: 100, quantidade: 1, precoUnitario: 50 }],
       evidencias: [],
+      envio: null,
     });
     expect(devolucoesFake).toHaveLength(1);
     expect(devolucoesFake[0].usuarioId).toBe(CLIENTE.id);

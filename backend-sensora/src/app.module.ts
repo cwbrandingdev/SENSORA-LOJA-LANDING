@@ -87,6 +87,19 @@ import { UsuariosModule } from './usuarios/usuarios.module';
         MELHOR_ENVIO_PACOTE_LARGURA_CM: Joi.number().positive(),
         MELHOR_ENVIO_PACOTE_COMPRIMENTO_CM: Joi.number().positive(),
         MELHOR_ENVIO_PACOTE_PESO_GRAMAS: Joi.number().positive(),
+        // Etapa 8 — dados da loja, destinatária da logística reversa. Também
+        // opcionais no boot: a geração da logística reversa é bloqueada (com a lista
+        // do que falta) enquanto não estiverem todas definidas.
+        LOJA_NOME: Joi.string(),
+        LOJA_DOCUMENTO: Joi.string(),
+        LOJA_TELEFONE: Joi.string(),
+        LOJA_EMAIL: Joi.string(),
+        LOJA_RUA: Joi.string(),
+        LOJA_NUMERO: Joi.string(),
+        LOJA_COMPLEMENTO: Joi.string().allow(''),
+        LOJA_BAIRRO: Joi.string(),
+        LOJA_CIDADE: Joi.string(),
+        LOJA_UF: Joi.string().length(2),
       }),
     }),
     // CFG-01 (achado da auditoria) — throttler global leve, cobrindo por

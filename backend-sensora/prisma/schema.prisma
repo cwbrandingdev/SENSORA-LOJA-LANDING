@@ -291,6 +291,8 @@ model Devolucao {
   analisadaEm       DateTime?
   observacaoAnalise String?
   analisadoPorId    Int?
+  // Etapa 8 — quando o ADMIN confirmou que o produto chegou (ENVIADA -> RECEBIDA).
+  recebidaEm        DateTime?
   atualizadoEm      DateTime        @updatedAt
 
   pedido       Pedido               @relation(fields: [pedidoId], references: [id], onDelete: Restrict)
@@ -298,6 +300,7 @@ model Devolucao {
   analisadoPor Usuario?             @relation("DevolucaoAnalisadoPor", fields: [analisadoPorId], references: [id], onDelete: SetNull)
   itens        ItemDevolucao[]
   evidencias   EvidenciaDevolucao[]
+  envio        EnvioDevolucao?
 
   // pedidoId/usuarioId: devoluções de um pedido e "minhas devoluções" do
   // cliente. status/solicitadaEm: fila e ordenação da listagem do Admin.
@@ -328,6 +331,40 @@ model ItemDevolucao {
   // itemPedidoId: somar o que já foi devolvido de um item.
   @@unique([devolucaoId, itemPedidoId])
   @@index([itemPedidoId])
+}
+
+// Etapa 8 — logística reversa da devolução (envio pago pela loja). O cliente
+// não usa etiqueta: apresenta nos Correios o código de devolução. No máximo
+// um envio por devolução: o @unique em devolucaoId é o que impede duas
+// cobranças, mesmo com dois ADMINs ao mesmo tempo. Os passos já concluídos
+// ficam marcados (idExterno, compradaEm, geradaEm), e é por eles que uma
+// geração interrompida é retomada. Nenhuma URL de documento é guardada: é
+// pedida ao provedor a cada acesso.
+model EnvioDevolucao {
+  id                   Int       @id @default(autoincrement())
+  devolucaoId          Int       @unique
+  provedor             String    @default("MELHOR_ENVIO")
+  // Id do envio no provedor — gravado logo depois de criado.
+  idExterno            String?   @unique
+  servicoId            Int
+  transportadora       String
+  servico              String
+  custo                Decimal   @db.Decimal(10, 2)
+  compradaEm           DateTime?
+  geradaEm             DateTime?
+  // Código que o cliente apresenta nos Correios (liberado pela geração).
+  codigoDevolucao      String?
+  // Rastreio do objeto, quando o provedor informar.
+  codigoRastreio       String?
+  // Só a última situação conhecida do rastreio (o histórico fica no provedor).
+  postadaEm            DateTime?
+  situacaoRastreio     String?
+  rastreioAtualizadoEm DateTime?
+  criadoEm             DateTime  @default(now())
+  atualizadoEm         DateTime  @updatedAt
+
+  // Restrict: um envio pago nunca some junto com a devolução.
+  devolucao Devolucao @relation(fields: [devolucaoId], references: [id], onDelete: Restrict)
 }
 
 // Foto enviada pelo cliente como evidência da devolução. O arquivo fica

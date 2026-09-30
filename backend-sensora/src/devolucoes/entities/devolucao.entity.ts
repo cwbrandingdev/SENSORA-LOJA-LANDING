@@ -15,6 +15,40 @@ export class EvidenciaDevolucao {
   criadoEm: Date;
 }
 
+// Etapa 8 — o que o cliente vê da logística reversa (só depois de gerada).
+// codigoDevolucao: o que ele apresenta nos Correios (pode chegar um pouco
+// depois da geração); codigoRastreio: rastreio do objeto, quando houver.
+// Nunca o id do envio no provedor, o custo nem a situação crua do provedor.
+export class EnvioDevolucaoCliente {
+  transportadora: string;
+  servico: string;
+  codigoDevolucao: string | null;
+  codigoRastreio: string | null;
+  postadaEm: Date | null;
+}
+
+// Etapa 8 — o que o ADMIN vê da logística. compradaEm/geradaEm nulos
+// mostram em que passo uma geração interrompida parou.
+export class EnvioDevolucaoAdmin {
+  servicoId: number;
+  transportadora: string;
+  servico: string;
+  custo: number;
+  compradaEm: Date | null;
+  geradaEm: Date | null;
+  codigoDevolucao: string | null;
+  codigoRastreio: string | null;
+  postadaEm: Date | null;
+  situacaoRastreio: string | null;
+  rastreioAtualizadoEm: Date | null;
+}
+
+// Recurso secundário: URL do documento do envio gerada na hora (nunca
+// guardada). O fluxo principal da devolução é o código de devolução.
+export class DocumentoEnvioDevolucao {
+  url: string;
+}
+
 export class Devolucao {
   id: number;
   pedidoId: number;
@@ -27,6 +61,7 @@ export class Devolucao {
   analisadaEm: Date | null;
   itens: ItemDevolucao[];
   evidencias: EvidenciaDevolucao[];
+  envio: EnvioDevolucaoCliente | null;
 }
 
 // Resposta de GET /pedidos/meus/:id/devolucoes: o histórico do pedido e o
@@ -62,6 +97,7 @@ export class DevolucaoAnalise {
   analisadaEm: Date | null;
   observacaoAnalise: string | null;
   analisadoPorNome: string | null;
+  recebidaEm: Date | null;
   pedido: {
     id: number;
     numero: string;
@@ -81,4 +117,5 @@ export class DevolucaoAnalise {
     precoUnitario: number;
   }[];
   evidencias: EvidenciaDevolucao[];
+  envio: EnvioDevolucaoAdmin | null;
 }

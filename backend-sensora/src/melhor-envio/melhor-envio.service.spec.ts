@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MelhorEnvioTokenCryptoService } from './melhor-envio-token-crypto.service';
 import {
   CODIGO_ERRO_FRETE_MELHOR_ENVIO,
+  CODIGO_ERRO_LOGISTICA_MELHOR_ENVIO,
   MelhorEnvioErroHttpError,
   MelhorEnvioIndisponivelError,
   MelhorEnvioNaoConectadoError,
@@ -46,11 +47,22 @@ async function criarService(
   prisma: { melhorEnvioToken: Record<string, jest.Mock> };
   tokenCrypto: MelhorEnvioTokenCryptoService;
 }> {
+  // Etapa 8 — $transaction imita a trava FOR UPDATE da linha do token: uma
+  // transação só começa depois que a anterior terminou.
+  let fila: Promise<unknown> = Promise.resolve();
   const prisma = {
     melhorEnvioToken: {
       findUnique: jest.fn(),
       upsert: jest.fn(),
     },
+    $queryRaw: jest.fn(),
+    $transaction: jest.fn(
+      (fn: (tx: unknown) => Promise<unknown>): Promise<unknown> => {
+        const resultado: Promise<unknown> = fila.then(() => fn(prisma));
+        fila = resultado.catch(() => undefined);
+        return resultado;
+      },
+    ),
   };
 
   const module: TestingModule = await Test.createTestingModule({
@@ -587,6 +599,35 @@ describe('MelhorEnvioService — cotar (Etapa 6.5, Parte 3)', () => {
     ).rejects.toThrow(MelhorEnvioErroHttpError);
   });
 
+  it('cotação recusada: o log leva só rota e status, nunca o corpo da resposta (pode repetir o CEP do cliente)', async () => {
+    const { service, prisma, tokenCrypto } = await criarService();
+    prisma.melhorEnvioToken.findUnique.mockResolvedValue({
+      accessToken: tokenCrypto.encrypt('access-valido'),
+      refreshToken: tokenCrypto.encrypt('refresh-valido'),
+      expiresAt: new Date(Date.now() + 60 * 60_000),
+    });
+    const logs = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 422,
+      statusText: 'Unprocessable Entity',
+      text: () => Promise.resolve('{"message":"CEP 01310100 inválido"}'),
+    });
+
+    await expect(
+      service.cotar({
+        cepDestino: '01310-100',
+        pacote: PACOTE,
+        valorDeclarado: 100,
+      }),
+    ).rejects.toThrow('O Melhor Envio recusou a cotação');
+
+    const registrado = JSON.stringify(logs.mock.calls);
+    expect(registrado).toContain('POST /shipment/calculate -> 422');
+    expect(registrado).not.toContain('01310100');
+    expect(registrado).not.toContain('inválido');
+  });
+
   // Achado da auditoria (Etapa 6.5) — antes desta correção, o frontend
   // (lib/errors.ts) descartava QUALQUER mensagem de erro com status >= 500,
   // então esta mensagem segura ("O Melhor Envio recusou a cotação") nunca
@@ -1058,5 +1099,548 @@ describe('MelhorEnvioService — Central de Integrações (Admin)', () => {
         expect(tudo).not.toContain(segredo);
       }
     });
+  });
+});
+
+// Etapa 8 — logística reversa e renovação concorrente do token. `fetch`
+// mockado por rota; nenhuma chamada de rede real.
+describe('MelhorEnvioService — logística reversa (Etapa 8)', () => {
+  const CONFIG_REVERSA: Record<string, string> = {
+    ...CONFIG_VALORES,
+    MELHOR_ENVIO_PACOTE_PESO_GRAMAS: '300',
+    LOJA_NOME: 'Sensora Velas',
+    LOJA_DOCUMENTO: '12.345.678/0001-95',
+    LOJA_TELEFONE: '41988887777',
+    LOJA_EMAIL: 'loja@sensora.dev',
+    LOJA_RUA: 'Rua XV de Novembro',
+    LOJA_NUMERO: '100',
+    LOJA_BAIRRO: 'Centro',
+    LOJA_CIDADE: 'Curitiba',
+    LOJA_UF: 'PR',
+  };
+
+  const REMETENTE = {
+    nome: 'Cliente Sensora',
+    cpf: '52998224725',
+    telefone: '41999998888',
+    email: 'cliente@sensora.dev',
+    rua: 'Av. Paulista',
+    numero: '1000',
+    complemento: 'Ap 12',
+    bairro: 'Bela Vista',
+    cidade: 'São Paulo',
+    uf: 'SP',
+    cep: '01310-100',
+  };
+
+  const REVERSA = {
+    servicoId: 1,
+    remetente: REMETENTE,
+    itens: [{ nome: 'Vela Lavanda', quantidade: 2, valorUnitario: 59.9 }],
+    pacote: { alturaCm: 10, larguraCm: 15, comprimentoCm: 20, pesoGramas: 600 },
+    valorDeclarado: 119.8,
+  };
+
+  // Service conectado com token válido.
+  async function conectado(config: Record<string, string> = CONFIG_REVERSA) {
+    const criado = await criarService(config);
+    criado.prisma.melhorEnvioToken.findUnique.mockResolvedValue({
+      accessToken: criado.tokenCrypto.encrypt('access-valido'),
+      refreshToken: criado.tokenCrypto.encrypt('refresh-valido'),
+      expiresAt: new Date(Date.now() + 3_600_000),
+    });
+    return criado;
+  }
+
+  function resposta(status: number, body: unknown) {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: 'x',
+      json: () => Promise.resolve(body),
+    } as unknown as Response;
+  }
+
+  function corpoDa(fetchMock: jest.Mock, indice = 0) {
+    return JSON.parse(
+      ((fetchMock.mock.calls as unknown[][])[indice][1] as RequestInit)
+        .body as string,
+    ) as Record<string, Record<string, unknown>>;
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('escopo padrão pede cotação e o ciclo da reversa (carrinho, compra, geração, consulta e impressão secundária)', async () => {
+    const { service } = await criarService();
+    const escopo = new URL(service.gerarUrlAutorizacao()).searchParams
+      .get('scope')!
+      .split(' ');
+    expect(escopo).toEqual([
+      'shipping-calculate',
+      'cart-read',
+      'cart-write',
+      'orders-read',
+      'shipping-checkout',
+      'shipping-generate',
+      'shipping-print',
+    ]);
+  });
+
+  it('cotarReversa: origem = CEP do cliente, destino = loja; só PAC/SEDEX (aceitos pela reversa)', async () => {
+    const { service } = await conectado();
+    const fetchMock = jest.fn().mockResolvedValue(
+      resposta(200, [
+        {
+          id: 1,
+          name: 'PAC',
+          price: '25.35',
+          delivery_time: 6,
+          company: { name: 'Correios' },
+        },
+        {
+          id: 2,
+          name: 'SEDEX',
+          price: '41.20',
+          delivery_time: 2,
+          company: { name: 'Correios' },
+        },
+        {
+          id: 3,
+          name: '.Package',
+          price: '19.00',
+          delivery_time: 5,
+          company: { name: 'Jadlog' },
+        },
+      ]),
+    );
+    global.fetch = fetchMock;
+
+    const opcoes = await service.cotarReversa(
+      '01310-100',
+      REVERSA.pacote,
+      119.8,
+    );
+
+    expect(opcoes.map((o) => o.id)).toEqual([1, 2]);
+    const corpo = corpoDa(fetchMock);
+    expect(corpo.from).toEqual({ postal_code: '01310100' });
+    expect(corpo.to).toEqual({ postal_code: '80000000' });
+  });
+
+  it('criarReversa: POST /api/v2/me/cart/reverse com cliente (CPF) como remetente e loja (CNPJ) como destinatária', async () => {
+    const { service } = await conectado();
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(
+        resposta(201, { id: 'ord-uuid-1', price: 24.9, status: 'pending' }),
+      );
+    global.fetch = fetchMock;
+
+    await expect(service.criarReversa(REVERSA)).resolves.toEqual({
+      id: 'ord-uuid-1',
+      preco: 24.9,
+    });
+
+    expect((fetchMock.mock.calls as unknown[][])[0][0]).toBe(
+      'https://sandbox.melhorenvio.com.br/api/v2/me/cart/reverse',
+    );
+    const init = (fetchMock.mock.calls as unknown[][])[0][1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      'Bearer access-valido',
+    );
+    expect(corpoDa(fetchMock)).toEqual({
+      service: 1,
+      new_sender_mail: 'cliente@sensora.dev',
+      new_sender_phone: '41999998888',
+      insurance_value: 119.8,
+      from: {
+        name: 'Cliente Sensora',
+        document: '52998224725',
+        phone: '41999998888',
+        email: 'cliente@sensora.dev',
+        address: 'Av. Paulista',
+        number: '1000',
+        complement: 'Ap 12',
+        district: 'Bela Vista',
+        city: 'São Paulo',
+        state_abbr: 'SP',
+        postal_code: '01310100',
+        country_id: 'BR',
+      },
+      to: {
+        name: 'Sensora Velas',
+        company_document: '12345678000195',
+        phone: '41988887777',
+        email: 'loja@sensora.dev',
+        address: 'Rua XV de Novembro',
+        number: '100',
+        district: 'Centro',
+        city: 'Curitiba',
+        state_abbr: 'PR',
+        postal_code: '80000000',
+        country_id: 'BR',
+      },
+      products: [
+        { name: 'Vela Lavanda', quantity: 2, unitary_value: 59.9, weight: 0.3 },
+      ],
+      package: { height: 10, width: 15, length: 20, weight: 0.6 },
+      options: { own_hand: false, receipt: false },
+    });
+  });
+
+  it('loja com CPF: vai em document, não em company_document', async () => {
+    const { service } = await conectado({
+      ...CONFIG_REVERSA,
+      LOJA_DOCUMENTO: '529.982.247-25',
+    });
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(resposta(201, { id: 'ord-1' }));
+    global.fetch = fetchMock;
+
+    await expect(service.criarReversa(REVERSA)).resolves.toEqual({
+      id: 'ord-1',
+      preco: null,
+    });
+    const { to } = corpoDa(fetchMock);
+    expect(to.document).toBe('52998224725');
+    expect(to.company_document).toBeUndefined();
+  });
+
+  it('dados da loja ausentes: lista o que falta e nunca chama o Melhor Envio', async () => {
+    const semLoja = { ...CONFIG_REVERSA };
+    delete semLoja.LOJA_DOCUMENTO;
+    delete semLoja.LOJA_TELEFONE;
+    const { service } = await conectado(semLoja);
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock;
+
+    expect(service.dadosLojaFaltando).toEqual([
+      'LOJA_DOCUMENTO',
+      'LOJA_TELEFONE',
+    ]);
+    await expect(service.criarReversa(REVERSA)).rejects.toThrow(
+      'Dados da loja incompletos: defina LOJA_DOCUMENTO, LOJA_TELEFONE.',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('erro do Melhor Envio na reversa: mensagem segura e o log nunca leva o corpo (CPF/endereço)', async () => {
+    const { service } = await conectado();
+    const logs = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    global.fetch = jest.fn().mockResolvedValue(
+      resposta(422, {
+        error: { from: ['CPF 52998224725 inválido para Av. Paulista 1000'] },
+      }),
+    );
+
+    const erro = await service.criarReversa(REVERSA).catch((e: unknown) => e);
+
+    expect(erro).toBeInstanceOf(MelhorEnvioErroHttpError);
+    expect((erro as Error).message).toContain('HTTP 422');
+    expect((erro as Error).message).not.toContain('52998224725');
+    const registrado = JSON.stringify(logs.mock.calls);
+    expect(registrado).toContain('422');
+    expect(registrado).not.toContain('52998224725');
+    expect(registrado).not.toContain('Paulista');
+  });
+
+  it('comprarEnvio: POST /shipment/checkout com o id', async () => {
+    const { service } = await conectado();
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(resposta(200, { purchase: { status: 'paid' } }));
+    global.fetch = fetchMock;
+
+    await service.comprarEnvio('ord-1');
+
+    expect((fetchMock.mock.calls as unknown[][])[0][0]).toContain(
+      '/api/v2/me/shipment/checkout',
+    );
+    expect(corpoDa(fetchMock)).toEqual({ orders: ['ord-1'] });
+  });
+
+  it('comprarEnvio: "já foram pagas" conta como sucesso (nunca cobra duas vezes)', async () => {
+    const { service } = await conectado();
+    global.fetch = jest.fn().mockResolvedValue(
+      resposta(422, {
+        message: 'The given data was invalid.',
+        errors: { orders: ['Existe uma ou mais orders que já foram pagas.'] },
+      }),
+    );
+
+    await expect(service.comprarEnvio('ord-1')).resolves.toBeUndefined();
+  });
+
+  it('comprarEnvio: saldo insuficiente vira mensagem clara', async () => {
+    const { service } = await conectado();
+    jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    global.fetch = jest.fn().mockResolvedValue(
+      resposta(422, {
+        message: 'Saldo insuficiente para realizar a compra.',
+      }),
+    );
+
+    await expect(service.comprarEnvio('ord-1')).rejects.toThrow(
+      'Saldo insuficiente na carteira do Melhor Envio para comprar o envio da devolução.',
+    );
+  });
+
+  it('erros da logística levam CODIGO_ERRO_LOGISTICA_MELHOR_ENVIO (a mensagem segura chega à tela do ADMIN)', async () => {
+    const { service } = await conectado();
+    jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(resposta(422, { message: 'Saldo insuficiente.' }))
+      .mockRejectedValueOnce(new Error('ECONNRESET'));
+
+    const saldo = (await service
+      .comprarEnvio('ord-1')
+      .catch((e: unknown) => e)) as MelhorEnvioErroHttpError;
+    expect(saldo.getResponse()).toEqual({
+      message:
+        'Saldo insuficiente na carteira do Melhor Envio para comprar o envio da devolução.',
+      code: CODIGO_ERRO_LOGISTICA_MELHOR_ENVIO,
+    });
+
+    const rede = (await service
+      .gerarEnvio('ord-1')
+      .catch((e: unknown) => e)) as MelhorEnvioIndisponivelError;
+    expect(rede).toBeInstanceOf(MelhorEnvioIndisponivelError);
+    expect(rede.getResponse()).toMatchObject({
+      code: CODIGO_ERRO_LOGISTICA_MELHOR_ENVIO,
+    });
+  });
+
+  it('comprarEnvio: outra recusa vira MelhorEnvioErroHttpError genérico', async () => {
+    const { service } = await conectado();
+    jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(resposta(500, { message: 'erro interno' }));
+
+    await expect(service.comprarEnvio('ord-1')).rejects.toThrow(
+      'O Melhor Envio recusou a compra do envio da devolução.',
+    );
+  });
+
+  it('gerarEnvio: sucesso só com status true para o id', async () => {
+    const { service } = await conectado();
+    jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(
+        resposta(200, { 'ord-1': { status: true, message: 'ok' } }),
+      )
+      .mockResolvedValueOnce(
+        resposta(200, { 'ord-1': { status: false, message: 'Não gerado' } }),
+      );
+
+    await expect(service.gerarEnvio('ord-1')).resolves.toBeUndefined();
+    await expect(service.gerarEnvio('ord-1')).rejects.toBeInstanceOf(
+      MelhorEnvioErroHttpError,
+    );
+  });
+
+  it('urlImpressao (secundário): pede a impressão em modo público e só devolve URL https', async () => {
+    const { service } = await conectado();
+    jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        resposta(200, {
+          url: 'https://sandbox.melhorenvio.com.br/imprimir/ixQL',
+        }),
+      )
+      .mockResolvedValueOnce(resposta(200, { url: 'javascript:alert(1)' }));
+    global.fetch = fetchMock;
+
+    await expect(service.urlImpressao('ord-1')).resolves.toBe(
+      'https://sandbox.melhorenvio.com.br/imprimir/ixQL',
+    );
+    expect((fetchMock.mock.calls as unknown[][])[0][0]).toContain(
+      '/api/v2/me/shipment/print',
+    );
+    expect(corpoDa(fetchMock)).toEqual({ mode: 'public', orders: ['ord-1'] });
+
+    await expect(service.urlImpressao('ord-1')).rejects.toBeInstanceOf(
+      MelhorEnvioErroHttpError,
+    );
+  });
+
+  it('consultarEnvio: GET /orders/:id, interpreta pago/gerado e as datas (horário de Brasília)', async () => {
+    const { service } = await conectado();
+    const fetchMock = jest.fn().mockResolvedValue(
+      resposta(200, {
+        status: 'released',
+        paid_at: '2026-09-30 10:00:00',
+        generated_at: null,
+        posted_at: null,
+        tracking: null,
+      }),
+    );
+    global.fetch = fetchMock;
+
+    const situacao = await service.consultarEnvio('ord-1');
+
+    expect((fetchMock.mock.calls as unknown[][])[0][0]).toContain(
+      '/api/v2/me/orders/ord-1',
+    );
+    expect(
+      ((fetchMock.mock.calls as unknown[][])[0][1] as RequestInit).method,
+    ).toBe('GET');
+    expect(situacao).toEqual({
+      status: 'released',
+      pago: true,
+      gerado: false,
+      postado: false,
+      pagoEm: new Date('2026-09-30T13:00:00Z'),
+      geradoEm: null,
+      postadoEm: null,
+      codigoDevolucao: null,
+      codigoRastreio: null,
+    });
+  });
+
+  it('consultarEnvio: authorization_code vira codigoDevolucao e tracking vira codigoRastreio (conceitos separados); reconhece a postagem', async () => {
+    const { service } = await conectado();
+    // Mesmos campos do exemplo oficial de GET /api/v2/me/orders/{id}.
+    global.fetch = jest.fn().mockResolvedValue(
+      resposta(200, {
+        id: 'ord-1',
+        protocol: 'ORD-20220395517',
+        status: 'posted',
+        authorization_code: '2022032920',
+        tracking: 'ME220021P96BR',
+        self_tracking: 'ME220021P96BR',
+        paid_at: '2026-09-30 10:00:00',
+        generated_at: '2026-09-30 10:01:00',
+        posted_at: '2026-10-01 09:00:00',
+      }),
+    );
+
+    const situacao = await service.consultarEnvio('ord-1');
+
+    expect(situacao).toEqual({
+      status: 'posted',
+      pago: true,
+      gerado: true,
+      postado: true,
+      pagoEm: new Date('2026-09-30T13:00:00Z'),
+      geradoEm: new Date('2026-09-30T13:01:00Z'),
+      postadoEm: new Date('2026-10-01T12:00:00Z'),
+      codigoDevolucao: '2022032920',
+      codigoRastreio: 'ME220021P96BR',
+    });
+  });
+
+  it('consultarEnvio: gerado sem código ainda (authorization_code null) fica null, nunca inventado', async () => {
+    const { service } = await conectado();
+    global.fetch = jest.fn().mockResolvedValue(
+      resposta(200, {
+        status: 'generated',
+        authorization_code: null,
+        tracking: null,
+        generated_at: '2026-09-30 10:01:00',
+      }),
+    );
+
+    const situacao = await service.consultarEnvio('ord-1');
+
+    expect(situacao.gerado).toBe(true);
+    expect(situacao.codigoDevolucao).toBeNull();
+    expect(situacao.codigoRastreio).toBeNull();
+  });
+
+  it('criarReversa: service_id diferente do pedido é recusado (nada é pago)', async () => {
+    const { service } = await conectado();
+    jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        resposta(201, { id: 'ord-1', price: 24.9, service_id: 2 }),
+      );
+
+    await expect(service.criarReversa(REVERSA)).rejects.toThrow(
+      'O Melhor Envio criou o envio com outro serviço de frete. Nada foi cobrado; tente novamente.',
+    );
+  });
+
+  it('criarReversa: service_id igual ao pedido (número ou texto) é aceito', async () => {
+    const { service } = await conectado();
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(
+        resposta(201, { id: 'ord-1', price: 24.9, service_id: 1 }),
+      )
+      .mockResolvedValueOnce(
+        resposta(201, { id: 'ord-2', price: '24.90', service_id: '1' }),
+      );
+
+    await expect(service.criarReversa(REVERSA)).resolves.toEqual({
+      id: 'ord-1',
+      preco: 24.9,
+    });
+    await expect(service.criarReversa(REVERSA)).resolves.toEqual({
+      id: 'ord-2',
+      preco: 24.9,
+    });
+  });
+
+  it('renovação concorrente do token: duas chamadas com o token vencendo renovam UMA vez; a segunda usa o token novo', async () => {
+    const { service, prisma, tokenCrypto } = await criarService(CONFIG_REVERSA);
+    // "Banco": o upsert grava e o findUnique seguinte lê o valor gravado.
+    let tokenSalvo = {
+      accessToken: tokenCrypto.encrypt('access-velho'),
+      refreshToken: tokenCrypto.encrypt('refresh-velho'),
+      expiresAt: new Date(Date.now() - 60_000),
+    };
+    prisma.melhorEnvioToken.findUnique.mockImplementation(() =>
+      Promise.resolve({ ...tokenSalvo }),
+    );
+    prisma.melhorEnvioToken.upsert.mockImplementation(
+      ({ update }: { update: typeof tokenSalvo }) => {
+        tokenSalvo = { ...update };
+        return Promise.resolve(tokenSalvo);
+      },
+    );
+
+    const fetchMock = jest.fn(async (url: string) => {
+      await new Promise((resolve) => setImmediate(resolve));
+      if (url.endsWith('/oauth/token')) {
+        return resposta(200, {
+          access_token: 'access-novo',
+          refresh_token: 'refresh-novo',
+          expires_in: 3600,
+        });
+      }
+      return resposta(200, { id: 'x', status: 'pending' });
+    });
+    global.fetch = fetchMock;
+
+    await Promise.all([
+      service.consultarEnvio('ord-1'),
+      service.consultarEnvio('ord-2'),
+    ]);
+
+    const renovacoes = fetchMock.mock.calls.filter(([url]) =>
+      url.endsWith('/oauth/token'),
+    );
+    expect(renovacoes).toHaveLength(1);
+    expect(prisma.melhorEnvioToken.upsert).toHaveBeenCalledTimes(1);
+    const autorizacoes = fetchMock.mock.calls
+      .filter(([url]) => url.includes('/orders/'))
+      .map(
+        (chamada) =>
+          ((chamada as unknown[])[1] as RequestInit).headers as Record<
+            string,
+            string
+          >,
+      )
+      .map((headers) => headers.Authorization);
+    expect(autorizacoes).toEqual(['Bearer access-novo', 'Bearer access-novo']);
   });
 });

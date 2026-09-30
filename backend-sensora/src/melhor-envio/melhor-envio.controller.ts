@@ -1,14 +1,13 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
-import { ADMIN_ONLY_ROLES, STAFF_ROLES } from '../common/constants/roles.constants';
+import { ADMIN_ONLY_ROLES } from '../common/constants/roles.constants';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { MelhorEnvioService } from './melhor-envio.service';
 
 // Etapa 6.5 (Frete), Parte 2 — conexão OAuth2 da loja com o Melhor Envio.
-// Só ADMIN/VENDEDOR (mesmo padrão de acesso administrativo já usado no
-// resto do projeto, ver STAFF_ROLES) conseguem iniciar a conexão; o
-// callback é a exceção deliberada abaixo.
+// Só ADMIN consegue iniciar a conexão (Etapa 8); o callback é a exceção
+// deliberada abaixo.
 @Controller('admin/melhor-envio')
 export class MelhorEnvioController {
   constructor(private readonly melhorEnvioService: MelhorEnvioService) {}
@@ -19,8 +18,7 @@ export class MelhorEnvioController {
   // ver MelhorEnvioService.obterStatusConexao). ADMIN_ONLY_ROLES (não mais
   // STAFF_ROLES): a página /admin/integracoes é ADMIN-only — este endpoint
   // agora segue o mesmo padrão de AsaasController/MailController/
-  // ImagekitController.status(). `conectar`/`callback` abaixo continuam
-  // STAFF_ROLES, intocados — só a leitura de status muda de escopo.
+  // ImagekitController.status().
   @Get('status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...ADMIN_ONLY_ROLES)
@@ -48,9 +46,13 @@ export class MelhorEnvioController {
   // manualmente no navegador (fluxo OAuth2 "authorization code" — precisa
   // do login/consentimento do dono da conta Melhor Envio, não pode ser
   // automatizado pelo backend).
+  //
+  // Etapa 8 — só ADMIN (antes ADMIN e VENDEDOR): a conta conectada paga as
+  // envios de devolução com o saldo da carteira, então trocar de conta é
+  // decisão de ADMIN.
   @Get('conectar')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(...STAFF_ROLES)
+  @Roles(...ADMIN_ONLY_ROLES)
   conectar(): { url: string } {
     return { url: this.melhorEnvioService.gerarUrlAutorizacao() };
   }
