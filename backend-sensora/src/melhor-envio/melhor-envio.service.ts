@@ -22,6 +22,8 @@ export interface MelhorEnvioCotacaoInput {
   // Sem cepOrigem, a origem é a loja (MELHOR_ENVIO_CEP_ORIGEM) — o checkout
   // nunca informa. A logística reversa informa o CEP do cliente.
   cepOrigem?: string;
+  // Só a logística reversa informa: pede explicitamente estes serviços.
+  servicos?: number[];
   cepDestino: string;
   pacote: MelhorEnvioPacote;
   valorDeclarado: number;
@@ -712,6 +714,7 @@ export class MelhorEnvioService {
             receipt: false,
             own_hand: false,
           },
+          ...(input.servicos ? { services: input.servicos.join(',') } : {}),
         }),
       });
     } catch {
@@ -741,12 +744,21 @@ export class MelhorEnvioService {
     }
 
     return corpo
-      .filter(
-        (item): item is Record<string, unknown> =>
-          typeof item === 'object' &&
-          item !== null &&
-          !(item as { error?: unknown }).error,
-      )
+      .filter((item): item is Record<string, unknown> => {
+        if (typeof item !== 'object' || item === null) {
+          return false;
+        }
+        const { id, name, error } = item as Record<string, unknown>;
+        if (error) {
+          // Só id, nome e motivo do serviço recusado — nunca o corpo inteiro.
+          const motivo = typeof error === 'string' ? error : 'erro sem texto';
+          this.logger.warn(
+            `Melhor Envio recusou o serviço ${Number(id)} (${typeof name === 'string' ? name : '?'}) na cotação: ${motivo}`,
+          );
+          return false;
+        }
+        return true;
+      })
       .map((item) => this.paraOpcao(item))
       .filter((opcao): opcao is MelhorEnvioOpcao => opcao !== null);
   }
@@ -815,6 +827,7 @@ export class MelhorEnvioService {
   ): Promise<MelhorEnvioOpcao[]> {
     const opcoes = await this.cotar({
       cepOrigem: cepCliente,
+      servicos: SERVICOS_LOGISTICA_REVERSA,
       cepDestino: this.cepOrigem ?? '',
       pacote,
       valorDeclarado,
