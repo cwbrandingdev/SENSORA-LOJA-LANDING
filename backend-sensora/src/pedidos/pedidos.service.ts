@@ -49,6 +49,13 @@ const DEVOLUCAO_QUE_IMPEDE_REEMBOLSO_INTEGRAL = {
 const PEDIDO_ENVIADO_MENSAGEM =
   'Pedido já enviado não pode ser reembolsado diretamente. Solicite a devolução.';
 
+// Recusa do Asaas no estorno (ex.: saldo insuficiente na conta da loja):
+// mensagem segura para a tela, sem o detalhe do Asaas. Mantenha o código
+// sincronizado com CODIGOS_ERRO_SEGUROS em frontend-sensora/lib/errors.ts.
+export const CODIGO_ERRO_REEMBOLSO_ASAAS = 'REEMBOLSO_ASAAS_RECUSADO';
+const REEMBOLSO_ASAAS_RECUSADO_MENSAGEM =
+  'Problema com a plataforma Asaas, aguarde um momento.';
+
 function soDigitosCep(valor: string | null | undefined): string {
   return (valor ?? '').replace(/\D/g, '');
 }
@@ -534,6 +541,10 @@ export class PedidosService {
         await this.prisma.pedido.updateMany({
           where: { id, status: StatusPedido.REEMBOLSO_SOLICITADO },
           data: { status: StatusPedido.PAGO },
+        });
+        throw new AsaasErroHttpError({
+          message: REEMBOLSO_ASAAS_RECUSADO_MENSAGEM,
+          code: CODIGO_ERRO_REEMBOLSO_ASAAS,
         });
       }
       throw erro;

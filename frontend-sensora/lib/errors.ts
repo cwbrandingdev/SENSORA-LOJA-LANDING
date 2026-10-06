@@ -10,9 +10,12 @@ import { isAxiosError } from "axios";
 // Etapa 8 — LOGISTICA_MELHOR_ENVIO_INDISPONIVEL: mensagens seguras da
 // logística reversa (ex.: saldo insuficiente), sincronizado com
 // CODIGO_ERRO_LOGISTICA_MELHOR_ENVIO no backend.
+// REEMBOLSO_ASAAS_RECUSADO: o Asaas recusou o estorno (ex.: saldo
+// insuficiente), sincronizado com CODIGO_ERRO_REEMBOLSO_ASAAS no backend.
 const CODIGOS_ERRO_SEGUROS = new Set([
   "FRETE_MELHOR_ENVIO_INDISPONIVEL",
   "LOGISTICA_MELHOR_ENVIO_INDISPONIVEL",
+  "REEMBOLSO_ASAAS_RECUSADO",
 ]);
 
 // Extrai uma mensagem segura para exibir ao usuário: usa a mensagem

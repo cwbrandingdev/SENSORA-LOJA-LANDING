@@ -20,7 +20,7 @@ import { UpdatePedidoDto } from './dto/update-pedido.dto';
 import { StatusEnvio } from './enums/status-envio.enum';
 import { StatusPedido } from './enums/status-pedido.enum';
 import { PedidosController } from './pedidos.controller';
-import { PedidosService } from './pedidos.service';
+import { CODIGO_ERRO_REEMBOLSO_ASAAS, PedidosService } from './pedidos.service';
 
 // Etapa 5B.4 — testa só a regra de negócio de PedidosService.solicitarReembolso
 // com Prisma e AsaasService MOCKADOS (nenhuma chamada real ao Asaas, nenhum
@@ -350,6 +350,27 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
     await expect(service.solicitarReembolso(1, CLIENTE)).rejects.toThrow(
       AsaasErroHttpError,
     );
+    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+  });
+
+  // O2 — recusa no próprio estorno (ex.: saldo insuficiente no Asaas):
+  // resposta com mensagem segura + código que o frontend exibe.
+  it('O2: estorno recusado pelo Asaas responde mensagem segura com código', async () => {
+    pedidoFake.asaasPaymentId = 'pay_123';
+    asaasService.consultarEstornos.mockResolvedValueOnce([]);
+    asaasService.estornarPagamento.mockRejectedValueOnce(
+      new AsaasErroHttpError('O Asaas recusou a requisição'),
+    );
+
+    const erro: unknown = await service
+      .solicitarReembolso(1, CLIENTE)
+      .catch((e: unknown) => e);
+
+    expect(erro).toBeInstanceOf(AsaasErroHttpError);
+    expect((erro as AsaasErroHttpError).getResponse()).toEqual({
+      message: 'Problema com a plataforma Asaas, aguarde um momento.',
+      code: CODIGO_ERRO_REEMBOLSO_ASAAS,
+    });
     expect(pedidoFake.status).toBe(StatusPedido.PAGO);
   });
 
