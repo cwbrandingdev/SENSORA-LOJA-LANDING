@@ -31,6 +31,9 @@ describe('DevolucoesAdminController — /admin/devolucoes (HTTP)', () => {
     documentoParaAdmin: jest.Mock;
     atualizarRastreio: jest.Mock;
     confirmarRecebimento: jest.Mock;
+    iniciarConferencia: jest.Mock;
+    concluirConferencia: jest.Mock;
+    reprocessarReembolso: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -50,6 +53,15 @@ describe('DevolucoesAdminController — /admin/devolucoes (HTTP)', () => {
       confirmarRecebimento: jest
         .fn()
         .mockResolvedValue({ id: 5, status: 'RECEBIDA' }),
+      iniciarConferencia: jest
+        .fn()
+        .mockResolvedValue({ id: 5, status: 'EM_CONFERENCIA' }),
+      concluirConferencia: jest
+        .fn()
+        .mockResolvedValue({ id: 5, status: 'CONCLUIDA' }),
+      reprocessarReembolso: jest
+        .fn()
+        .mockResolvedValue({ id: 5, status: 'CONCLUIDA' }),
     };
 
     const module = await Test.createTestingModule({
@@ -136,6 +148,16 @@ describe('DevolucoesAdminController — /admin/devolucoes (HTTP)', () => {
     await comPerfil(http().get('/admin/devolucoes/5/documento')).expect(403);
     await comPerfil(http().post('/admin/devolucoes/5/rastreio')).expect(403);
     await comPerfil(http().post('/admin/devolucoes/5/recebida')).expect(403);
+    // Etapa 9.1 — conferência e reembolso.
+    await comPerfil(http().post('/admin/devolucoes/5/conferencia')).expect(
+      403,
+    );
+    await comPerfil(
+      http()
+        .post('/admin/devolucoes/5/concluir')
+        .send({ itens: [{ itemPedidoId: 100, quantidadeAceita: 1 }] }),
+    ).expect(403);
+    await comPerfil(http().post('/admin/devolucoes/5/reembolso')).expect(403);
 
     for (const fn of Object.values(service)) {
       expect(fn).not.toHaveBeenCalled();
@@ -292,6 +314,88 @@ describe('DevolucoesAdminController — /admin/devolucoes (HTTP)', () => {
         .set('x-perfil', 'ADMIN')
         .send({ servicoId: 1, custoConfirmado: 25.35 })
         .expect(404);
+    });
+  });
+
+  describe('conferência e reembolso (Etapa 9.1)', () => {
+    it('ADMIN inicia a conferência', async () => {
+      await http()
+        .post('/admin/devolucoes/5/conferencia')
+        .set('x-perfil', 'ADMIN')
+        .expect(200);
+      expect(service.iniciarConferencia).toHaveBeenCalledWith(5);
+    });
+
+    it('concluir: quem conferiu vem do token; só quantidades e observação saem do corpo', async () => {
+      await http()
+        .post('/admin/devolucoes/5/concluir')
+        .set('x-perfil', 'ADMIN')
+        .send({
+          itens: [
+            { itemPedidoId: 100, quantidadeAceita: 2 },
+            { itemPedidoId: 200, quantidadeAceita: 0 },
+          ],
+          observacao: 'Uma vela chegou usada',
+        })
+        .expect(200);
+      expect(service.concluirConferencia).toHaveBeenCalledWith(
+        5,
+        ADMIN_ID,
+        [
+          { itemPedidoId: 100, quantidadeAceita: 2 },
+          { itemPedidoId: 200, quantidadeAceita: 0 },
+        ],
+        'Uma vela chegou usada',
+      );
+    });
+
+    it.each([
+      ['negativa', [{ itemPedidoId: 100, quantidadeAceita: -1 }]],
+      ['decimal', [{ itemPedidoId: 100, quantidadeAceita: 1.5 }]],
+      ['texto', [{ itemPedidoId: 100, quantidadeAceita: 'duas' }]],
+      ['ausente', [{ itemPedidoId: 100 }]],
+      ['lista vazia', []],
+    ])('quantidade aceita %s: 400, service não é chamado', async (_caso, itens) => {
+      await http()
+        .post('/admin/devolucoes/5/concluir')
+        .set('x-perfil', 'ADMIN')
+        .send({ itens })
+        .expect(400);
+      expect(service.concluirConferencia).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [{ valor: 9999 }],
+      [{ reembolsoValor: 9999 }],
+      [{ adminId: 1 }],
+    ])('valor ou admin no corpo (%j): 400 — nunca vêm do cliente', async (extra) => {
+      await http()
+        .post('/admin/devolucoes/5/concluir')
+        .set('x-perfil', 'ADMIN')
+        .send({ itens: [{ itemPedidoId: 100, quantidadeAceita: 1 }], ...extra })
+        .expect(400);
+      expect(service.concluirConferencia).not.toHaveBeenCalled();
+    });
+
+    it('preço no item (precoUnitario): 400', async () => {
+      await http()
+        .post('/admin/devolucoes/5/concluir')
+        .set('x-perfil', 'ADMIN')
+        .send({
+          itens: [
+            { itemPedidoId: 100, quantidadeAceita: 1, precoUnitario: 9999 },
+          ],
+        })
+        .expect(400);
+      expect(service.concluirConferencia).not.toHaveBeenCalled();
+    });
+
+    it('ADMIN reprocessa o reembolso', async () => {
+      await http()
+        .post('/admin/devolucoes/5/reembolso')
+        .set('x-perfil', 'ADMIN')
+        .expect(200);
+      expect(service.reprocessarReembolso).toHaveBeenCalledWith(5);
     });
   });
 });

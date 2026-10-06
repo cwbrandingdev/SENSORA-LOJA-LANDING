@@ -7,6 +7,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { ImagekitService } from '../imagekit/imagekit.service';
 import { MailService } from '../mail/mail.service';
+import { AsaasService } from '../asaas/asaas.service';
 import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
 import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
@@ -210,6 +211,7 @@ describe('DevolucoesService — criar (Etapa 3)', () => {
         { provide: ImagekitService, useValue: {} },
         { provide: MailService, useValue: {} },
         { provide: MelhorEnvioService, useValue: {} },
+        { provide: AsaasService, useValue: {} },
       ],
     }).compile();
 
@@ -252,7 +254,17 @@ describe('DevolucoesService — criar (Etapa 3)', () => {
       descricao: 'Tampa rachada',
       solicitadaEm: new Date('2026-09-29T12:00:00Z'),
       analisadaEm: null,
-      itens: [{ id: 1, itemPedidoId: 100, quantidade: 1, precoUnitario: 50 }],
+      itens: [
+        {
+          id: 1,
+          itemPedidoId: 100,
+          quantidade: 1,
+          precoUnitario: 50,
+          quantidadeAceita: null,
+        },
+      ],
+      reembolsoValor: null,
+      reembolsadaEm: null,
       evidencias: [],
       envio: null,
     });
@@ -271,8 +283,20 @@ describe('DevolucoesService — criar (Etapa 3)', () => {
     );
 
     expect(resultado.itens).toEqual([
-      { id: 1, itemPedidoId: 100, quantidade: 2, precoUnitario: 50 },
-      { id: 2, itemPedidoId: 200, quantidade: 1, precoUnitario: 80 },
+      {
+        id: 1,
+        itemPedidoId: 100,
+        quantidade: 2,
+        precoUnitario: 50,
+        quantidadeAceita: null,
+      },
+      {
+        id: 2,
+        itemPedidoId: 200,
+        quantidade: 1,
+        precoUnitario: 80,
+        quantidadeAceita: null,
+      },
     ]);
   });
 

@@ -303,14 +303,22 @@ export class AsaasService {
   // `PENDING`/outro) é quem determina isso, e cabe ao chamador (item 5 da
   // etapa) interpretar o campo `status` do retorno — este método não decide
   // isso por ele.
+  //
+  // Etapa 9.1 — `value` opcional: estorno PARCIAL (devolução). Sem ele, o
+  // corpo e o comportamento são os de sempre (estorno total). O valor é
+  // sempre calculado pelo backend (DevolucoesService), nunca pelo cliente.
   async estornarPagamento(
     paymentId: string,
     description?: string,
+    value?: number,
   ): Promise<AsaasRefund> {
     return this.request<AsaasRefund>(
       'POST',
       `/payments/${encodeURIComponent(paymentId)}/refund`,
-      description ? { description } : {},
+      {
+        ...(description ? { description } : {}),
+        ...(value !== undefined ? { value } : {}),
+      },
       { mensagemNaoEncontrado: 'Payment não encontrado no Asaas' },
     );
   }

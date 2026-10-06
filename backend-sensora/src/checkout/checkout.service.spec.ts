@@ -10,6 +10,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import Stripe from 'stripe';
 import { AsaasService } from '../asaas/asaas.service';
 import { EnderecosService } from '../enderecos/enderecos.service';
+import { DevolucoesService } from '../devolucoes/devolucoes.service';
 import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
@@ -102,6 +103,12 @@ function melhorEnvioServiceComOpcoes(opcoes: unknown[] = [OPCAO_FRETE_FAKE]) {
 const STRIPE_WEBHOOK_SECRET = 'whsec_teste_fake_para_assinatura_local';
 const STRIPE_SECRET_KEY = 'sk_test_fake_nao_faz_chamada_de_rede';
 const ASAAS_WEBHOOK_TOKEN = 'asaas_token_teste_fake_para_comparacao_local';
+
+// Etapa 9.1 — DevolucoesService MOCKADO: por padrão o pedido não tem
+// devolução com estorno pendente (0 confirmado).
+const devolucoesService = {
+  confirmarReembolsosDoPedido: jest.fn(() => Promise.resolve(0)),
+};
 
 function assinarEventoStripe(event: Record<string, unknown>): {
   payload: string;
@@ -208,6 +215,7 @@ describe('CheckoutService — webhook Stripe (Task 15, modo de rollback)', () =>
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: { get: (key: string) => configValues[key] },
@@ -411,6 +419,7 @@ describe('CheckoutService — webhook Stripe (Task 15, modo de rollback)', () =>
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: {
@@ -551,6 +560,7 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: { get: (key: string) => configValues[key] },
@@ -739,6 +749,7 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: {
@@ -790,6 +801,7 @@ describe('CheckoutService — webhook Asaas: eventos de reembolso (Etapa 5B.5)',
     id: number;
     asaasPaymentId: string | null;
     status: StatusPedido;
+    total: number;
   };
 
   function construirEventoPayment(
@@ -810,6 +822,7 @@ describe('CheckoutService — webhook Asaas: eventos de reembolso (Etapa 5B.5)',
       id: 1,
       asaasPaymentId: 'pay_123',
       status: StatusPedido.REEMBOLSO_SOLICITADO,
+      total: 100,
     };
 
     prisma = {
@@ -861,6 +874,7 @@ describe('CheckoutService — webhook Asaas: eventos de reembolso (Etapa 5B.5)',
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: { get: (key: string) => configValues[key] },
@@ -1000,6 +1014,113 @@ describe('CheckoutService — webhook Asaas: eventos de reembolso (Etapa 5B.5)',
     expect(prisma.pedido.findUnique).not.toHaveBeenCalled();
     expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
   });
+
+  // Etapa 9.1 — estornos de devolução. DevolucoesService MOCKADO:
+  // confirmarReembolsosDoPedido devolve o total já reembolsado e confirmado
+  // em devoluções do pedido (a conferência de cada estorno no Asaas, o
+  // estoque e a conclusão da devolução são testados em
+  // devolucoes.conferencia.spec.ts).
+  describe('estornos de devolução (Etapa 9.1)', () => {
+    const enviar = (evento: string) =>
+      service.handleWebhook(
+        { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+        Buffer.from(construirEventoPayment(evento, 'pay_123')),
+      );
+
+    beforeEach(() => {
+      devolucoesService.confirmarReembolsosDoPedido.mockClear();
+      pedidoFake.status = StatusPedido.PAGO;
+    });
+
+    it.each([
+      'PAYMENT_REFUND_IN_PROGRESS',
+      'PAYMENT_PARTIALLY_REFUNDED',
+      'PAYMENT_REFUNDED',
+      'PAYMENT_REFUND_DENIED',
+    ])('%s: confere as devoluções do pedido', async (evento) => {
+      await enviar(evento);
+
+      expect(
+        devolucoesService.confirmarReembolsosDoPedido,
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        devolucoesService.confirmarReembolsosDoPedido,
+      ).toHaveBeenCalledWith(1);
+    });
+
+    it('evento para pagamento desconhecido: devoluções não são consultadas', async () => {
+      await service.handleWebhook(
+        { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+        Buffer.from(construirEventoPayment('PAYMENT_REFUNDED', 'pay_outro')),
+      );
+
+      expect(
+        devolucoesService.confirmarReembolsosDoPedido,
+      ).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      'PAYMENT_REFUND_IN_PROGRESS',
+      'PAYMENT_PARTIALLY_REFUNDED',
+      'PAYMENT_REFUND_DENIED',
+    ])(
+      '%s com devolução reembolsada: o pedido continua PAGO, sem estoque por pedido',
+      async (evento) => {
+        devolucoesService.confirmarReembolsosDoPedido.mockResolvedValueOnce(100);
+
+        await enviar(evento);
+
+        expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+        expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+        expect(prisma.itemPedido.findMany).not.toHaveBeenCalled();
+      },
+    );
+
+    it('PAYMENT_REFUNDED com reembolso parcial por devolução: o pedido continua PAGO', async () => {
+      devolucoesService.confirmarReembolsosDoPedido.mockResolvedValueOnce(40);
+
+      await enviar('PAYMENT_REFUNDED');
+
+      expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+      expect(prisma.itemPedido.findMany).not.toHaveBeenCalled();
+    });
+
+    it('PAYMENT_REFUNDED com as devoluções cobrindo o total: pedido REEMBOLSADO, sem estoque por pedido', async () => {
+      devolucoesService.confirmarReembolsosDoPedido.mockResolvedValueOnce(100);
+
+      await enviar('PAYMENT_REFUNDED');
+
+      expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSADO);
+      // O estoque já foi devolvido por devolução (quantidade aceita).
+      expect(prisma.itemPedido.findMany).not.toHaveBeenCalled();
+    });
+
+    it('PAYMENT_REFUNDED com pedido PAGO e nenhuma devolução reembolsada: nada muda (como antes)', async () => {
+      await enviar('PAYMENT_REFUNDED');
+
+      expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+      expect(prisma.itemPedido.findMany).not.toHaveBeenCalled();
+    });
+
+    it('reembolso integral do pedido (REEMBOLSO_SOLICITADO) continua igual', async () => {
+      pedidoFake.status = StatusPedido.REEMBOLSO_SOLICITADO;
+
+      await enviar('PAYMENT_REFUNDED');
+
+      expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSADO);
+    });
+
+    it('falha ao conferir as devoluções: o webhook falha (o Asaas reenvia) e o pedido não muda', async () => {
+      devolucoesService.confirmarReembolsosDoPedido.mockRejectedValueOnce(
+        new Error('Asaas fora do ar'),
+      );
+
+      await expect(enviar('PAYMENT_REFUNDED')).rejects.toThrow(
+        'Asaas fora do ar',
+      );
+      expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+    });
+  });
 });
 
 // Task 16 (aprovado) — createSession agora rejeita produto com `ativo:
@@ -1026,6 +1147,7 @@ describe('CheckoutService — createSession: produto inativo (Task 16)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: {
@@ -1091,6 +1213,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: {
@@ -1207,6 +1330,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: {
@@ -1277,6 +1401,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: {
@@ -1331,6 +1456,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: {
@@ -1383,6 +1509,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: {
@@ -1449,6 +1576,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: {
@@ -1662,6 +1790,7 @@ describe('CheckoutService — restauração de estoque após reembolso (Etapa 5B
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: { get: (key: string) => configValues[key] },
@@ -2035,6 +2164,7 @@ describe('CheckoutService — cotarFrete (Etapa 6.5)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
         {
           provide: ConfigService,
           useValue: {

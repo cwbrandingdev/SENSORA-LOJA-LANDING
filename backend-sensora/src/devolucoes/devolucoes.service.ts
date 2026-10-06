@@ -12,6 +12,7 @@ import {
   type EvidenciaDevolucao as EvidenciaDevolucaoPrisma,
   type ItemDevolucao as ItemDevolucaoPrisma,
 } from '../../generated/prisma/client';
+import { AsaasService, type AsaasRefund } from '../asaas/asaas.service';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { escaparHtml } from '../common/utils/html.util';
 import { ImagekitService } from '../imagekit/imagekit.service';
@@ -25,6 +26,7 @@ import {
 import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { PrismaService } from '../prisma/prisma.service';
+import { ItemConferidoDto } from './dto/concluir-conferencia.dto';
 import { CreateDevolucaoDto } from './dto/create-devolucao.dto';
 import {
   Devolucao,
@@ -108,6 +110,7 @@ export class DevolucoesService {
     private readonly imagekitService: ImagekitService,
     private readonly mailService: MailService,
     private readonly melhorEnvioService: MelhorEnvioService,
+    private readonly asaasService: AsaasService,
   ) {}
 
   // Cliente solicita a devolução de itens de um pedido já enviado. Tudo que
@@ -426,6 +429,7 @@ export class DevolucoesService {
         pedido: true,
         usuario: { select: { nome: true, email: true } },
         analisadoPor: { select: { nome: true } },
+        conferidoPor: { select: { nome: true } },
         itens: {
           include: {
             itemPedido: {
@@ -455,6 +459,15 @@ export class DevolucoesService {
       observacaoAnalise: devolucao.observacaoAnalise,
       analisadoPorNome: devolucao.analisadoPor?.nome ?? null,
       recebidaEm: devolucao.recebidaEm,
+      conferidaEm: devolucao.conferidaEm,
+      observacaoConferencia: devolucao.observacaoConferencia,
+      conferidoPorNome: devolucao.conferidoPor?.nome ?? null,
+      reembolsoValor:
+        devolucao.reembolsoValor !== null
+          ? Number(devolucao.reembolsoValor)
+          : null,
+      reembolsadaEm: devolucao.reembolsadaEm,
+      estoqueRestauradoEm: devolucao.estoqueRestauradoEm,
       pedido: {
         id: pedido.id,
         numero: pedido.numero,
@@ -475,6 +488,7 @@ export class DevolucoesService {
         quantidade: item.quantidade,
         quantidadeComprada: item.itemPedido.quantidade,
         precoUnitario: Number(item.precoUnitario),
+        quantidadeAceita: item.quantidadeAceita,
       })),
       evidencias: devolucao.evidencias.map((evidencia) =>
         this.paraEvidencia(evidencia),
@@ -893,6 +907,526 @@ export class DevolucoesService {
     return this.buscarParaAnalise(devolucaoId);
   }
 
+  // ---------------------------------------------------------------------
+  // Etapa 9.1 — conferência, reembolso e fechamento. Só ADMIN.
+  // RECEBIDA -> EM_CONFERENCIA -> conferência registrada (quantidades
+  // aceitas e valor) -> estorno no Asaas -> estorno confirmado (DONE) ->
+  // unidades aceitas de volta ao estoque -> CONCLUIDA.
+  //
+  // O reembolso cobre só os itens aceitos. O frete da compra não entra:
+  // `motivo` é texto livre e não identifica o direito de arrependimento.
+  // Pedido.status e Pedido.total não mudam aqui (o pedido continua PAGO).
+  // ---------------------------------------------------------------------
+
+  // Só RECEBIDA -> EM_CONFERENCIA, numa única atualização condicionada ao
+  // status atual: com dois ADMINs ao mesmo tempo, só um inicia.
+  async iniciarConferencia(devolucaoId: number): Promise<DevolucaoAnalise> {
+    const resultado = await this.prisma.devolucao.updateMany({
+      where: { id: devolucaoId, status: StatusDevolucao.RECEBIDA },
+      data: { status: StatusDevolucao.EM_CONFERENCIA },
+    });
+    if (resultado.count === 0) {
+      await this.recusarPorStatus(devolucaoId, 'entrar em conferência');
+    }
+    return this.buscarParaAnalise(devolucaoId);
+  }
+
+  // Registra a conferência física (uma única vez) e segue para o reembolso.
+  // Do ADMIN vêm só a quantidade aceita de cada item e a observação; o valor
+  // é sempre a soma de quantidadeAceita x precoUnitario gravado na devolução.
+  // Nada aceito: sem reembolso e sem estoque, a devolução já fica CONCLUIDA.
+  //
+  // Se o Asaas falhar depois de a conferência estar gravada, ela continua
+  // valendo: o estorno é retomado por reprocessarReembolso.
+  async concluirConferencia(
+    devolucaoId: number,
+    adminId: number,
+    itens: ItemConferidoDto[],
+    observacao?: string,
+  ): Promise<DevolucaoAnalise> {
+    const observacaoLimpa = observacao?.trim() || null;
+    const aceitas = new Map(
+      itens.map((item) => [item.itemPedidoId, item.quantidadeAceita]),
+    );
+    if (aceitas.size !== itens.length) {
+      throw new BadRequestException(
+        'O mesmo item foi informado mais de uma vez.',
+      );
+    }
+
+    const alvo = await this.prisma.devolucao.findUnique({
+      where: { id: devolucaoId },
+      select: { pedidoId: true },
+    });
+    if (!alvo) {
+      throw new NotFoundException('Devolução não encontrada');
+    }
+
+    const valor = await this.prisma.$transaction(async (tx) => {
+      // Trava o pedido: conferências e estornos de devoluções do mesmo
+      // pedido passam um de cada vez (mesma trava de `criar`).
+      await tx.$queryRaw`SELECT id FROM "Pedido" WHERE id = ${alvo.pedidoId} FOR UPDATE`;
+
+      const devolucao = await tx.devolucao.findUniqueOrThrow({
+        where: { id: devolucaoId },
+        include: {
+          itens: true,
+          pedido: { select: { status: true, total: true } },
+        },
+      });
+      if (
+        (devolucao.status as StatusDevolucao) !== StatusDevolucao.EM_CONFERENCIA
+      ) {
+        throw new ConflictException(
+          `Devolução com status ${devolucao.status} não pode ser concluída.`,
+        );
+      }
+      if (devolucao.conferidaEm) {
+        throw new ConflictException(
+          'A conferência desta devolução já foi registrada; falta só a confirmação do reembolso.',
+        );
+      }
+      if (
+        aceitas.size !== devolucao.itens.length ||
+        devolucao.itens.some((item) => !aceitas.has(item.itemPedidoId))
+      ) {
+        throw new BadRequestException(
+          'Informe a quantidade aceita de todos os itens da devolução (e só deles).',
+        );
+      }
+
+      // Em centavos, para a soma não acumular erro de ponto flutuante.
+      let centavos = 0;
+      let algoNaoAceito = false;
+      for (const item of devolucao.itens) {
+        const aceita = aceitas.get(item.itemPedidoId)!;
+        if (
+          !Number.isInteger(aceita) ||
+          aceita < 0 ||
+          aceita > item.quantidade
+        ) {
+          throw new BadRequestException(
+            `Quantidade aceita inválida para o item ${item.itemPedidoId}: de 0 a ${item.quantidade}.`,
+          );
+        }
+        if (aceita < item.quantidade) {
+          algoNaoAceito = true;
+        }
+        centavos += aceita * Math.round(Number(item.precoUnitario) * 100);
+      }
+      if (algoNaoAceito && !observacaoLimpa) {
+        throw new BadRequestException(
+          'Informe na observação por que parte dos itens não foi aceita.',
+        );
+      }
+      const valor = centavos / 100;
+
+      if (valor > 0) {
+        if ((devolucao.pedido.status as StatusPedido) !== StatusPedido.PAGO) {
+          throw new ConflictException(
+            `O pedido desta devolução está com status ${devolucao.pedido.status}; não é possível reembolsar.`,
+          );
+        }
+        // Somando todas as devoluções, nunca mais do que o pedido custou.
+        const outras = await tx.devolucao.aggregate({
+          where: {
+            pedidoId: alvo.pedidoId,
+            id: { not: devolucaoId },
+            reembolsoValor: { not: null },
+          },
+          _sum: { reembolsoValor: true },
+        });
+        const jaComprometido = Number(outras._sum.reembolsoValor ?? 0);
+        if (
+          Math.round((jaComprometido + valor) * 100) >
+          Math.round(Number(devolucao.pedido.total) * 100)
+        ) {
+          throw new ConflictException(
+            'O reembolso desta devolução, somado aos anteriores, passaria do valor pago no pedido.',
+          );
+        }
+      }
+
+      for (const item of devolucao.itens) {
+        await tx.itemDevolucao.update({
+          where: { id: item.id },
+          data: { quantidadeAceita: aceitas.get(item.itemPedidoId)! },
+        });
+      }
+      await tx.devolucao.update({
+        where: { id: devolucaoId },
+        data: {
+          conferidaEm: new Date(),
+          conferidoPorId: adminId,
+          observacaoConferencia: observacaoLimpa,
+          reembolsoValor: valor,
+          ...(valor === 0 ? { status: StatusDevolucao.CONCLUIDA } : {}),
+        },
+      });
+      return valor;
+    });
+
+    if (valor === 0) {
+      await this.avisarClienteDaConclusao(devolucaoId);
+    } else {
+      await this.sincronizarReembolso(devolucaoId, true);
+    }
+    return this.buscarParaAnalise(devolucaoId);
+  }
+
+  // Retoma o reembolso de uma conferência já registrada: confere no Asaas se
+  // o estorno desta devolução já existe (e se já foi concluído) antes de
+  // pedir um novo. Nunca cria um segundo estorno para a mesma devolução.
+  async reprocessarReembolso(devolucaoId: number): Promise<DevolucaoAnalise> {
+    await this.sincronizarReembolso(devolucaoId, true);
+    return this.buscarParaAnalise(devolucaoId);
+  }
+
+  // Chamado pelos webhooks de reembolso do Asaas (CheckoutService): conclui
+  // as devoluções do pedido cujo estorno o Asaas já confirmou — nunca cria
+  // estorno. Devolve o total já reembolsado e confirmado em devoluções do
+  // pedido (para quem chama decidir se o pedido inteiro foi reembolsado).
+  async confirmarReembolsosDoPedido(pedidoId: number): Promise<number> {
+    const pendentes = await this.prisma.devolucao.findMany({
+      where: {
+        pedidoId,
+        status: StatusDevolucao.EM_CONFERENCIA,
+        conferidaEm: { not: null },
+        reembolsadaEm: null,
+        reembolsoValor: { gt: 0 },
+      },
+      select: { id: true },
+    });
+    for (const pendente of pendentes) {
+      await this.sincronizarReembolso(pendente.id, false);
+    }
+
+    const confirmado = await this.prisma.devolucao.aggregate({
+      where: { pedidoId, reembolsadaEm: { not: null } },
+      _sum: { reembolsoValor: true },
+    });
+    return Number(confirmado._sum.reembolsoValor ?? 0);
+  }
+
+  // Ponto único que fala com o Asaas sobre o estorno de uma devolução. Roda
+  // com o pedido travado (FOR UPDATE) do começo ao fim: duas chamadas
+  // simultâneas passam uma de cada vez, e a segunda já encontra o estorno
+  // da primeira.
+  //
+  // O estorno da devolução é reconhecido no Asaas pelo id guardado
+  // (asaasRefundId) ou pela descrição "Devolução #<id>". Só é criado
+  // (`criar`) se não existir; depois de criar, a lista é relida — o que vale
+  // é o estorno como o Asaas o lista, não a resposta da criação.
+  //
+  // Com o estorno DONE, numa única escrita condicionada: reembolsadaEm,
+  // estoqueRestauradoEm e CONCLUIDA, e as unidades aceitas voltam ao
+  // estoque na mesma transação (nunca duas vezes; se falhar, nada fica pela
+  // metade).
+  private async sincronizarReembolso(
+    devolucaoId: number,
+    criar: boolean,
+  ): Promise<void> {
+    const alvo = await this.prisma.devolucao.findUnique({
+      where: { id: devolucaoId },
+      select: { pedidoId: true },
+    });
+    if (!alvo) {
+      throw new NotFoundException('Devolução não encontrada');
+    }
+
+    const concluida = await this.prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Pedido" WHERE id = ${alvo.pedidoId} FOR UPDATE`;
+
+        const devolucao = await tx.devolucao.findUniqueOrThrow({
+          where: { id: devolucaoId },
+          include: {
+            pedido: true,
+            itens: {
+              include: {
+                itemPedido: {
+                  select: { produtoId: true, estoqueBaixado: true },
+                },
+              },
+            },
+          },
+        });
+        const { pedido } = devolucao;
+        const valor = Number(devolucao.reembolsoValor ?? 0);
+        const pendente =
+          (devolucao.status as StatusDevolucao) ===
+            StatusDevolucao.EM_CONFERENCIA &&
+          devolucao.conferidaEm !== null &&
+          devolucao.reembolsadaEm === null &&
+          valor > 0;
+        if (!pendente) {
+          if (criar) {
+            throw new ConflictException(
+              'Esta devolução não tem reembolso pendente.',
+            );
+          }
+          return false;
+        }
+
+        let paymentId = pedido.asaasPaymentId;
+        if (!paymentId && pedido.asaasCheckoutId) {
+          const resultado =
+            await this.asaasService.resolverPaymentIdPorCheckout(
+              pedido.asaasCheckoutId,
+            );
+          if (resultado.encontrado) {
+            paymentId = resultado.payment.id;
+            await tx.pedido.update({
+              where: { id: pedido.id },
+              data: { asaasPaymentId: paymentId },
+            });
+          }
+        }
+        if (!paymentId) {
+          if (criar) {
+            throw new ConflictException(
+              'Não há informação de pagamento no Asaas para reembolsar este pedido.',
+            );
+          }
+          return false;
+        }
+
+        const descricao = this.descricaoDoEstorno(devolucaoId);
+        let estornos = await this.asaasService.consultarEstornos(paymentId);
+
+        // Estorno guardado que o Asaas cancelou/negou: deixa de valer, para
+        // um novo poder ser pedido.
+        let refundId = devolucao.asaasRefundId;
+        if (
+          refundId &&
+          estornos.some(
+            (item) => item.id === refundId && item.status === 'CANCELLED',
+          )
+        ) {
+          this.logger.warn(
+            `Estorno ${refundId} da devolução ${devolucaoId} foi cancelado pelo Asaas.`,
+          );
+          await tx.devolucao.update({
+            where: { id: devolucaoId },
+            data: { asaasRefundId: null },
+          });
+          refundId = null;
+        }
+
+        let estorno = this.estornoDaDevolucao(estornos, refundId, descricao);
+
+        if (!estorno) {
+          if (!criar) {
+            return false;
+          }
+          if ((pedido.status as StatusPedido) !== StatusPedido.PAGO) {
+            throw new ConflictException(
+              `O pedido desta devolução está com status ${pedido.status}; não é possível reembolsar.`,
+            );
+          }
+
+          // Todo estorno ativo do pagamento tem de ser de uma devolução
+          // deste pedido. Um que não seja (reembolso feito fora daqui, ou
+          // uma tentativa anterior que o Asaas não devolveu identificada)
+          // bloqueia: criar outro poderia devolver o dinheiro duas vezes.
+          const ativos = estornos.filter((item) => item.status !== 'CANCELLED');
+          const outras = await tx.devolucao.findMany({
+            where: { pedidoId: pedido.id, id: { not: devolucaoId } },
+            select: { id: true, asaasRefundId: true },
+          });
+          const semDono = ativos.some(
+            (item) =>
+              !outras.some(
+                (outra) =>
+                  this.estornoDaDevolucao(
+                    [item],
+                    outra.asaasRefundId,
+                    this.descricaoDoEstorno(outra.id),
+                  ) !== undefined,
+              ),
+          );
+          if (semDono) {
+            throw new ConflictException(
+              'Já existe no Asaas um estorno deste pagamento que não pertence a nenhuma devolução. Confira no painel do Asaas antes de tentar de novo.',
+            );
+          }
+          const jaEstornado = ativos.reduce(
+            (soma, item) => soma + Math.round(Number(item.value) * 100),
+            0,
+          );
+          if (
+            jaEstornado + Math.round(valor * 100) >
+            Math.round(Number(pedido.total) * 100)
+          ) {
+            throw new ConflictException(
+              'O reembolso desta devolução, somado aos estornos já feitos, passaria do valor pago no pedido.',
+            );
+          }
+
+          await this.asaasService.estornarPagamento(
+            paymentId,
+            descricao,
+            valor,
+          );
+          estornos = await this.asaasService.consultarEstornos(paymentId);
+          estorno = this.estornoDaDevolucao(estornos, null, descricao);
+        }
+
+        if (!estorno) {
+          // Pedido ao Asaas, mas ainda não listado: fica pendente.
+          return false;
+        }
+        if (
+          !refundId &&
+          typeof estorno.id === 'string' &&
+          estorno.id &&
+          estorno.id !== paymentId
+        ) {
+          await tx.devolucao.update({
+            where: { id: devolucaoId },
+            data: { asaasRefundId: estorno.id },
+          });
+        }
+        if (estorno.status !== 'DONE') {
+          // Em processamento: quem conclui é o webhook ou um reprocessamento.
+          return false;
+        }
+
+        const agora = new Date();
+        const fechamento = await tx.devolucao.updateMany({
+          where: {
+            id: devolucaoId,
+            status: StatusDevolucao.EM_CONFERENCIA,
+            reembolsadaEm: null,
+            estoqueRestauradoEm: null,
+          },
+          data: {
+            status: StatusDevolucao.CONCLUIDA,
+            reembolsadaEm: agora,
+            estoqueRestauradoEm: agora,
+          },
+        });
+        if (fechamento.count === 0) {
+          return false;
+        }
+
+        for (const item of devolucao.itens) {
+          const aceita = item.quantidadeAceita ?? 0;
+          if (aceita === 0) {
+            continue;
+          }
+          // Mesma regra do reembolso do pedido: só volta ao estoque o que
+          // comprovadamente saiu dele.
+          if (item.itemPedido.estoqueBaixado !== true) {
+            this.logger.warn(
+              `Estoque não restaurado para o item ${item.itemPedidoId} da devolução ${devolucaoId}: baixa de estoque não registrada na compra.`,
+            );
+            continue;
+          }
+          await tx.produto.update({
+            where: { id: item.itemPedido.produtoId },
+            data: { quantidade: { increment: aceita } },
+          });
+        }
+        return true;
+      },
+      // A transação espera as respostas do Asaas.
+      { timeout: 30_000 },
+    );
+
+    if (concluida) {
+      await this.avisarClienteDaConclusao(devolucaoId);
+    }
+  }
+
+  private descricaoDoEstorno(devolucaoId: number): string {
+    return `Devolução #${devolucaoId}`;
+  }
+
+  // O estorno (não cancelado) de uma devolução na lista do Asaas: pelo id
+  // guardado ou pela descrição.
+  private estornoDaDevolucao(
+    estornos: AsaasRefund[],
+    refundId: string | null,
+    descricao: string,
+  ): AsaasRefund | undefined {
+    return estornos.find(
+      (estorno) =>
+        estorno.status !== 'CANCELLED' &&
+        ((refundId !== null && estorno.id === refundId) ||
+          estorno.description === descricao),
+    );
+  }
+
+  private async recusarPorStatus(
+    devolucaoId: number,
+    acao: string,
+  ): Promise<never> {
+    const atual = await this.prisma.devolucao.findUnique({
+      where: { id: devolucaoId },
+    });
+    if (!atual) {
+      throw new NotFoundException('Devolução não encontrada');
+    }
+    throw new ConflictException(
+      `Devolução com status ${atual.status} não pode ${acao}.`,
+    );
+  }
+
+  // E-mail ao cliente quando a devolução é concluída. Nunca lança.
+  private async avisarClienteDaConclusao(devolucaoId: number): Promise<void> {
+    try {
+      const devolucao = await this.prisma.devolucao.findUnique({
+        where: { id: devolucaoId },
+        include: {
+          usuario: { select: { nome: true, email: true } },
+          pedido: {
+            select: { numero: true, clienteNome: true, clienteEmail: true },
+          },
+        },
+      });
+      if (!devolucao) {
+        return;
+      }
+
+      const destinatario =
+        devolucao.usuario?.email ?? devolucao.pedido.clienteEmail;
+      if (!destinatario) {
+        this.logger.warn(
+          `Devolução ${devolucaoId} sem e-mail de cliente — aviso da conclusão não enviado.`,
+        );
+        return;
+      }
+
+      const nome = escaparHtml(
+        devolucao.usuario?.nome ?? devolucao.pedido.clienteNome ?? 'cliente',
+      );
+      const numero = escaparHtml(devolucao.pedido.numero);
+      const valor = Number(devolucao.reembolsoValor ?? 0);
+      const observacao = devolucao.observacaoConferencia
+        ? `<p>Observação da conferência: ${escaparHtml(devolucao.observacaoConferencia)}</p>`
+        : '';
+
+      await this.mailService.enviarEmail({
+        to: destinatario,
+        subject: `Devolução concluída — pedido ${devolucao.pedido.numero}`,
+        html:
+          `<p>Olá, ${nome}.</p>` +
+          `<p>A conferência da sua devolução do pedido ${numero} foi concluída.</p>` +
+          (valor > 0
+            ? `<p>O reembolso de R$ ${valor.toFixed(2).replace('.', ',')} foi confirmado, na mesma forma de pagamento da compra.</p>`
+            : '<p>Os itens devolvidos não foram aceitos na conferência; não há reembolso.</p>') +
+          observacao +
+          '<p>Se tiver dúvidas, é só responder este e-mail.</p>',
+      });
+    } catch (erro) {
+      this.logger.error(
+        `Falha ao avisar o cliente sobre a conclusão da devolução ${devolucaoId}.`,
+        erro instanceof Error ? erro.stack : String(erro),
+      );
+    }
+  }
+
   private async carregarParaLogistica(
     devolucaoId: number,
   ): Promise<DevolucaoLogistica> {
@@ -1218,7 +1752,13 @@ export class DevolucoesService {
         itemPedidoId: item.itemPedidoId,
         quantidade: item.quantidade,
         precoUnitario: Number(item.precoUnitario),
+        quantidadeAceita: item.quantidadeAceita ?? null,
       })),
+      reembolsoValor:
+        devolucao.reembolsoValor != null
+          ? Number(devolucao.reembolsoValor)
+          : null,
+      reembolsadaEm: devolucao.reembolsadaEm ?? null,
       evidencias: (devolucao.evidencias ?? []).map((evidencia) =>
         this.paraEvidencia(evidencia),
       ),

@@ -66,7 +66,10 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
       updateMany: jest.Mock;
       update: jest.Mock;
     };
+    devolucao: { findFirst: jest.Mock };
   };
+  // Etapa 9.1 — devolução do pedido que impede o reembolso integral (ou null).
+  let devolucaoImpeditiva: { status: string } | null;
   let pedidoFake: {
     id: number;
     usuarioId: number;
@@ -80,6 +83,7 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
   };
 
   beforeEach(async () => {
+    devolucaoImpeditiva = null;
     pedidoFake = {
       id: 1,
       usuarioId: CLIENTE.id,
@@ -118,7 +122,14 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
             const envioOk =
               where.statusEnvio === undefined ||
               where.statusEnvio === pedidoFake.statusEnvio;
-            if (ownerOk && envioOk && where.status === pedidoFake.status) {
+            // Etapa 9.1 — `devolucoes: { none }` do claim: com devolução
+            // impeditiva, a escrita não acontece.
+            if (
+              ownerOk &&
+              envioOk &&
+              devolucaoImpeditiva === null &&
+              where.status === pedidoFake.status
+            ) {
               pedidoFake.status = data.status;
               return { count: 1 };
             }
@@ -129,6 +140,9 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
           Object.assign(pedidoFake, data);
           return { ...pedidoFake };
         }),
+      },
+      devolucao: {
+        findFirst: jest.fn(() => devolucaoImpeditiva),
       },
     };
 
@@ -424,6 +438,87 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
 
     expect(resultado.status).toBe(StatusPedido.REEMBOLSO_SOLICITADO);
     expect(asaasService.estornarPagamento).toHaveBeenCalledWith('pay_123');
+  });
+
+  // Etapa 9.1 — o reembolso integral nunca passa por cima de uma devolução.
+  it.each([
+    'SOLICITADA',
+    'EM_ANALISE',
+    'APROVADA',
+    'AGUARDANDO_ENVIO',
+    'ENVIADA',
+    'RECEBIDA',
+    'EM_CONFERENCIA',
+  ])(
+    'V: devolução em andamento (%s) bloqueia o reembolso integral, inclusive do ADMIN',
+    async (status) => {
+      pedidoFake.asaasPaymentId = 'pay_123';
+      pedidoFake.statusEnvio = StatusEnvio.ENVIADO;
+      devolucaoImpeditiva = { status };
+
+      await expect(service.solicitarReembolso(1, ADMIN)).rejects.toThrow(
+        'devolução em andamento',
+      );
+
+      expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+      expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+      expect(asaasService.consultarEstornos).not.toHaveBeenCalled();
+      expect(asaasService.estornarPagamento).not.toHaveBeenCalled();
+    },
+  );
+
+  it('W: pedido com reembolso parcial por devolução concluída não aceita reembolso integral', async () => {
+    pedidoFake.asaasPaymentId = 'pay_123';
+    pedidoFake.statusEnvio = StatusEnvio.ENVIADO;
+    devolucaoImpeditiva = { status: 'CONCLUIDA' };
+
+    await expect(service.solicitarReembolso(1, ADMIN)).rejects.toThrow(
+      'reembolso parcial',
+    );
+
+    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+    expect(asaasService.estornarPagamento).not.toHaveBeenCalled();
+  });
+
+  it('X: a consulta de devoluções impeditivas cobre as em andamento e as já reembolsadas', async () => {
+    pedidoFake.asaasPaymentId = 'pay_123';
+    asaasService.estornarPagamento.mockResolvedValueOnce(refund());
+
+    await service.solicitarReembolso(1, CLIENTE);
+
+    const filtro = {
+      OR: [
+        { status: { notIn: ['RECUSADA', 'CANCELADA', 'CONCLUIDA'] } },
+        { reembolsoValor: { gt: 0 } },
+      ],
+    };
+    expect(prisma.devolucao.findFirst).toHaveBeenCalledWith({
+      where: { pedidoId: 1, ...filtro },
+      select: { status: true },
+    });
+    // E a mesma condição vai no WHERE do claim (instante da escrita).
+    expect(prisma.pedido.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ devolucoes: { none: filtro } }),
+      }),
+    );
+  });
+
+  it('Y: devolução que surge entre a consulta e o claim também bloqueia (nenhuma chamada ao Asaas)', async () => {
+    pedidoFake.asaasPaymentId = 'pay_123';
+    pedidoFake.statusEnvio = StatusEnvio.ENVIADO;
+    prisma.devolucao.findFirst.mockImplementationOnce(() => {
+      // A consulta não vê nada; a devolução é criada logo depois.
+      devolucaoImpeditiva = { status: 'SOLICITADA' };
+      return null;
+    });
+
+    await expect(service.solicitarReembolso(1, ADMIN)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+
+    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+    expect(asaasService.estornarPagamento).not.toHaveBeenCalled();
   });
 });
 

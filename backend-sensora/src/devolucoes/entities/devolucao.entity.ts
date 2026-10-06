@@ -5,6 +5,8 @@ export class ItemDevolucao {
   itemPedidoId: number;
   quantidade: number;
   precoUnitario: number;
+  // Etapa 9.1 — unidades aceitas na conferência (nulo antes dela).
+  quantidadeAceita: number | null;
 }
 
 // Foto da devolução. `url` é uma URL assinada de validade curta, gerada a
@@ -60,6 +62,10 @@ export class Devolucao {
   // análise (observacaoAnalise) não é exposta ao cliente.
   analisadaEm: Date | null;
   itens: ItemDevolucao[];
+  // Etapa 9.1 — valor do reembolso desta devolução (definido na conferência)
+  // e quando o Asaas confirmou o estorno.
+  reembolsoValor: number | null;
+  reembolsadaEm: Date | null;
   evidencias: EvidenciaDevolucao[];
   envio: EnvioDevolucaoCliente | null;
 }
@@ -98,6 +104,14 @@ export class DevolucaoAnalise {
   observacaoAnalise: string | null;
   analisadoPorNome: string | null;
   recebidaEm: Date | null;
+  // Etapa 9.1 — conferência e fechamento. reembolsoValor definido com
+  // reembolsadaEm nulo (e valor > 0) = estorno ainda não confirmado.
+  conferidaEm: Date | null;
+  observacaoConferencia: string | null;
+  conferidoPorNome: string | null;
+  reembolsoValor: number | null;
+  reembolsadaEm: Date | null;
+  estoqueRestauradoEm: Date | null;
   pedido: {
     id: number;
     numero: string;
@@ -115,6 +129,7 @@ export class DevolucaoAnalise {
     quantidade: number;
     quantidadeComprada: number;
     precoUnitario: number;
+    quantidadeAceita: number | null;
   }[];
   evidencias: EvidenciaDevolucao[];
   envio: EnvioDevolucaoAdmin | null;

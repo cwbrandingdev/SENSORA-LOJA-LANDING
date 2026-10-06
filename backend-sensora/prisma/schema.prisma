@@ -64,6 +64,7 @@ model Usuario {
   // analisou (ADMIN). Duas relações com Devolucao, por isso os nomes.
   devolucoes              Devolucao[]    @relation("DevolucaoUsuario")
   devolucoesAnalisadas    Devolucao[]    @relation("DevolucaoAnalisadoPor")
+  devolucoesConferidas    Devolucao[]    @relation("DevolucaoConferidoPor")
 }
 
 // Task 8 (Carrinho/Checkout) — endereços de entrega do próprio usuário
@@ -279,25 +280,40 @@ model ItemPedido {
 // Regras comerciais (prazo, frete, motivos aceitos, produtos não
 // devolvíveis) ainda não foram definidas e ficam fora do schema.
 model Devolucao {
-  id                Int             @id @default(autoincrement())
-  pedidoId          Int
-  usuarioId         Int?
+  id                    Int             @id @default(autoincrement())
+  pedidoId              Int
+  usuarioId             Int?
   // Texto livre: a lista de motivos aceitos ainda não foi definida.
-  motivo            String
-  descricao         String?
-  status            StatusDevolucao @default(SOLICITADA)
-  solicitadaEm      DateTime        @default(now())
+  motivo                String
+  descricao             String?
+  status                StatusDevolucao @default(SOLICITADA)
+  solicitadaEm          DateTime        @default(now())
   // Preenchidos quando a devolução é aprovada ou recusada.
-  analisadaEm       DateTime?
-  observacaoAnalise String?
-  analisadoPorId    Int?
+  analisadaEm           DateTime?
+  observacaoAnalise     String?
+  analisadoPorId        Int?
   // Etapa 8 — quando o ADMIN confirmou que o produto chegou (ENVIADA -> RECEBIDA).
-  recebidaEm        DateTime?
-  atualizadoEm      DateTime        @updatedAt
+  recebidaEm            DateTime?
+  // Etapa 9.1 — conferência física (EM_CONFERENCIA) e fechamento. A
+  // conferência é registrada uma única vez (conferidaEm) e define
+  // reembolsoValor = soma de quantidadeAceita x precoUnitario dos itens
+  // (0 quando nada foi aceito). asaasRefundId é o estorno desta devolução
+  // no Asaas; reembolsadaEm, a confirmação dele (status DONE).
+  // estoqueRestauradoEm marca a devolução única das unidades aceitas ao
+  // estoque, feita junto com a confirmação do reembolso.
+  conferidaEm           DateTime?
+  conferidoPorId        Int?
+  observacaoConferencia String?
+  reembolsoValor        Decimal?        @db.Decimal(10, 2)
+  asaasRefundId         String?         @unique
+  reembolsadaEm         DateTime?
+  estoqueRestauradoEm   DateTime?
+  atualizadoEm          DateTime        @updatedAt
 
   pedido       Pedido               @relation(fields: [pedidoId], references: [id], onDelete: Restrict)
   usuario      Usuario?             @relation("DevolucaoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
   analisadoPor Usuario?             @relation("DevolucaoAnalisadoPor", fields: [analisadoPorId], references: [id], onDelete: SetNull)
+  conferidoPor Usuario?             @relation("DevolucaoConferidoPor", fields: [conferidoPorId], references: [id], onDelete: SetNull)
   itens        ItemDevolucao[]
   evidencias   EvidenciaDevolucao[]
   envio        EnvioDevolucao?
@@ -316,11 +332,14 @@ model Devolucao {
 // `precoUnitario` é copiado de ItemPedido.precoUnitario na criação (mesmo
 // nome), para o valor a devolver nunca depender do preço atual do Produto.
 model ItemDevolucao {
-  id            Int     @id @default(autoincrement())
-  devolucaoId   Int
-  itemPedidoId  Int
-  quantidade    Int
-  precoUnitario Decimal @db.Decimal(10, 2)
+  id               Int     @id @default(autoincrement())
+  devolucaoId      Int
+  itemPedidoId     Int
+  quantidade       Int
+  precoUnitario    Decimal @db.Decimal(10, 2)
+  // Etapa 9.1 — unidades aprovadas na conferência física (0..quantidade).
+  // É o que é reembolsado e o que volta ao estoque; nulo antes da conferência.
+  quantidadeAceita Int?
 
   // Cascade só a partir da própria Devolucao (item não existe sem ela);
   // Restrict no ItemPedido para nunca perder o item devolvido.

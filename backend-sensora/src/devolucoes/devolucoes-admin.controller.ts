@@ -24,6 +24,7 @@ import {
   AprovarDevolucaoDto,
   RecusarDevolucaoDto,
 } from './dto/analisar-devolucao.dto';
+import { ConcluirConferenciaDto } from './dto/concluir-conferencia.dto';
 import { GerarLogisticaDto } from './dto/gerar-logistica.dto';
 import {
   DevolucaoAnalise,
@@ -128,5 +129,41 @@ export class DevolucoesAdminController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<DevolucaoAnalise> {
     return this.devolucoesService.confirmarRecebimento(id);
+  }
+
+  // Etapa 9.1 — conferência e fechamento. Tudo só ADMIN (herdado da classe).
+
+  @Post(':id/conferencia')
+  @HttpCode(HttpStatus.OK)
+  iniciarConferencia(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<DevolucaoAnalise> {
+    return this.devolucoesService.iniciarConferencia(id);
+  }
+
+  // Registra as quantidades aceitas e pede o reembolso. O valor nunca vem
+  // do corpo: é calculado no service.
+  @Post(':id/concluir')
+  @HttpCode(HttpStatus.OK)
+  concluirConferencia(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ConcluirConferenciaDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ): Promise<DevolucaoAnalise> {
+    return this.devolucoesService.concluirConferencia(
+      id,
+      user.id,
+      dto.itens,
+      dto.observacao,
+    );
+  }
+
+  // Retoma/reconfere o reembolso de uma conferência já registrada.
+  @Post(':id/reembolso')
+  @HttpCode(HttpStatus.OK)
+  reprocessarReembolso(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<DevolucaoAnalise> {
+    return this.devolucoesService.reprocessarReembolso(id);
   }
 }

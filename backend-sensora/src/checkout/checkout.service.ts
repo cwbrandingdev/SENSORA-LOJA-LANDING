@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import Stripe from 'stripe';
 import { AsaasService } from '../asaas/asaas.service';
+import { DevolucoesService } from '../devolucoes/devolucoes.service';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
@@ -96,6 +97,7 @@ export class CheckoutService {
     private readonly asaasService: AsaasService,
     private readonly usuariosService: UsuariosService,
     private readonly melhorEnvioService: MelhorEnvioService,
+    private readonly devolucoesService: DevolucoesService,
   ) {
     this.gateway =
       (this.configService.get<string>('CHECKOUT_GATEWAY') as
@@ -684,6 +686,15 @@ export class CheckoutService {
       return;
     }
 
+    // Etapa 9.1 — estornos de devolução. Para qualquer evento de reembolso,
+    // as devoluções do pedido com estorno pendente são conferidas no Asaas:
+    // quem decide é o status do estorno de cada uma (DONE conclui a
+    // devolução e devolve o estoque aceito; cancelado/negado libera um novo
+    // pedido de estorno), nunca o nome do evento. Pedido.status não é
+    // tocado aqui. Sem devolução pendente, nada é consultado.
+    const reembolsadoEmDevolucoes =
+      await this.devolucoesService.confirmarReembolsosDoPedido(pedido.id);
+
     if (evento !== 'PAYMENT_REFUNDED') {
       // PAYMENT_REFUND_IN_PROGRESS (item 5): continua REEMBOLSO_SOLICITADO.
       // PAYMENT_PARTIALLY_REFUNDED (item 9): MVP só suporta reembolso
@@ -723,6 +734,32 @@ export class CheckoutService {
     // REEMBOLSO_SOLICITADO), que continua protegido exatamente como na
     // Etapa 5B.5 — sem transição forçada, sem restauração de estoque.
     const jaEstavaReembolsado = pedido.status === StatusPedido.REEMBOLSADO;
+
+    // Etapa 9.1 — pagamento todo estornado por devoluções (pedido ainda
+    // PAGO): só vira REEMBOLSADO se o que foi confirmado nas devoluções
+    // cobre o total do pedido. Reembolso parcial deixa o pedido PAGO. O
+    // estoque já foi devolvido por devolução (quantidade aceita), nunca por
+    // aqui.
+    if (
+      resultado.count === 0 &&
+      (pedido.status as StatusPedido) === StatusPedido.PAGO &&
+      reembolsadoEmDevolucoes > 0
+    ) {
+      if (
+        Math.round(reembolsadoEmDevolucoes * 100) >=
+        Math.round(Number(pedido.total) * 100)
+      ) {
+        await this.prisma.pedido.updateMany({
+          where: { id: pedido.id, status: StatusPedido.PAGO },
+          data: { status: StatusPedido.REEMBOLSADO },
+        });
+      } else {
+        this.logger.log(
+          `Webhook Asaas PAYMENT_REFUNDED para o pedido ${pedido.id}: reembolso parcial por devolução — pedido continua PAGO.`,
+        );
+      }
+      return;
+    }
 
     if (resultado.count === 0 && !jaEstavaReembolsado) {
       this.logger.warn(

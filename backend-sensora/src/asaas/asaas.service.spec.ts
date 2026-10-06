@@ -256,6 +256,39 @@ describe('AsaasService', () => {
       expect(corpo.value).toBeUndefined();
     });
 
+    // Etapa 9.1 — estorno parcial (devolução).
+    it('com value: solicita o estorno parcial desse valor', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({ id: 'ref_124', status: 'PENDING', value: 100 }),
+      });
+
+      await service.estornarPagamento('pay_123', 'Devolução #1', 100);
+
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe(`${BASE_URL}/payments/pay_123/refund`);
+      expect(JSON.parse(init.body as string)).toEqual({
+        description: 'Devolução #1',
+        value: 100,
+      });
+    });
+
+    it('sem descrição e sem value: corpo vazio, como antes', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({ id: 'ref_125', status: 'PENDING', value: 39.9 }),
+      });
+
+      await service.estornarPagamento('pay_123');
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(init.body as string)).toEqual({});
+    });
+
     it('HTTP 200 com status PENDING não deve ser interpretado como concluído pelo chamador', async () => {
       fetchMock.mockResolvedValueOnce({
         ok: true,

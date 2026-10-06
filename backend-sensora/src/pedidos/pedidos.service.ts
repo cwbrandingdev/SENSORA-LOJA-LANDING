@@ -12,6 +12,7 @@ import type {
 } from '../../generated/prisma/client';
 import { Prisma } from '../../generated/prisma/client';
 import { AsaasErroHttpError, AsaasService } from '../asaas/asaas.service';
+import { StatusDevolucao } from '../devolucoes/enums/status-devolucao.enum';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { NotaFiscalResumo } from '../fiscal/entities/nota-fiscal.entity';
 import { StatusFiscal } from '../fiscal/enums/status-fiscal.enum';
@@ -26,6 +27,23 @@ import { PedidoComItensDetalhado } from './entities/pedido-com-itens-detalhado.e
 import { Pedido } from './entities/pedido.entity';
 import { StatusEnvio } from './enums/status-envio.enum';
 import { StatusPedido } from './enums/status-pedido.enum';
+
+// Etapa 9.1 — devoluções que impedem o reembolso integral do pedido: as que
+// ainda estão em andamento e as que já reembolsaram algum valor.
+const DEVOLUCAO_QUE_IMPEDE_REEMBOLSO_INTEGRAL = {
+  OR: [
+    {
+      status: {
+        notIn: [
+          StatusDevolucao.RECUSADA,
+          StatusDevolucao.CANCELADA,
+          StatusDevolucao.CONCLUIDA,
+        ],
+      },
+    },
+    { reembolsoValor: { gt: 0 } },
+  ],
+} satisfies Prisma.DevolucaoWhereInput;
 
 const PEDIDO_ENVIADO_MENSAGEM =
   'Pedido já enviado não pode ser reembolsado diretamente. Solicite a devolução.';
@@ -380,8 +398,32 @@ export class PedidosService {
       ? {}
       : { statusEnvio: StatusEnvio.NAO_ENVIADO };
 
+    // Etapa 9.1 — o reembolso integral nunca passa por cima de uma
+    // devolução: bloqueado enquanto houver devolução em andamento (ela ainda
+    // pode gerar um estorno) ou já reembolsada (estornar o total passaria do
+    // valor pago). Conferido aqui, para a mensagem, e de novo no WHERE do
+    // claim abaixo, no instante da escrita.
+    const devolucaoImpeditiva = await this.prisma.devolucao.findFirst({
+      where: { pedidoId: id, ...DEVOLUCAO_QUE_IMPEDE_REEMBOLSO_INTEGRAL },
+      select: { status: true },
+    });
+    if (devolucaoImpeditiva) {
+      throw new ConflictException(
+        (devolucaoImpeditiva.status as StatusDevolucao) ===
+          StatusDevolucao.CONCLUIDA
+          ? 'Este pedido já teve reembolso parcial por devolução; o reembolso integral não está disponível.'
+          : 'Este pedido tem uma devolução em andamento; conclua a devolução antes de reembolsar o pedido.',
+      );
+    }
+
     const claim = await this.prisma.pedido.updateMany({
-      where: { id, ...ownerFilter, ...envioFilter, status: StatusPedido.PAGO },
+      where: {
+        id,
+        ...ownerFilter,
+        ...envioFilter,
+        status: StatusPedido.PAGO,
+        devolucoes: { none: DEVOLUCAO_QUE_IMPEDE_REEMBOLSO_INTEGRAL },
+      },
       data: { status: StatusPedido.REEMBOLSO_SOLICITADO },
     });
 
