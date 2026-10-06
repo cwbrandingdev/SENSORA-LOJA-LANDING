@@ -67,6 +67,15 @@ async function mockDetalheMeuPedido(page: Page, pedido: Record<string, unknown>)
     }
     await route.fulfill({ json: { pedido, itens: [], total: pedido.total } });
   });
+  // Pedido PAGO + ENVIADO também busca as devoluções do pedido — sem este
+  // mock a chamada iria ao backend real e o 401 levaria para o login.
+  await page.route(`**/pedidos/meus/${pedido.id}/devolucoes`, async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({ json: { devolucoes: [], itensDisponiveis: [] } });
+  });
 }
 
 test.describe("Minha Conta / Pedidos — indicador de envio na listagem", () => {

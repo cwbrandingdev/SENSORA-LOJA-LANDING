@@ -473,15 +473,15 @@ test.describe("Carrinho — isolamento por conta (Etapa Carrinho por conta)", ()
   }
 
   async function logout(page: Page) {
-    // O botão "Sair" existe duas vezes no DOM (Navbar desktop e o menu
-    // mobile, sempre montados os dois — só a visibilidade muda por CSS
-    // responsivo, ver components/layout/Navbar.tsx) — filtra pelo
-    // visível no viewport de teste (desktop) para não colidir com o modo
-    // estrito do Playwright (2 elementos combinando o mesmo role+nome).
-    await page
-      .getByRole("button", { name: "Sair" })
-      .and(page.locator(":visible"))
-      .click();
+    // No desktop o Navbar não tem mais "Sair": ele só existe no menu mobile
+    // aberto (ver components/layout/Navbar.tsx). Usa esse logout real do
+    // Navbar com o viewport mobile por um instante, a partir da página
+    // atual (fora de /conta, onde ProtectedAccountLayout trocaria o destino
+    // para /login?redirect=/conta), e restaura o viewport depois.
+    const viewportOriginal = page.viewportSize();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("button", { name: "Abrir menu" }).click();
+    await page.getByRole("button", { name: "Sair", exact: true }).click();
     // waitForURL (não expect(page).toHaveURL) + waitForLoadState: /login é
     // outro root layout (reload completo do documento, ver comentário no
     // topo de context/CartContext.tsx) — sem esperar o load/hidratação
@@ -490,6 +490,7 @@ test.describe("Carrinho — isolamento por conta (Etapa Carrinho por conta)", ()
     // nativo (GET com ?email=...&senha=... na URL, formulário nunca
     // processado pela app).
     await page.waitForURL(/\/login$/);
+    if (viewportOriginal) await page.setViewportSize(viewportOriginal);
     // networkidle (não só "load"): em dev, a rota /login pode ainda estar
     // sendo compilada sob demanda pelo Next.js (chunk buscado via rede
     // depois do evento "load") — mesmo padrão já usado em
