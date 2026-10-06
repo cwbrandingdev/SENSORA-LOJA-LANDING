@@ -27,11 +27,11 @@
 // tecla digitada (ver lib/cpf.ts e lib/telefone.ts) — o valor normalizado
 // de verdade é sempre recalculado no backend antes de persistir.
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { isAxiosError } from "axios";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
-import FormButton from "@/components/ui/FormButton";
 import Skeleton from "@/components/ui/Skeleton";
 import AccountPageHeader from "@/components/conta/AccountPageHeader";
 import { useToast } from "@/context/ToastContext";
@@ -40,9 +40,10 @@ import { atualizarMeuPerfil, buscarMeuPerfil } from "@/services/conta";
 import Link from "next/link";
 import { ROUTES } from "@/lib/routes";
 import { EMPRESA, ROTAS_LEGAIS, mailtoAssunto } from "@/lib/empresa";
-import { cpfValido, formatarCpf } from "@/lib/cpf";
-import { formatarTelefone, telefoneValido } from "@/lib/telefone";
+import { cpfValido } from "@/lib/cpf";
+import { telefoneValido } from "@/lib/telefone";
 import type { Usuario } from "@/lib/types/loja";
+import CartaoPerfilDados from "@/components/conta/CartaoPerfilDados";
 
 const dadosSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório").max(150, "Nome muito longo"),
@@ -60,14 +61,18 @@ const dadosSchema = z.object({
     .refine((valor) => valor.trim() === "" || telefoneValido(valor), {
       message: "Telefone inválido",
     }),
+  // Só é enviada quando o e-mail muda de verdade (ver onSubmit).
+  senhaAtual: z.string(),
 });
 
 type DadosFormValues = z.infer<typeof dadosSchema>;
 type Campo = "nome" | "email" | "cpf" | "telefone";
 
-const inputClass =
-  "rounded-md border border-slate-300 px-3 py-2 text-sm transition-colors duration-200 focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy";
-const errorClass = "text-sm text-red-600";
+// Mesma normalização do backend (normalizarEmail): só caixa/espaços
+// diferentes não contam como troca de e-mail.
+function normalizarEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
 
 function valoresIniciais(usuario: Usuario): DadosFormValues {
   return {
@@ -75,6 +80,7 @@ function valoresIniciais(usuario: Usuario): DadosFormValues {
     email: usuario.email,
     cpf: usuario.cpf ?? "",
     telefone: usuario.telefone ?? "",
+    senhaAtual: "",
   };
 }
 
@@ -88,11 +94,20 @@ export default function DadosPessoaisPage() {
     register,
     handleSubmit,
     reset,
+    control,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<DadosFormValues>({
     resolver: zodResolver(dadosSchema),
-    defaultValues: { nome: "", email: "", cpf: "", telefone: "" },
+    defaultValues: { nome: "", email: "", cpf: "", telefone: "", senhaAtual: "" },
   });
+
+  // Troca de e-mail exige a senha atual; o campo só aparece nesse caso.
+  const emailDigitado = useWatch({ control, name: "email" });
+  const trocandoEmail =
+    campoEditando === "email" &&
+    usuario !== null &&
+    normalizarEmail(emailDigitado) !== normalizarEmail(usuario.email);
 
   useEffect(() => {
     buscarMeuPerfil()
@@ -117,22 +132,33 @@ export default function DadosPessoaisPage() {
     setCampoEditando(null);
   }
 
-  async function onSubmit(data: DadosFormValues) {
+  async function onSubmit({ senhaAtual, ...dados }: DadosFormValues) {
+    if (trocandoEmail && !senhaAtual) {
+      setError("senhaAtual", { message: "Informe sua senha atual para alterar o e-mail." });
+      return;
+    }
     try {
-      const atualizado = await atualizarMeuPerfil(data);
-      // Troca de e-mail: o backend grava o endereço novo como não verificado
-      // e envia o link de confirmação para ele (a sessão atual continua).
-      const emailAlterado = usuario !== null && atualizado.email !== usuario.email;
+      const atualizado = await atualizarMeuPerfil(
+        trocandoEmail ? { ...dados, senhaAtual } : dados,
+      );
+      // Troca de e-mail: o backend mantém o e-mail atual como oficial e
+      // devolve o novo em `emailPendente` até ele ser confirmado pelo link.
       setUsuario(atualizado);
       reset(valoresIniciais(atualizado));
       setCampoEditando(null);
       toast.success(
-        emailAlterado
-          ? `Novo e-mail salvo. Enviamos um link de confirmação para ${atualizado.email} — confirme o novo endereço para continuar entrando com ele.`
+        trocandoEmail && atualizado.emailPendente
+          ? `Dados atualizados com sucesso. Seu e-mail atual continua sendo o oficial até você confirmar o novo endereço. Enviamos um link de confirmação para ${atualizado.emailPendente}.`
           : "Dados atualizados com sucesso.",
       );
     } catch (err) {
-      toast.error(getErrorMessage(err, "Não foi possível atualizar seus dados."));
+      const mensagem = getErrorMessage(err, "Não foi possível atualizar seus dados.");
+      // 400 na troca de e-mail = senha atual incorreta: mostra no próprio campo.
+      if (trocandoEmail && isAxiosError(err) && err.response?.status === 400) {
+        setError("senhaAtual", { message: mensagem });
+        return;
+      }
+      toast.error(mensagem);
     }
   }
 
@@ -155,234 +181,16 @@ export default function DadosPessoaisPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="mt-10 flex flex-col gap-4">
-            {/* Nome */}
-            <div className="rounded-sm border border-slate-200 bg-white p-6 transition-colors duration-300 focus-within:border-brand-navy/40">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    Nome
-                  </p>
-                  {campoEditando === "nome" ? (
-                    <div className="mt-2 flex flex-col gap-1">
-                      <input
-                        id="nome"
-                        type="text"
-                        autoFocus
-                        className={inputClass}
-                        {...register("nome")}
-                      />
-                      {errors.nome && <p className={errorClass}>{errors.nome.message}</p>}
-                    </div>
-                  ) : (
-                    <p className="mt-1 truncate text-base text-brand-navy">{usuario.nome}</p>
-                  )}
-                </div>
-
-                {campoEditando === "nome" ? (
-                  <div className="flex shrink-0 gap-2">
-                    <FormButton type="submit" variant="primary" disabled={isSubmitting}>
-                      {isSubmitting ? "Salvando..." : "Salvar"}
-                    </FormButton>
-                    <FormButton
-                      type="button"
-                      variant="ghost"
-                      onClick={cancelarEdicao}
-                      disabled={isSubmitting}
-                    >
-                      Cancelar
-                    </FormButton>
-                  </div>
-                ) : (
-                  <FormButton
-                    type="button"
-                    variant="secondary"
-                    className="shrink-0"
-                    onClick={() => iniciarEdicao("nome")}
-                  >
-                    Editar
-                  </FormButton>
-                )}
-              </div>
-            </div>
-
-            {/* E-mail */}
-            <div className="rounded-sm border border-slate-200 bg-white p-6 transition-colors duration-300 focus-within:border-brand-navy/40">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    E-mail
-                  </p>
-                  {campoEditando === "email" ? (
-                    <div className="mt-2 flex flex-col gap-1">
-                      <input
-                        id="email"
-                        type="email"
-                        autoFocus
-                        className={inputClass}
-                        {...register("email")}
-                      />
-                      {errors.email && <p className={errorClass}>{errors.email.message}</p>}
-                    </div>
-                  ) : (
-                    <>
-                      <p className="mt-1 truncate text-base text-brand-navy">{usuario.email}</p>
-                      {/* Aviso persistente (o toast some): e-mail ainda não
-                          confirmado, normalmente logo após uma troca. */}
-                      {!usuario.emailVerificado && (
-                        <p className="mt-2 text-sm text-amber-700">
-                          E-mail ainda não confirmado. Enviamos um link de
-                          confirmação para este endereço — confirme para
-                          continuar entrando com ele.
-                        </p>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {campoEditando === "email" ? (
-                  <div className="flex shrink-0 gap-2">
-                    <FormButton type="submit" variant="primary" disabled={isSubmitting}>
-                      {isSubmitting ? "Salvando..." : "Salvar"}
-                    </FormButton>
-                    <FormButton
-                      type="button"
-                      variant="ghost"
-                      onClick={cancelarEdicao}
-                      disabled={isSubmitting}
-                    >
-                      Cancelar
-                    </FormButton>
-                  </div>
-                ) : (
-                  <FormButton
-                    type="button"
-                    variant="secondary"
-                    className="shrink-0"
-                    onClick={() => iniciarEdicao("email")}
-                  >
-                    Editar
-                  </FormButton>
-                )}
-              </div>
-            </div>
-
-            {/* CPF */}
-            <div className="rounded-sm border border-slate-200 bg-white p-6 transition-colors duration-300 focus-within:border-brand-navy/40">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    CPF
-                  </p>
-                  {campoEditando === "cpf" ? (
-                    <div className="mt-2 flex flex-col gap-1">
-                      <input
-                        id="cpf"
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="off"
-                        placeholder="000.000.000-00"
-                        autoFocus
-                        className={inputClass}
-                        {...register("cpf", {
-                          onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
-                            event.target.value = formatarCpf(event.target.value);
-                          },
-                        })}
-                      />
-                      {errors.cpf && <p className={errorClass}>{errors.cpf.message}</p>}
-                    </div>
-                  ) : (
-                    <p className="mt-1 truncate text-base text-brand-navy">
-                      {usuario.cpf ? formatarCpf(usuario.cpf) : "Não informado"}
-                    </p>
-                  )}
-                </div>
-
-                {campoEditando === "cpf" ? (
-                  <div className="flex shrink-0 gap-2">
-                    <FormButton type="submit" variant="primary" disabled={isSubmitting}>
-                      {isSubmitting ? "Salvando..." : "Salvar"}
-                    </FormButton>
-                    <FormButton
-                      type="button"
-                      variant="ghost"
-                      onClick={cancelarEdicao}
-                      disabled={isSubmitting}
-                    >
-                      Cancelar
-                    </FormButton>
-                  </div>
-                ) : (
-                  <FormButton
-                    type="button"
-                    variant="secondary"
-                    className="shrink-0"
-                    onClick={() => iniciarEdicao("cpf")}
-                  >
-                    {usuario.cpf ? "Editar" : "Adicionar"}
-                  </FormButton>
-                )}
-              </div>
-            </div>
-
-            {/* Telefone */}
-            <div className="rounded-sm border border-slate-200 bg-white p-6 transition-colors duration-300 focus-within:border-brand-navy/40">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    Telefone
-                  </p>
-                  {campoEditando === "telefone" ? (
-                    <div className="mt-2 flex flex-col gap-1">
-                      <input
-                        id="telefone"
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="off"
-                        placeholder="(00) 00000-0000"
-                        autoFocus
-                        className={inputClass}
-                        {...register("telefone", {
-                          onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
-                            event.target.value = formatarTelefone(event.target.value);
-                          },
-                        })}
-                      />
-                      {errors.telefone && <p className={errorClass}>{errors.telefone.message}</p>}
-                    </div>
-                  ) : (
-                    <p className="mt-1 truncate text-base text-brand-navy">
-                      {usuario.telefone ? formatarTelefone(usuario.telefone) : "Não informado"}
-                    </p>
-                  )}
-                </div>
-
-                {campoEditando === "telefone" ? (
-                  <div className="flex shrink-0 gap-2">
-                    <FormButton type="submit" variant="primary" disabled={isSubmitting}>
-                      {isSubmitting ? "Salvando..." : "Salvar"}
-                    </FormButton>
-                    <FormButton
-                      type="button"
-                      variant="ghost"
-                      onClick={cancelarEdicao}
-                      disabled={isSubmitting}
-                    >
-                      Cancelar
-                    </FormButton>
-                  </div>
-                ) : (
-                  <FormButton
-                    type="button"
-                    variant="secondary"
-                    className="shrink-0"
-                    onClick={() => iniciarEdicao("telefone")}
-                  >
-                    {usuario.telefone ? "Editar" : "Adicionar"}
-                  </FormButton>
-                )}
-              </div>
-            </div>
+            <CartaoPerfilDados
+              usuario={usuario}
+              campoEditando={campoEditando}
+              register={register}
+              errors={errors}
+              isSubmitting={isSubmitting}
+              trocandoEmail={trocandoEmail}
+              onEditar={iniciarEdicao}
+              onCancelar={cancelarEdicao}
+            />
           </form>
         )}
 
