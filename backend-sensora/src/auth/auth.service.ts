@@ -241,6 +241,8 @@ export class AuthService {
     // sessões existentes, não só bloquear login com a senha antiga.
     await this.usuariosService.revogarTodosRefreshTokensAtivos(usuario.id);
 
+    await this.avisarSenhaAlterada(usuario.id);
+
     return { message: 'Senha redefinida com sucesso.' };
   }
 
@@ -471,6 +473,45 @@ export class AuthService {
     }
   }
 
+  // MÉDIO-4 — aviso de segurança depois de a senha já ter sido alterada
+  // (troca em Minha Conta ou redefinição por token). Vai para o e-mail
+  // oficial ATUAL da conta, sem senha/token/hash; o link leva só à tela
+  // "Esqueci minha senha". Nunca lança: falha no envio não desfaz a troca.
+  private async avisarSenhaAlterada(usuarioId: number): Promise<void> {
+    try {
+      const usuario = await this.usuariosService.findOne(usuarioId);
+      if (!usuario?.email) {
+        return;
+      }
+
+      const quando = new Date().toLocaleString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        dateStyle: 'short',
+        timeStyle: 'short',
+      });
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+      const recuperacao = frontendUrl
+        ? `<p>Para redefinir sua senha: <a href="${frontendUrl}/forgot-password">${frontendUrl}/forgot-password</a></p>`
+        : '';
+
+      await this.mailService.enviarEmail({
+        to: usuario.email,
+        subject: 'Senha alterada — Sensora',
+        html:
+          `<p>Olá, ${escaparHtml(usuario.nome)}.</p>` +
+          `<p>A senha da sua conta na Sensora foi alterada em ${quando} (horário de Brasília).</p>` +
+          '<p>Se foi você, não é preciso fazer nada.</p>' +
+          '<p>Se você não fez essa alteração, redefina sua senha agora pela opção "Esqueci minha senha" e entre em contato com o suporte da Sensora respondendo este e-mail.</p>' +
+          recuperacao,
+      });
+    } catch (erro) {
+      this.logger.error(
+        'Falha ao enviar o aviso de senha alterada.',
+        erro instanceof Error ? erro.stack : String(erro),
+      );
+    }
+  }
+
   // Limite de reenvio por e-mail-alvo (aprovado, requisito 12): sem coluna
   // nova — `emailVerificationExpiry - EMAIL_VERIFICATION_VALIDADE_MS` é
   // exatamente o instante em que o token atual foi emitido (seja pelo
@@ -611,6 +652,7 @@ export class AuthService {
       dto.senhaAtual,
       dto.novaSenha,
     );
+    await this.avisarSenhaAlterada(usuarioId);
     return { message: 'Senha alterada com sucesso.' };
   }
 

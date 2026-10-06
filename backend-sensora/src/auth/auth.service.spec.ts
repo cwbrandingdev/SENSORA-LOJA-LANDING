@@ -62,6 +62,7 @@ describe('AuthService', () => {
     atualizarMeusDados: jest.Mock;
     buscarPorHashEmailPendente: jest.Mock;
     confirmarEmailPendenteSeHashValido: jest.Mock;
+    alterarMinhaSenha: jest.Mock;
   };
   let mailService: { enviarEmail: jest.Mock };
   let jwtService: { sign: jest.Mock };
@@ -86,6 +87,7 @@ describe('AuthService', () => {
       atualizarMeusDados: jest.fn(),
       buscarPorHashEmailPendente: jest.fn(),
       confirmarEmailPendenteSeHashValido: jest.fn(),
+      alterarMinhaSenha: jest.fn(),
     };
     mailService = { enviarEmail: jest.fn() };
     jwtService = { sign: jest.fn(() => 'access-token-fake') };
@@ -1371,6 +1373,221 @@ describe('AuthService', () => {
       ).rejects.toThrow(UnauthorizedException);
       expect(usuariosService.redefinirSenha).not.toHaveBeenCalled();
       expect(usuariosService.revogarTodosRefreshTokensAtivos).not.toHaveBeenCalled();
+    });
+  });
+
+  // MÉDIO-4 — aviso de segurança por e-mail depois de a senha ser alterada,
+  // nos dois fluxos (troca em Minha Conta e redefinição por token).
+  describe('aviso de senha alterada (MÉDIO-4)', () => {
+    const USUARIO = { id: 1, nome: 'Ana', email: 'ana@sensora.dev' };
+    const DTO_TROCA = {
+      senhaAtual: 'senhaAtual123',
+      novaSenha: 'novaSenhaSegura123',
+    };
+
+    function emailEnviado() {
+      expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
+      const [[email]] = mailService.enviarEmail.mock.calls as [
+        [{ to: string; subject: string; html: string }],
+      ];
+      return email;
+    }
+
+    function tokenValido() {
+      usuariosService.buscarPorResetToken.mockResolvedValueOnce({
+        ...USUARIO,
+        resetTokenExpiry: new Date(Date.now() + 60 * 60 * 1000),
+      });
+    }
+
+    describe('troca autenticada (changePassword)', () => {
+      it('sucesso: envia exatamente 1 aviso, ao e-mail atual, com o assunto certo', async () => {
+        usuariosService.findOne.mockResolvedValueOnce(USUARIO);
+
+        const resultado = await service.changePassword(1, DTO_TROCA);
+
+        expect(resultado.message).toBe('Senha alterada com sucesso.');
+        const email = emailEnviado();
+        expect(email.to).toBe('ana@sensora.dev');
+        expect(email.subject).toBe('Senha alterada — Sensora');
+        expect(email.html).toContain('foi alterada em');
+        expect(email.html).toContain('http://localhost:3002/forgot-password');
+      });
+
+      it('o aviso é enviado depois da troca, nunca antes', async () => {
+        usuariosService.findOne.mockResolvedValueOnce(USUARIO);
+
+        await service.changePassword(1, DTO_TROCA);
+
+        expect(
+          usuariosService.alterarMinhaSenha.mock.invocationCallOrder[0],
+        ).toBeLessThan(mailService.enviarEmail.mock.invocationCallOrder[0]);
+      });
+
+      it('nome com HTML é escapado', async () => {
+        usuariosService.findOne.mockResolvedValueOnce({
+          ...USUARIO,
+          nome: '<script>alert(1)</script>',
+        });
+
+        await service.changePassword(1, DTO_TROCA);
+
+        const { html } = emailEnviado();
+        expect(html).not.toContain('<script>');
+        expect(html).toContain('&lt;script&gt;');
+      });
+
+      it('o e-mail não contém senha, token, hash nem JWT', async () => {
+        usuariosService.findOne.mockResolvedValueOnce(USUARIO);
+
+        await service.changePassword(1, DTO_TROCA);
+
+        const { html } = emailEnviado();
+        expect(html).not.toContain(DTO_TROCA.senhaAtual);
+        expect(html).not.toContain(DTO_TROCA.novaSenha);
+        expect(html).not.toContain('token');
+        expect(html).not.toContain('access-token-fake');
+        expect(html).not.toContain('$2b$');
+      });
+
+      it('senha atual incorreta: não envia aviso', async () => {
+        usuariosService.alterarMinhaSenha.mockRejectedValueOnce(
+          new UnauthorizedException('Senha atual incorreta.'),
+        );
+
+        await expect(service.changePassword(1, DTO_TROCA)).rejects.toThrow(
+          UnauthorizedException,
+        );
+        expect(mailService.enviarEmail).not.toHaveBeenCalled();
+      });
+
+      it('falha na atualização: não envia aviso', async () => {
+        usuariosService.alterarMinhaSenha.mockRejectedValueOnce(
+          new Error('falha no banco'),
+        );
+
+        await expect(service.changePassword(1, DTO_TROCA)).rejects.toThrow(
+          'falha no banco',
+        );
+        expect(mailService.enviarEmail).not.toHaveBeenCalled();
+      });
+
+      it('falha no envio do e-mail: a troca continua bem-sucedida', async () => {
+        usuariosService.findOne.mockResolvedValueOnce(USUARIO);
+        mailService.enviarEmail.mockRejectedValueOnce(new Error('Resend fora'));
+
+        const resultado = await service.changePassword(1, DTO_TROCA);
+
+        expect(resultado.message).toBe('Senha alterada com sucesso.');
+        expect(usuariosService.alterarMinhaSenha).toHaveBeenCalledWith(
+          1,
+          DTO_TROCA.senhaAtual,
+          DTO_TROCA.novaSenha,
+        );
+      });
+    });
+
+    describe('redefinição (resetPassword)', () => {
+      it('sucesso: envia exatamente 1 aviso, ao e-mail atual, e mantém revogação das sessões', async () => {
+        tokenValido();
+        usuariosService.findOne.mockResolvedValueOnce(USUARIO);
+
+        const resultado = await service.resetPassword({
+          token: 'token-valido',
+          novaSenha: 'novaSenhaSegura123',
+        });
+
+        expect(resultado.message).toBe('Senha redefinida com sucesso.');
+        const email = emailEnviado();
+        expect(email.to).toBe('ana@sensora.dev');
+        expect(email.subject).toBe('Senha alterada — Sensora');
+        expect(usuariosService.redefinirSenha).toHaveBeenCalledWith(
+          1,
+          'novaSenhaSegura123',
+        );
+        expect(
+          usuariosService.revogarTodosRefreshTokensAtivos,
+        ).toHaveBeenCalledWith(1);
+        expect(
+          usuariosService.redefinirSenha.mock.invocationCallOrder[0],
+        ).toBeLessThan(mailService.enviarEmail.mock.invocationCallOrder[0]);
+      });
+
+      it('nome com HTML é escapado', async () => {
+        tokenValido();
+        usuariosService.findOne.mockResolvedValueOnce({
+          ...USUARIO,
+          nome: '<b>Ana</b>',
+        });
+
+        await service.resetPassword({
+          token: 'token-valido',
+          novaSenha: 'novaSenhaSegura123',
+        });
+
+        const { html } = emailEnviado();
+        expect(html).not.toContain('<b>Ana</b>');
+        expect(html).toContain('&lt;b&gt;Ana&lt;/b&gt;');
+      });
+
+      it('o e-mail não contém o token de recuperação, seu hash nem a senha nova', async () => {
+        tokenValido();
+        usuariosService.findOne.mockResolvedValueOnce(USUARIO);
+
+        await service.resetPassword({
+          token: 'token-de-recuperacao-secreto',
+          novaSenha: 'novaSenhaSegura123',
+        });
+
+        const { html } = emailEnviado();
+        expect(html).not.toContain('token-de-recuperacao-secreto');
+        expect(html).not.toContain(sha256('token-de-recuperacao-secreto'));
+        expect(html).not.toContain('novaSenhaSegura123');
+        expect(html).not.toContain('reset-password');
+      });
+
+      it('token inválido: não envia aviso', async () => {
+        usuariosService.buscarPorResetToken.mockResolvedValueOnce(null);
+
+        await expect(
+          service.resetPassword({
+            token: 'nao-existe',
+            novaSenha: 'novaSenhaSegura123',
+          }),
+        ).rejects.toThrow(UnauthorizedException);
+        expect(mailService.enviarEmail).not.toHaveBeenCalled();
+      });
+
+      it('token expirado: não envia aviso', async () => {
+        usuariosService.buscarPorResetToken.mockResolvedValueOnce({
+          ...USUARIO,
+          resetTokenExpiry: new Date(Date.now() - 1000),
+        });
+
+        await expect(
+          service.resetPassword({
+            token: 'expirado',
+            novaSenha: 'novaSenhaSegura123',
+          }),
+        ).rejects.toThrow(UnauthorizedException);
+        expect(mailService.enviarEmail).not.toHaveBeenCalled();
+      });
+
+      it('falha no envio do e-mail: a redefinição continua bem-sucedida', async () => {
+        tokenValido();
+        usuariosService.findOne.mockResolvedValueOnce(USUARIO);
+        mailService.enviarEmail.mockRejectedValueOnce(new Error('Resend fora'));
+
+        const resultado = await service.resetPassword({
+          token: 'token-valido',
+          novaSenha: 'novaSenhaSegura123',
+        });
+
+        expect(resultado.message).toBe('Senha redefinida com sucesso.');
+        expect(
+          usuariosService.revogarTodosRefreshTokensAtivos,
+        ).toHaveBeenCalledWith(1);
+      });
     });
   });
 
