@@ -169,8 +169,14 @@ async function mockDetalhe(
   return chamadas;
 }
 
+// Fila redesenhada (DevolucoesFila): cada devolução é um link para o detalhe.
 function linhaDaFila(page: Page, texto: string) {
-  return page.getByRole("row").filter({ hasText: texto });
+  return page.getByRole("link").filter({ hasText: texto });
+}
+
+// As abas mostram a contagem no nome ("Em andamento 1").
+function abaDaFila(page: Page, titulo: string) {
+  return page.getByRole("button", { name: new RegExp(`^${titulo}`) });
 }
 
 test.describe("Admin — Devoluções (Etapa 7)", () => {
@@ -183,10 +189,13 @@ test.describe("Admin — Devoluções (Etapa 7)", () => {
     const primeira = linhaDaFila(page, "PED-10");
     await expect(primeira).toContainText("#1");
     await expect(primeira).toContainText("Ana Cliente");
-    await expect(primeira).toContainText("ana@sensora.dev");
+    await expect(primeira).toContainText("PED-10");
     await expect(primeira).toContainText("Solicitada");
-    await expect(primeira.getByRole("cell").nth(5)).toHaveText("2");
-    await expect(primeira.getByRole("cell").nth(6)).toHaveText("1");
+    await expect(primeira).toContainText("2 itens");
+    await expect(primeira).toContainText("1 fotos");
+
+    // APROVADA fica na aba "Em andamento".
+    await abaDaFila(page, "Em andamento").click();
     await expect(linhaDaFila(page, "PED-11")).toContainText("Aprovada");
   });
 
@@ -199,6 +208,11 @@ test.describe("Admin — Devoluções (Etapa 7)", () => {
     await page.goto(FILA_URL);
     await expect(linhaDaFila(page, "PED-10")).toBeVisible();
     await page.getByLabel("Status").selectOption("APROVADA");
+    // O filtro recarrega a fila (que volta para a aba padrão): espera o
+    // resultado filtrado antes de trocar de aba. APROVADA fica em
+    // "Em andamento".
+    await expect(abaDaFila(page, "Precisa de ação")).toContainText("0");
+    await abaDaFila(page, "Em andamento").click();
 
     await expect(linhaDaFila(page, "PED-11")).toBeVisible();
     await expect(linhaDaFila(page, "PED-10")).toHaveCount(0);

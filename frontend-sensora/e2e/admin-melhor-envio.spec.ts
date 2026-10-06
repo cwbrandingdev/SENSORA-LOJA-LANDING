@@ -113,6 +113,16 @@ function cardMelhorEnvio(page: Page) {
   return page.getByRole("heading", { name: "Melhor Envio", exact: true }).locator("../..");
 }
 
+// Redesign (IntegracoesQuadro): o cartão completo só é renderizado no
+// painel aberto por "Detalhes" no resumo do serviço.
+async function abrirDetalhesMelhorEnvio(page: Page) {
+  await page
+    .getByRole("article")
+    .filter({ hasText: "Melhor Envio" })
+    .getByRole("button", { name: "Detalhes" })
+    .click();
+}
+
 function capturarChamadasConectar(page: Page) {
   const chamadas: { authorization: string | undefined }[] = [];
   page.on("request", (request) => {
@@ -160,6 +170,7 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5 + Central de Integ
     await mockConectar(page);
 
     await page.goto(INTEGRACOES_URL);
+    await abrirDetalhesMelhorEnvio(page);
 
     await expect(page.getByText("Não conectado", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Conectar Melhor Envio" })).toBeVisible();
@@ -186,6 +197,7 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5 + Central de Integ
     const chamadasConectar = capturarChamadasConectar(page);
 
     await page.goto(INTEGRACOES_URL);
+    await abrirDetalhesMelhorEnvio(page);
     // O rótulo do botão muda para "Conectando..." assim que clicado (mesmo
     // padrão de checkout.spec.ts) — um locator preso só ao nome original
     // deixaria de casar com o elemento na verificação seguinte.
@@ -229,6 +241,7 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5 + Central de Integ
     });
 
     await page.goto(INTEGRACOES_URL);
+    await abrirDetalhesMelhorEnvio(page);
 
     await expect(page.getByText("Conectado", { exact: true })).toBeVisible();
     const botaoVerificar = cardMelhorEnvio(page).getByRole("button", { name: "Verificar agora" });
@@ -255,6 +268,7 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5 + Central de Integ
     });
 
     await page.goto(INTEGRACOES_URL);
+    await abrirDetalhesMelhorEnvio(page);
     await cardMelhorEnvio(page).getByRole("button", { name: "Verificar agora" }).click();
 
     await expect(page.getByText("Instável", { exact: true })).toBeVisible();
@@ -287,6 +301,7 @@ test.describe("Admin — integração Melhor Envio (Etapa 6.5 + Central de Integ
     await mockStatus(page, false, { status: 500 });
 
     await page.goto(INTEGRACOES_URL);
+    await abrirDetalhesMelhorEnvio(page);
 
     await expect(page.getByText("Não foi possível verificar a conexão.")).toBeVisible();
     const retry = page.getByRole("button", { name: "Tentar novamente" });

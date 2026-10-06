@@ -1,4 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
+import { loadEnvConfig } from "@next/env";
+
+// Mesma API que o dev server do Next injeta em services/api.ts
+// (NEXT_PUBLIC_API_URL via .env*) — o Playwright não carrega .env sozinho.
+loadEnvConfig(process.cwd(), true);
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 // Etapa 6.1 (Refinamento de Design — Minha Conta) — cobre especificamente o
 // requisito obrigatório da etapa (navegação de volta consistente em todas
@@ -71,12 +77,12 @@ const ENDERECO = {
   padrao: true,
 };
 
-// Escopado à origem exata da API (http://localhost:3000, ver .env.local),
+// Escopado à URL exata da API (API_URL, de NEXT_PUBLIC_API_URL),
 // nunca "**/enderecos" puro: esse glob também bateria na navegação da
 // própria página /conta/enderecos (mesmo sufixo de path), substituindo o
 // HTML da página pelo JSON da resposta mockada.
 async function mockEnderecosLista(page: Page, lista: unknown[]) {
-  await page.route("http://localhost:3000/enderecos", async (route) => {
+  await page.route(`${API_URL}/enderecos`, async (route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({ json: lista });
       return;
@@ -173,7 +179,7 @@ test.describe("Endereços — ConfirmDialog substitui window.confirm (Etapa 6.1)
   }) => {
     await seedSession(page);
     let removido = false;
-    await page.route("http://localhost:3000/enderecos", async (route) => {
+    await page.route(`${API_URL}/enderecos`, async (route) => {
       if (route.request().method() !== "GET") {
         await route.continue();
         return;
@@ -293,7 +299,7 @@ test.describe("Responsividade (item 19 da Etapa 6.1)", () => {
     test(`/conta/pedidos (lista) sem overflow em ${nome}`, async ({ page }) => {
       await page.setViewportSize({ width, height });
       await seedSession(page);
-      await page.route("http://localhost:3000/pedidos/meus", async (route) => {
+      await page.route(`${API_URL}/pedidos/meus`, async (route) => {
         await route.fulfill({
           json: [
             { id: 1, numero: "PED-1", data: "2026-08-01T12:00:00.000Z", status: "PAGO", total: 59.9 },
@@ -319,7 +325,7 @@ test.describe("Responsividade (item 19 da Etapa 6.1)", () => {
     }) => {
       await page.setViewportSize({ width, height });
       await seedSession(page);
-      await page.route("http://localhost:3000/pedidos/meus/7", async (route) => {
+      await page.route(`${API_URL}/pedidos/meus/7`, async (route) => {
         await route.fulfill({
           json: {
             pedido: { id: 7, numero: "PED-7", data: "2026-08-01T12:00:00.000Z", status: "PAGO", total: 59.9 },

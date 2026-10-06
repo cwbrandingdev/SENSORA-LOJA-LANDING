@@ -206,15 +206,14 @@ test.describe("Admin — Central de Integrações: os 4 cards", () => {
 
     await page.goto(INTEGRACOES_URL);
 
-    await expect(page.getByRole("heading", { name: "Asaas" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Melhor Envio" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Resend" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "ImageKit" })).toBeVisible();
+    // Resumo (IntegracoesQuadro): um <article> por serviço, nome em <p>.
+    for (const nome of ["Asaas", "Melhor Envio", "Resend", "ImageKit"]) {
+      await expect(page.getByRole("article").filter({ hasText: nome })).toBeVisible();
+    }
 
-    // 4 cards, todos "Configurado"/"Conectado" — nenhum preso em
-    // "Verificando..."/erro.
-    await expect(page.getByText("Configurado", { exact: true })).toHaveCount(3);
-    await expect(page.getByText("Conectado", { exact: true })).toHaveCount(1);
+    // 4 cards, todos "Pronto" — nenhum preso em consulta/erro.
+    await expect(page.getByText("Pronto", { exact: true })).toHaveCount(4);
+    await expect(page.getByText("4 de 4 integrações prontas")).toBeVisible();
   });
 
   test("cada card reflete 'não configurado' independentemente dos outros", async ({ page }) => {
@@ -228,9 +227,12 @@ test.describe("Admin — Central de Integrações: os 4 cards", () => {
 
     await page.goto(INTEGRACOES_URL);
 
-    await expect(page.getByText("Não configurado", { exact: true })).toHaveCount(2);
-    await expect(page.getByText("Não conectado", { exact: true })).toBeVisible();
-    await expect(page.getByText("Configurado", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("Pendente", { exact: true })).toHaveCount(3);
+    await expect(page.getByText("Pronto", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("Credenciais não configuradas neste ambiente.")).toHaveCount(2);
+    await expect(
+      page.getByText("Configurado, mas a conta da loja ainda não foi conectada."),
+    ).toBeVisible();
   });
 
   test("Asaas: exibe a base URL devolvida pelo backend quando configurado, nada além disso", async ({
@@ -242,6 +244,12 @@ test.describe("Admin — Central de Integrações: os 4 cards", () => {
     });
 
     await page.goto(INTEGRACOES_URL);
+    // A URL completa só aparece no cartão do painel de Detalhes.
+    await page
+      .getByRole("article")
+      .filter({ hasText: "Asaas" })
+      .getByRole("button", { name: "Detalhes" })
+      .click();
 
     await expect(page.getByText("https://sandbox.asaas.com/api/v3")).toBeVisible();
   });
@@ -253,7 +261,7 @@ test.describe("Admin — Central de Integrações: os 4 cards", () => {
     await mockTodosOsStatus(page);
 
     await page.goto(INTEGRACOES_URL);
-    await expect(page.getByRole("heading", { name: "ImageKit" })).toBeVisible();
+    await expect(page.getByText("4 de 4 integrações prontas")).toBeVisible();
 
     // Só nomes técnicos de credencial (nunca palavras comuns como "senha" —
     // "recuperação de senha" é texto legítimo da descrição do card Resend,
@@ -285,11 +293,15 @@ test.describe("Admin — Central de Integrações: os 4 cards", () => {
 
     await page.goto(INTEGRACOES_URL);
 
-    await expect(page.getByRole("heading", { name: "Resend" })).toBeVisible();
-    await expect(page.getByText("Erro ao verificar")).toBeVisible();
+    const resend = page.getByRole("article").filter({ hasText: "Resend" });
+    await expect(resend.getByText("Sem status", { exact: true })).toBeVisible();
+    await expect(resend.getByText("Não foi possível consultar o status agora.")).toBeVisible();
     // Os outros 3 continuam normais.
-    await expect(page.getByText("Configurado", { exact: true })).toHaveCount(2);
-    await expect(page.getByText("Conectado", { exact: true })).toBeVisible();
+    await expect(page.getByText("Pronto", { exact: true })).toHaveCount(3);
+
+    // O cartão completo do Resend (painel de Detalhes) mostra o erro.
+    await resend.getByRole("button", { name: "Detalhes" }).click();
+    await expect(page.getByText("Erro ao verificar")).toBeVisible();
   });
 });
 

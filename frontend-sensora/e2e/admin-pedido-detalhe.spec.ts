@@ -1,4 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
+import { loadEnvConfig } from "@next/env";
+
+// Mesma API que o dev server do Next injeta em services/api.ts
+// (NEXT_PUBLIC_API_URL via .env*) — o Playwright não carrega .env sozinho.
+loadEnvConfig(process.cwd(), true);
 
 // Etapa 8.1 (complemento — eliminação da venda manual) — suíte E2E de
 // /workspace-x/pedidos/[id] (Etapa 8.12, antes /admin/pedidos/[id]) dedicada
@@ -9,7 +14,7 @@ import { test, expect, type Page } from "@playwright/test";
 // Não existia nenhuma suíte E2E para esta página antes.
 
 const TOKEN_KEY = "sensora_token";
-const API_URL = "http://localhost:3000";
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 function base64Url(payload: Record<string, unknown>): string {
   return Buffer.from(JSON.stringify(payload))

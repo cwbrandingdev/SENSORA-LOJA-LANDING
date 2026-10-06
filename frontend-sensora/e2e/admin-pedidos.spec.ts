@@ -1,4 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
+import { loadEnvConfig } from "@next/env";
+
+// Mesma API que o dev server do Next injeta em services/api.ts
+// (NEXT_PUBLIC_API_URL via .env*) — o Playwright não carrega .env sozinho.
+loadEnvConfig(process.cwd(), true);
 
 // Etapa 6.6 (Parte B) — suíte E2E de /workspace-x/pedidos (Etapa 8.12, antes
 // /admin/pedidos) dedicada à investigação/
@@ -18,7 +23,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 const TOKEN_KEY = "sensora_token";
 const PEDIDOS_URL = "/workspace-x/pedidos";
-const API_URL = "http://localhost:3000";
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 function base64Url(payload: Record<string, unknown>): string {
   return Buffer.from(JSON.stringify(payload))
@@ -419,14 +424,14 @@ test.describe("Admin / Pedidos — Exclusão (Etapa 8.2, HIGH-02)", () => {
     });
 
     await page.goto(PEDIDOS_URL);
-    const resposta = await page.evaluate(async () => {
+    const resposta = await page.evaluate(async (apiUrl) => {
       const token = window.localStorage.getItem("sensora_token");
-      const res = await fetch("http://localhost:3000/pedidos/2", {
+      const res = await fetch(`${apiUrl}/pedidos/2`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
       return { status: res.status, body: await res.json() };
-    });
+    }, API_URL);
 
     expect(resposta.status).toBe(409);
     expect(resposta.body.message).toBe("Pedido com status PAGO não pode ser excluído.");
