@@ -488,8 +488,8 @@ test.describe("Admin / Pedidos — Status de Envio", () => {
     const { chamadasMarcarEnviado } = mockPedidos(page, [PEDIDO_PAGO]);
 
     await page.goto(PEDIDOS_URL);
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "Marcar como enviado" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Confirmar envio" }).click();
 
     await expect(page.getByText("Pedido marcado como enviado.")).toBeVisible();
     expect(chamadasMarcarEnviado).toEqual([2]);
@@ -513,11 +513,12 @@ test.describe("Admin / Pedidos — Status de Envio", () => {
     });
 
     await page.goto(PEDIDOS_URL);
-    page.once("dialog", (dialog) => dialog.accept());
-    const botao = page.getByRole("button", { name: "Marcar como enviado" });
-    await botao.click();
+    await page.getByRole("button", { name: "Marcar como enviado" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Confirmar envio" }).click();
 
-    await expect(page.getByRole("button", { name: "Marcando..." })).toBeDisabled();
+    // Tabela e ConfirmDialog usam o mesmo rótulo de loading; o diálogo
+    // é o que o admin confirma, então o assert fica no botão dali.
+    await expect(page.getByRole("dialog").getByRole("button", { name: "Marcando..." })).toBeDisabled();
 
     await expect(page.getByText("Pedido marcado como enviado.")).toBeVisible();
     expect(chamadasMarcarEnviado).toHaveLength(1);
@@ -537,13 +538,13 @@ test.describe("Admin / Pedidos — Status de Envio", () => {
     await expect(page.getByRole("button", { name: "Marcar como enviado" })).toHaveCount(0);
   });
 
-  test("cancelar a confirmação nativa não chama o endpoint", async ({ page }) => {
+  test("cancelar a confirmação não chama o endpoint", async ({ page }) => {
     await seedSession(page);
     const { chamadasMarcarEnviado } = mockPedidos(page, [PEDIDO_PAGO]);
 
     await page.goto(PEDIDOS_URL);
-    page.once("dialog", (dialog) => dialog.dismiss());
     await page.getByRole("button", { name: "Marcar como enviado" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Voltar" }).click();
 
     expect(chamadasMarcarEnviado).toEqual([]);
     // Mesmo raciocínio do teste acima: escopa à linha da tabela principal,

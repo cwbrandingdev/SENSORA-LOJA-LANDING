@@ -163,6 +163,11 @@ export default function PedidoTable({
                         {formatarDataEnvio(pedido.enviadoEm)}
                       </span>
                     )}
+                    {pedido.codigoRastreio && (
+                      <span className="font-mono text-xs text-slate-500">
+                        {pedido.codigoRastreio}
+                      </span>
+                    )}
                     {/* Achado da auditoria (Etapa 6.6) — freteTransportadora/
                         freteServico/freteValor são a opção de frete COTADA no
                         checkout, não uma confirmação de envio; mostrados aqui

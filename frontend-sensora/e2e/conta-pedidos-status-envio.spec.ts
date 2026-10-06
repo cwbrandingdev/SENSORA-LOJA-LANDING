@@ -136,6 +136,24 @@ test.describe("Minha Conta / Pedidos — timeline no detalhe", () => {
     // enviadoEm em America/Sao_Paulo (UTC-3): 21/08/2026 14h UTC ainda é
     // 21/08 no Brasil — sem risco do bug de fuso aqui.
     await expect(page.getByText(/Enviado em 21\/08\/2026/)).toBeVisible();
+    await expect(
+      page.getByText("Ainda não temos código de rastreio disponível para este pedido."),
+    ).toBeVisible();
+  });
+
+  test("PAGO + ENVIADO com código mostra o rastreio", async ({ page }) => {
+    await seedSession(page);
+    const pedido = pedidoBase({
+      statusEnvio: "ENVIADO",
+      enviadoEm: "2026-08-21T14:00:00.000Z",
+      codigoRastreio: "AA123456789BR",
+    });
+    await mockDetalheMeuPedido(page, pedido);
+
+    await page.goto(`/conta/pedidos/${pedido.id}`);
+
+    await expect(page.getByText("Código de rastreio:")).toBeVisible();
+    await expect(page.getByText("AA123456789BR")).toBeVisible();
   });
 
   test("PENDENTE continua funcionando sem menção a envio (regressão)", async ({ page }) => {

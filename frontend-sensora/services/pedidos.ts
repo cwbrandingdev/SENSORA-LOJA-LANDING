@@ -144,7 +144,24 @@ export async function removerPedido(id: number): Promise<void> {
 // ENVIADO; a regra "só a partir de PAGO", a idempotência e o claim atômico
 // contra corrida são inteiramente resolvidos no backend, ver
 // PedidosService.marcarComoEnviado).
-export async function marcarPedidoComoEnviado(id: number): Promise<Pedido> {
-  const response = await api.post<Pedido>(`/pedidos/${id}/marcar-enviado`);
+export async function marcarPedidoComoEnviado(
+  id: number,
+  codigoRastreio?: string,
+): Promise<Pedido> {
+  const codigo = codigoRastreio?.trim();
+  const response = await api.post<Pedido>(
+    `/pedidos/${id}/marcar-enviado`,
+    codigo ? { codigoRastreio: codigo } : {},
+  );
+  return response.data;
+}
+
+export async function atualizarEnderecoMeuPedido(
+  id: number,
+  enderecoId: number,
+): Promise<Pedido> {
+  const response = await api.patch<Pedido>(`/pedidos/meus/${id}/endereco`, {
+    enderecoId,
+  });
   return response.data;
 }

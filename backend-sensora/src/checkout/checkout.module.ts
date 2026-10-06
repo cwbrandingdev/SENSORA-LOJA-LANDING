@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AsaasModule } from '../asaas/asaas.module';
 import { AuthModule } from '../auth/auth.module';
 import { EnderecosModule } from '../enderecos/enderecos.module';
+import { MailModule } from '../mail/mail.module';
 import { MelhorEnvioModule } from '../melhor-envio/melhor-envio.module';
 import { ProdutosModule } from '../produtos/produtos.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
@@ -22,6 +23,7 @@ import { CheckoutService } from './checkout.service';
     AsaasModule,
     UsuariosModule,
     MelhorEnvioModule,
+    MailModule,
   ],
   controllers: [CheckoutController],
   providers: [CheckoutService],

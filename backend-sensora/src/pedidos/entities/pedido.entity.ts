@@ -44,6 +44,7 @@ export class Pedido {
   // no schema); `enviadoEm` só é preenchido quando `statusEnvio === ENVIADO`.
   statusEnvio: StatusEnvio;
   enviadoEm?: Date;
+  codigoRastreio?: string;
 
   // Infraestrutura Fiscal (preparação arquitetural) — só populado por
   // PedidosService.findOne (a única query que faz `include: { notaFiscal:

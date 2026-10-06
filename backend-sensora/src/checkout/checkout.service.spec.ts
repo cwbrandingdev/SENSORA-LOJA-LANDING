@@ -11,6 +11,7 @@ import Stripe from 'stripe';
 import { AsaasService } from '../asaas/asaas.service';
 import { EnderecosService } from '../enderecos/enderecos.service';
 import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
@@ -22,12 +23,14 @@ import {
 } from './checkout.service';
 
 // Etapa 6.4 (Confirmação de e-mail) — CheckoutService agora também injeta
-// UsuariosService (checagem de emailVerificado em createSession), então
+// UsuariosService (checagem de emailVerificado em createSession) e
+// MailService (e-mail de pedido confirmado após CHECKOUT_PAID), então
 // TODO Test.createTestingModule que constrói CheckoutService precisa prover
-// esse dependency, mesmo nas suítes de webhook que nunca chamam
+// esses dependencies, mesmo nas suítes de webhook que nunca chamam
 // createSession (o Nest resolve o construtor inteiro, não só os métodos
-// exercitados pelo teste). Stub vazio ({}) é suficiente para elas; só as
-// suítes que chamam createSession precisam de um `findOne` de verdade.
+// exercitados pelo teste). Stub vazio ({}) / { enviarEmail } é suficiente
+// para elas; só as suítes que chamam createSession precisam de um `findOne`
+// de verdade.
 //
 // `nome` (Etapa "Dados do Cliente / Cadastro") — createSession agora usa
 // exatamente este campo como Pedido.clienteNome (ver teste "usa
@@ -218,6 +221,7 @@ describe('CheckoutService — webhook Stripe (Task 15, modo de rollback)', () =>
         { provide: AsaasService, useValue: {} },
         { provide: UsuariosService, useValue: {} },
         { provide: MelhorEnvioService, useValue: {} },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
 
@@ -424,6 +428,7 @@ describe('CheckoutService — webhook Stripe (Task 15, modo de rollback)', () =>
         { provide: AsaasService, useValue: {} },
         { provide: UsuariosService, useValue: {} },
         { provide: MelhorEnvioService, useValue: {} },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
     const servicoSemWebhookSecret =
@@ -450,10 +455,12 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
       findUnique: jest.Mock;
       updateMany: jest.Mock;
     };
+    produto: { findMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let produtosService: { removerEstoque: jest.Mock };
   let asaasService: { resolverPaymentIdPorCheckout: jest.Mock };
+  let mailService: { enviarEmail: jest.Mock };
   let txPedidoUpdateMany: jest.Mock;
   let txItemPedidoUpdate: jest.Mock;
 
@@ -461,7 +468,28 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
     id: number;
     status: StatusPedido;
     asaasPaymentId: string | null;
-    itens: { id: number; produtoId: number; quantidade: number }[];
+    numero?: string;
+    clienteNome?: string | null;
+    clienteEmail?: string | null;
+    total?: number;
+    enderecoCep?: string | null;
+    enderecoRua?: string | null;
+    enderecoNumero?: string | null;
+    enderecoComplemento?: string | null;
+    enderecoBairro?: string | null;
+    enderecoCidade?: string | null;
+    enderecoEstado?: string | null;
+    freteValor?: number | null;
+    freteTransportadora?: string | null;
+    freteServico?: string | null;
+    fretePrazoDias?: number | null;
+    itens: {
+      id: number;
+      produtoId: number;
+      quantidade: number;
+      precoUnitario?: number;
+      subtotal?: number;
+    }[];
   };
 
   function construirEventoCheckoutPago(checkoutId: string) {
@@ -520,6 +548,7 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
           },
         ),
       },
+      produto: { findMany: jest.fn(() => []) },
       $transaction: jest.fn(
         async (callback: (tx: unknown) => Promise<void>) => {
           const tx = {
@@ -561,10 +590,12 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
         { provide: AsaasService, useValue: asaasService },
         { provide: UsuariosService, useValue: {} },
         { provide: MelhorEnvioService, useValue: {} },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(CheckoutService);
+    mailService = module.get(MailService);
   });
 
   it('CHECKOUT_PAID grava o asaasPaymentId do pedido logo após o pagamento', async () => {
@@ -594,6 +625,66 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
     expect(asaasService.resolverPaymentIdPorCheckout).toHaveBeenCalledTimes(1);
     expect(pedidoFake.asaasPaymentId).toBe('pay_123');
     expect(produtosService.removerEstoque).toHaveBeenCalledTimes(2);
+  });
+
+  it('CHECKOUT_PAID envia e-mail de confirmação com itens, total e endereço', async () => {
+    Object.assign(pedidoFake, {
+      numero: 'PED-1',
+      clienteNome: 'Cliente Sensora',
+      clienteEmail: 'cliente@sensora.dev',
+      total: 103.5,
+      enderecoCep: '80000-000',
+      enderecoRua: 'Rua das Flores',
+      enderecoNumero: '123',
+      enderecoComplemento: null,
+      enderecoBairro: 'Centro',
+      enderecoCidade: 'Curitiba',
+      enderecoEstado: 'PR',
+      freteValor: 23.5,
+      freteTransportadora: 'Correios',
+      freteServico: 'PAC',
+      fretePrazoDias: 9,
+      itens: [
+        {
+          id: 100,
+          produtoId: 10,
+          quantidade: 2,
+          precoUnitario: 40,
+          subtotal: 80,
+        },
+      ],
+    });
+    prisma.produto.findMany.mockResolvedValueOnce([{ id: 10, nome: 'Vela de verão' }]);
+
+    await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(construirEventoCheckoutPago('chk_123')),
+    );
+
+    expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
+    const enviado = mailService.enviarEmail.mock.calls[0][0] as {
+      to: string;
+      subject: string;
+      html: string;
+    };
+    expect(enviado.to).toBe('cliente@sensora.dev');
+    expect(enviado.subject).toContain('PED-1');
+    expect(enviado.html).toContain('Vela de verão');
+    expect(enviado.html).toContain('Rua das Flores');
+    expect(enviado.html).toContain('7 dias');
+    expect(enviado.html).toContain('/conta/pedidos/1');
+  });
+
+  it('CHECKOUT_PAID duplicado não reenvia o e-mail de confirmação', async () => {
+    pedidoFake.clienteEmail = 'cliente@sensora.dev';
+    pedidoFake.numero = 'PED-1';
+    const payload = Buffer.from(construirEventoCheckoutPago('chk_123'));
+    const headers = { asaasAccessToken: ASAAS_WEBHOOK_TOKEN };
+
+    await service.handleWebhook(headers, payload);
+    await service.handleWebhook(headers, payload);
+
+    expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
   });
 
   it('CHECKOUT_PAID: falha ao consultar o Payment no Asaas não derruba o webhook nem desfaz o pagamento', async () => {
@@ -752,6 +843,7 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
         { provide: AsaasService, useValue: {} },
         { provide: UsuariosService, useValue: {} },
         { provide: MelhorEnvioService, useValue: {} },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
     const servicoSemWebhookToken = module.get<CheckoutService>(CheckoutService);
@@ -871,6 +963,7 @@ describe('CheckoutService — webhook Asaas: eventos de reembolso (Etapa 5B.5)',
         { provide: AsaasService, useValue: {} },
         { provide: UsuariosService, useValue: {} },
         { provide: MelhorEnvioService, useValue: {} },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
 
@@ -1042,6 +1135,7 @@ describe('CheckoutService — createSession: produto inativo (Task 16)', () => {
         { provide: AsaasService, useValue: {} },
         { provide: UsuariosService, useValue: usuariosServiceVerificado },
         { provide: MelhorEnvioService, useValue: {} },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
     const service = module.get<CheckoutService>(CheckoutService);
@@ -1112,6 +1206,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         { provide: AsaasService, useValue: { criarCheckout } },
         { provide: UsuariosService, useValue: usuariosServiceVerificado },
         { provide: MelhorEnvioService, useValue: melhorEnvioService },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
     const service = module.get<CheckoutService>(CheckoutService);
@@ -1226,6 +1321,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         { provide: AsaasService, useValue: { criarCheckout: jest.fn(() => ({ id: 'chk_x', link: 'x', status: 'ACTIVE' })) } },
         { provide: UsuariosService, useValue: { findOne } },
         { provide: MelhorEnvioService, useValue: melhorEnvioServiceComOpcoes() },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
     const service = module.get<CheckoutService>(CheckoutService);
@@ -1290,6 +1386,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         { provide: AsaasService, useValue: {} },
         { provide: UsuariosService, useValue: usuariosServiceVerificado },
         { provide: MelhorEnvioService, useValue: melhorEnvioService },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
     const service = module.get<CheckoutService>(CheckoutService);
@@ -1344,6 +1441,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         { provide: AsaasService, useValue: {} },
         { provide: UsuariosService, useValue: usuariosServiceVerificado },
         { provide: MelhorEnvioService, useValue: melhorEnvioService },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
     const service = module.get<CheckoutService>(CheckoutService);
@@ -1399,6 +1497,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
           useValue: { findOne: jest.fn(() => ({ emailVerificado: false })) },
         },
         { provide: MelhorEnvioService, useValue: {} },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
     const service = module.get<CheckoutService>(CheckoutService);
@@ -1468,6 +1567,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
         { provide: AsaasService, useValue: { criarCheckout } },
         { provide: UsuariosService, useValue: { findOne } },
         { provide: MelhorEnvioService, useValue: melhorEnvioServiceComOpcoes() },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
     const service = module.get<CheckoutService>(CheckoutService);
@@ -1672,6 +1772,7 @@ describe('CheckoutService — restauração de estoque após reembolso (Etapa 5B
         { provide: AsaasService, useValue: {} },
         { provide: UsuariosService, useValue: {} },
         { provide: MelhorEnvioService, useValue: {} },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
 
@@ -2048,6 +2149,7 @@ describe('CheckoutService — cotarFrete (Etapa 6.5)', () => {
         { provide: AsaasService, useValue: {} },
         { provide: UsuariosService, useValue: {} },
         { provide: MelhorEnvioService, useValue: melhorEnvioService },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
     }).compile();
     return module.get<CheckoutService>(CheckoutService);

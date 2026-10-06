@@ -8,6 +8,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Patch,
   Put,
   UseGuards,
 } from '@nestjs/common';
@@ -18,6 +19,8 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { STAFF_ROLES, TODOS_OS_PERFIS } from '../common/constants/roles.constants';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UpdatePedidoDto } from './dto/update-pedido.dto';
+import { MarcarEnviadoDto } from './dto/marcar-enviado.dto';
+import { AtualizarEnderecoPedidoDto } from './dto/atualizar-endereco-pedido.dto';
 import { PedidoComItens } from './entities/pedido-com-itens.entity';
 import { PedidoComItensDetalhado } from './entities/pedido-com-itens-detalhado.entity';
 import { Pedido } from './entities/pedido.entity';
@@ -103,6 +106,20 @@ export class PedidosController {
     return this.pedidosService.solicitarReembolso(id, user);
   }
 
+  @Patch('meus/:id/endereco')
+  @Roles(...TODOS_OS_PERFIS)
+  atualizarEnderecoMeuPedido(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AtualizarEnderecoPedidoDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ): Promise<Pedido> {
+    return this.pedidosService.atualizarEnderecoEntrega(
+      id,
+      dto.enderecoId,
+      user,
+    );
+  }
+
   @Get(':id')
   findOne(
     @Param('id', ParseIntPipe) id: number,
@@ -130,9 +147,14 @@ export class PedidosController {
   @HttpCode(HttpStatus.OK)
   marcarComoEnviado(
     @Param('id', ParseIntPipe) id: number,
+    @Body() dto: MarcarEnviadoDto = {},
     @CurrentUser() user: UsuarioAutenticado,
   ): Promise<Pedido> {
-    return this.pedidosService.marcarComoEnviado(id, user);
+    return this.pedidosService.marcarComoEnviado(
+      id,
+      user,
+      dto?.codigoRastreio,
+    );
   }
 
   // Etapa 8.1 (complemento — eliminação da venda manual) — POST /pedidos foi

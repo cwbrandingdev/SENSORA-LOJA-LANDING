@@ -304,6 +304,11 @@ export default function PedidoDetalhePage() {
                   </span>
                 )}
               </div>
+              {pedido.codigoRastreio && (
+                <p className="mt-1 font-mono text-xs text-slate-500">
+                  {pedido.codigoRastreio}
+                </p>
+              )}
             </div>
 
             <div>

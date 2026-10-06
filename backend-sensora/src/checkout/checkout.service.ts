@@ -12,8 +12,10 @@ import { AsaasService } from '../asaas/asaas.service';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
+import { escaparHtml } from '../common/utils/html.util';
 import { EnderecosService } from '../enderecos/enderecos.service';
 import { Endereco } from '../enderecos/entities/endereco.entity';
+import { MailService } from '../mail/mail.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
 import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
@@ -96,6 +98,7 @@ export class CheckoutService {
     private readonly asaasService: AsaasService,
     private readonly usuariosService: UsuariosService,
     private readonly melhorEnvioService: MelhorEnvioService,
+    private readonly mailService: MailService,
   ) {
     this.gateway =
       (this.configService.get<string>('CHECKOUT_GATEWAY') as
@@ -853,7 +856,7 @@ export class CheckoutService {
       return;
     }
 
-    await this.prisma.$transaction(async (tx) => {
+    const confirmou = await this.prisma.$transaction(async (tx) => {
       // Idempotência real (não só "checar antes"): esta UPDATE só afeta a
       // linha se o status ainda for PENDENTE no exato instante da escrita —
       // o próprio Postgres serializa duas transações concorrentes tentando
@@ -868,7 +871,7 @@ export class CheckoutService {
       });
 
       if (resultado.count === 0) {
-        return;
+        return false;
       }
 
       // Quantidade vem exclusivamente dos itens do PEDIDO já persistidos no
@@ -896,6 +899,137 @@ export class CheckoutService {
           data: { estoqueBaixado: true },
         });
       }
+
+      return true;
     });
+
+    // Decreto 7.962/2013, art. 4º — confirmação da oferta depois do
+    // pagamento, FORA da transação (HTTP externo não pode segurar o commit
+    // de status+estoque). Falha de e-mail nunca desfaz o pagamento:
+    // MailService.enviarEmail não lança, e o wrapper abaixo ainda engole
+    // qualquer outro erro. Webhook duplicado (confirmou === false) não
+    // reenvia.
+    if (confirmou) {
+      await this.avisarPagamentoConfirmado(pedido);
+    }
+  }
+
+  private async avisarPagamentoConfirmado(pedido: {
+    id: number;
+    numero: string;
+    clienteNome: string | null;
+    clienteEmail: string | null;
+    total: unknown;
+    enderecoCep: string | null;
+    enderecoRua: string | null;
+    enderecoNumero: string | null;
+    enderecoComplemento: string | null;
+    enderecoBairro: string | null;
+    enderecoCidade: string | null;
+    enderecoEstado: string | null;
+    freteValor: unknown;
+    freteTransportadora: string | null;
+    freteServico: string | null;
+    fretePrazoDias: number | null;
+    itens: {
+      produtoId: number;
+      quantidade: number;
+      precoUnitario: unknown;
+      subtotal: unknown;
+    }[];
+  }): Promise<void> {
+    if (!pedido.clienteEmail) {
+      return;
+    }
+
+    try {
+      const produtoIds = [...new Set(pedido.itens.map((item) => item.produtoId))];
+      const produtos =
+        produtoIds.length > 0
+          ? await this.prisma.produto.findMany({
+              where: { id: { in: produtoIds } },
+              select: { id: true, nome: true },
+            })
+          : [];
+      const nomePorId = new Map(produtos.map((produto) => [produto.id, produto.nome]));
+
+      const reais = (valor: unknown) =>
+        new Intl.NumberFormat('pt-BR', {
+          style: 'currency',
+          currency: 'BRL',
+        }).format(Number(valor ?? 0));
+
+      const nome = escaparHtml(pedido.clienteNome ?? 'cliente');
+      const numero = escaparHtml(pedido.numero);
+      const itensHtml = pedido.itens
+        .map((item) => {
+          const nomeItem = escaparHtml(
+            nomePorId.get(item.produtoId) ?? `Produto #${item.produtoId}`,
+          );
+          return `<li>${item.quantidade} × ${nomeItem} — ${reais(item.subtotal)}</li>`;
+        })
+        .join('');
+
+      const enderecoHtml = pedido.enderecoRua
+        ? `<p>${escaparHtml(pedido.enderecoRua)}, ${escaparHtml(pedido.enderecoNumero ?? '')}` +
+          (pedido.enderecoComplemento
+            ? ` — ${escaparHtml(pedido.enderecoComplemento)}`
+            : '') +
+          `<br />${escaparHtml(pedido.enderecoBairro ?? '')}<br />` +
+          `${escaparHtml(pedido.enderecoCidade ?? '')} / ${escaparHtml(pedido.enderecoEstado ?? '')}<br />` +
+          `CEP ${escaparHtml(pedido.enderecoCep ?? '')}</p>`
+        : '';
+
+      const freteNome = [pedido.freteTransportadora, pedido.freteServico]
+        .filter(Boolean)
+        .join(' · ');
+      const prazo =
+        pedido.fretePrazoDias != null
+          ? `${pedido.fretePrazoDias} dia(s) úteis após a postagem`
+          : null;
+
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+      const linkPedido = frontendUrl
+        ? `${frontendUrl.replace(/\/$/, '')}/conta/pedidos/${pedido.id}`
+        : null;
+
+      const lojaNome =
+        this.configService.get<string>('LOJA_NOME')?.trim() || 'Sensora';
+      const lojaDocumento =
+        this.configService.get<string>('LOJA_DOCUMENTO')?.trim() || '';
+      const lojaEmail =
+        this.configService.get<string>('LOJA_EMAIL')?.trim() || '';
+
+      await this.mailService.enviarEmail({
+        to: pedido.clienteEmail,
+        subject: `Pedido ${pedido.numero} confirmado — ${lojaNome}`,
+        html:
+          `<p>Olá, ${nome}.</p>` +
+          `<p>Recebemos o pagamento do pedido <strong>${numero}</strong>.</p>` +
+          `<p>Itens:</p><ul>${itensHtml}</ul>` +
+          (freteNome
+            ? `<p>Frete: ${escaparHtml(freteNome)}` +
+              (pedido.freteValor != null ? ` — ${reais(pedido.freteValor)}` : '') +
+              (prazo ? `<br />Prazo estimado: ${escaparHtml(prazo)}` : '') +
+              '</p>'
+            : '') +
+          `<p>Total pago: <strong>${reais(pedido.total)}</strong></p>` +
+          (enderecoHtml ? `<p>Entrega em:</p>${enderecoHtml}` : '') +
+          `<p>A nota fiscal será enviada por e-mail em seguida.</p>` +
+          `<p>Você pode desistir da compra em até 7 dias depois de receber o produto, sem precisar justificar.</p>` +
+          (linkPedido
+            ? `<p>Acompanhe o pedido: <a href="${escaparHtml(linkPedido)}">${escaparHtml(linkPedido)}</a></p>`
+            : '') +
+          `<p>${escaparHtml(lojaNome)}` +
+          (lojaDocumento ? `<br />CNPJ ${escaparHtml(lojaDocumento)}` : '') +
+          (lojaEmail ? `<br />${escaparHtml(lojaEmail)}` : '') +
+          '</p>',
+      });
+    } catch (erro) {
+      this.logger.error(
+        `Falha ao enviar e-mail de confirmação do pedido ${pedido.id}.`,
+        erro instanceof Error ? erro.stack : String(erro),
+      );
+    }
   }
 }
