@@ -44,6 +44,16 @@ model Usuario {
   // abriria a possibilidade de um token de um fluxo ser aceito no outro.
   emailVerificationHash   String?        @unique
   emailVerificationExpiry DateTime?
+  // MÉDIO-3 (e-mail pendente) — troca de e-mail em Minha Conta. `email`
+  // continua sendo o endereço oficial até o novo ser confirmado; o novo
+  // fica aqui, com o hash SHA-256 do token e a validade. Campos próprios,
+  // separados de emailVerificationHash (confirmação de cadastro), para que
+  // um token de um fluxo nunca seja aceito no outro. `emailPendente` sem
+  // @unique de propósito: o pendente não reserva o endereço; o @unique de
+  // `email` decide na confirmação.
+  emailPendente           String?
+  emailPendenteTokenHash  String?        @unique
+  emailPendenteExpiraEm   DateTime?
   // Etapa — Dados do Cliente / Cadastro. Ambos opcionais (nunca exigidos no
   // cadastro público, só preenchíveis depois em Minha Conta — ver
   // AtualizarMeusDadosDto). Sempre normalizados antes de persistir (só

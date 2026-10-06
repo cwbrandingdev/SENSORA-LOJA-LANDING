@@ -35,4 +35,11 @@ export class AtualizarMeusDadosDto {
   @IsOptional()
   @IsString()
   telefone?: string;
+
+  // Obrigatória só quando o e-mail muda (conferida em
+  // AuthService.atualizarMeusDados). Sem @MaxLength de propósito: é
+  // comparada com o hash existente e não pode recusar senhas antigas.
+  @IsOptional()
+  @IsString()
+  senhaAtual?: string;
 }

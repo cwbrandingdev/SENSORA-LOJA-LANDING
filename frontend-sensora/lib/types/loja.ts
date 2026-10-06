@@ -623,6 +623,10 @@ export type Usuario = {
   // preenchido.
   cpf: string | null;
   telefone: string | null;
+  // MÉDIO-3 — troca de e-mail aguardando confirmação (devolvido pelo
+  // backend só enquanto o link vale). `email` continua sendo o oficial até
+  // a confirmação.
+  emailPendente?: string | null;
 };
 
 // Fase B (Admin/Clientes reais) — espelha backend/src/usuarios/entities/
@@ -757,6 +761,8 @@ export type AtualizarMeusDadosPayload = {
   email: string;
   cpf?: string;
   telefone?: string;
+  // Só quando o e-mail muda (exigida pelo backend nesse caso).
+  senhaAtual?: string;
 };
 
 // Etapa 3 (Minha Conta / Segurança) — espelha AlterarMinhaSenhaDto

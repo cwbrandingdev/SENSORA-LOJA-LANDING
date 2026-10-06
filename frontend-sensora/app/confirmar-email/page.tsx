@@ -18,7 +18,7 @@ import { ROUTES } from "@/lib/routes";
 import FormButton from "@/components/ui/FormButton";
 import Logo from "@/components/ui/Logo";
 
-type Estado = "idle" | "confirmando" | "sucesso" | "erro";
+type Estado = "idle" | "confirmando" | "sucesso" | "erro" | "conflito";
 
 export default function ConfirmarEmailPage() {
   return (
@@ -52,7 +52,10 @@ function ConfirmarEmailContent() {
       setMensagem(
         getErrorMessage(error, "Não foi possível confirmar seu e-mail. Tente novamente."),
       );
-      setEstado("erro");
+      // 409 só acontece na troca de e-mail: o endereço novo passou a ser
+      // usado por outra conta. A troca é descartada no backend; reenviar
+      // não ajudaria.
+      setEstado(isAxiosError(error) && error.response?.status === 409 ? "conflito" : "erro");
     }
   }
 
@@ -94,6 +97,20 @@ function ConfirmarEmailContent() {
               Ir para o login
             </Link>
           </>
+        ) : estado === "conflito" ? (
+          <>
+            <h1 className="text-lg font-semibold text-brand-navy">
+              Não foi possível confirmar
+            </h1>
+            <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              {mensagem}
+            </p>
+            <p className="text-sm text-slate-600">
+              A troca de e-mail foi cancelada e o e-mail da sua conta continua
+              o mesmo. Se quiser, solicite a troca para outro endereço em Minha
+              Conta.
+            </p>
+          </>
         ) : estado === "erro" ? (
           <>
             <h1 className="text-lg font-semibold text-brand-navy">
@@ -112,8 +129,7 @@ function ConfirmarEmailContent() {
           <>
             <h1 className="text-lg font-semibold text-brand-navy">Confirme seu e-mail</h1>
             <p className="text-sm text-slate-600">
-              Clique no botão abaixo para confirmar seu endereço de e-mail e
-              ativar sua conta.
+              Clique no botão abaixo para confirmar seu endereço de e-mail.
             </p>
             <FormButton
               type="button"

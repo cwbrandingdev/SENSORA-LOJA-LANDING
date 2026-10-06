@@ -1,6 +1,9 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -10,6 +13,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'crypto';
 import { normalizarEmail } from '../common/utils/email.util';
+import { escaparHtml } from '../common/utils/html.util';
 import { MailService } from '../mail/mail.service';
 import { AtualizarMeusDadosDto } from '../usuarios/dto/atualizar-meus-dados.dto';
 import { Usuario, UsuarioPublico } from '../usuarios/entities/usuario.entity';
@@ -53,6 +57,9 @@ const EMAIL_VERIFICATION_VALIDADE_HORAS =
 // exatamente o instante em que o token atual foi emitido (ver
 // podeReenviarVerificacao).
 const EMAIL_VERIFICATION_REENVIO_COOLDOWN_MS = 60 * 1000;
+// Cooldown da troca de e-mail em Minha Conta, por usuário — independente
+// do cooldown de reenvio acima (ver AuthService.atualizarMeusDados).
+const EMAIL_TROCA_COOLDOWN_MS = 60 * 1000;
 const VERIFICATION_RESEND_MENSAGEM =
   'Se existir uma conta com esse e-mail ainda não confirmada, você receberá um novo link de confirmação.';
 const EMAIL_JA_CONFIRMADO_MENSAGEM = 'Este e-mail já foi confirmado.';
@@ -250,8 +257,12 @@ export class AuthService {
     const usuario =
       await this.usuariosService.buscarPorHashVerificacaoEmail(tokenHash);
 
+    // MÉDIO-3: token que não é de confirmação de cadastro pode ser de troca
+    // de e-mail pendente. O caminho de cadastro vem sempre primeiro (contas
+    // antigas, inclusive as que trocaram de e-mail antes do MÉDIO-3, ainda
+    // confirmam por emailVerificationHash).
     if (!usuario) {
-      throw new UnauthorizedException(TOKEN_VERIFICACAO_INVALIDO_MENSAGEM);
+      return this.confirmarTrocaDeEmail(tokenHash);
     }
 
     if (usuario.emailVerificado) {
@@ -273,6 +284,40 @@ export class AuthService {
       // Corrida rara (duplo clique, ou a mesma requisição reenviada pelo
       // navegador): outra chamada já confirmou com este mesmo hash entre a
       // leitura acima e esta escrita.
+      return { message: EMAIL_JA_CONFIRMADO_MENSAGEM };
+    }
+
+    return { message: 'E-mail confirmado com sucesso.' };
+  }
+
+  // MÉDIO-3 — confirmação da troca de e-mail: o pendente vira o `email`
+  // oficial (ver UsuariosService.confirmarEmailPendenteSeHashValido: uso
+  // único, e 409 se outra conta já usa o endereço). Mesmas mensagens do
+  // fluxo de cadastro; não gera sessão.
+  private async confirmarTrocaDeEmail(
+    tokenHash: string,
+  ): Promise<VerifyEmailResponse> {
+    const pendente =
+      await this.usuariosService.buscarPorHashEmailPendente(tokenHash);
+
+    if (
+      !pendente ||
+      !pendente.emailPendente ||
+      !pendente.emailPendenteExpiraEm ||
+      pendente.emailPendenteExpiraEm <= new Date()
+    ) {
+      throw new UnauthorizedException(TOKEN_VERIFICACAO_INVALIDO_MENSAGEM);
+    }
+
+    const confirmado =
+      await this.usuariosService.confirmarEmailPendenteSeHashValido(
+        pendente.id,
+        tokenHash,
+        pendente.emailPendente,
+      );
+    if (confirmado === 0) {
+      // Outra chamada com o mesmo link já efetivou a troca entre a leitura
+      // e a escrita (duplo clique).
       return { message: EMAIL_JA_CONFIRMADO_MENSAGEM };
     }
 
@@ -317,13 +362,11 @@ export class AuthService {
 
   // Minha Conta (PUT /usuarios/me) — orquestra a troca de e-mail com o mesmo
   // fluxo de confirmação do cadastro. Sem troca de e-mail, é só um repasse
-  // para UsuariosService.atualizarMeusDados. Com troca, o token novo é
-  // gravado na MESMA escrita que troca o e-mail e zera a verificação (ver
-  // atualizarMeusDados) e o link vai para o endereço novo. MailService nunca
-  // lança: se o envio falhar, a conta fica não verificada com um token
-  // válido — estado consistente, recuperável pelo reenvio de confirmação.
-  // A sessão atual não é encerrada (o usuário continua podendo corrigir o
-  // e-mail em Minha Conta); só um NOVO login exige a confirmação.
+  // para UsuariosService.atualizarMeusDados. Com troca (MÉDIO-3), o endereço
+  // novo fica PENDENTE: `email` continua o atual (login, reset de senha e
+  // demais e-mails seguem nele) e só muda quando o link enviado ao novo
+  // endereço for confirmado (verifyEmail). MailService nunca lança: se o
+  // envio falhar, a troca fica pendente até expirar ou ser refeita.
   async atualizarMeusDados(
     usuarioId: number,
     dto: AtualizarMeusDadosDto,
@@ -334,25 +377,89 @@ export class AuthService {
       return this.usuariosService.atualizarMeusDados(usuarioId, dto);
     }
 
-    const emailVerificationToken = randomBytes(32).toString('hex');
+    // Troca de e-mail exige a senha atual (ALTO-2): uma sessão roubada não
+    // basta para tomar a conta. Ausente ou errada recebem a mesma resposta,
+    // e nunca 401 — o frontend trata 401 fora de /auth/* como sessão
+    // expirada. Nada é gravado, gerado ou enviado antes desta checagem.
+    const conta = await this.usuariosService.buscarPorEmail(atual.email);
+    const senhaValida =
+      !!conta &&
+      !!dto.senhaAtual &&
+      (await bcrypt.compare(dto.senhaAtual, conta.senha));
+    if (!conta || !senhaValida) {
+      throw new BadRequestException('Senha atual incorreta.');
+    }
+
+    // Cooldown próprio da troca de e-mail (separado do de reenvio): toda
+    // troca grava o token pendente com validade de
+    // EMAIL_VERIFICATION_VALIDADE_MS, então `emailPendenteExpiraEm - validade`
+    // é o instante em que a troca atual foi pedida. Usa só os campos da
+    // troca — cadastro e reenvio (emailVerificationExpiry) não bloqueiam.
+    // Null (nenhuma troca pendente) libera.
+    if (conta.emailPendenteExpiraEm) {
+      const emitidoEm =
+        conta.emailPendenteExpiraEm.getTime() - EMAIL_VERIFICATION_VALIDADE_MS;
+      if (Date.now() - emitidoEm < EMAIL_TROCA_COOLDOWN_MS) {
+        throw new HttpException(
+          'Aguarde um minuto antes de alterar o e-mail novamente.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+
+    const novoEmail = normalizarEmail(dto.email);
+    const tokenTroca = randomBytes(32).toString('hex');
     const usuario = await this.usuariosService.atualizarMeusDados(
       usuarioId,
       dto,
       {
-        emailVerificationHash: this.hashToken(emailVerificationToken),
-        emailVerificationExpiry: new Date(
+        emailPendenteTokenHash: this.hashToken(tokenTroca),
+        emailPendenteExpiraEm: new Date(
           Date.now() + EMAIL_VERIFICATION_VALIDADE_MS,
         ),
       },
     );
 
+    // Só depois de a troca pendente estar gravada: encerra as outras
+    // sessões, manda o link só para o endereço novo e avisa o atual.
+    await this.usuariosService.revogarTodosRefreshTokensAtivos(usuarioId);
+
     await this.enviarEmailVerificacao(
-      usuario,
-      emailVerificationToken,
+      { nome: usuario.nome, email: novoEmail },
+      tokenTroca,
       'troca-email',
     );
 
+    await this.avisarEmailAntigo(atual.email, atual.nome, novoEmail);
+
     return usuario;
+  }
+
+  // Aviso de segurança ao e-mail atual quando uma troca é pedida. Sem token
+  // nem link; o novo endereço vai mascarado. Nunca lança: falha no envio não
+  // desfaz o pedido.
+  private async avisarEmailAntigo(
+    emailAntigo: string,
+    nome: string,
+    emailNovo: string,
+  ): Promise<void> {
+    try {
+      await this.mailService.enviarEmail({
+        to: emailAntigo,
+        subject: 'Alteração de e-mail solicitada — Sensora',
+        html:
+          `<p>Olá, ${escaparHtml(nome)}.</p>` +
+          `<p>Foi solicitada a alteração do e-mail da sua conta na Sensora para ${escaparHtml(mascararEmail(emailNovo))}.</p>` +
+          '<p>O novo endereço fica pendente até ser confirmado pelo link enviado a ele. Até lá, este continua sendo o e-mail da sua conta.</p>' +
+          '<p>Se foi você, não é preciso fazer nada.</p>' +
+          '<p>Se você não fez essa solicitação, redefina sua senha pela opção "Esqueci minha senha" (isso também cancela a alteração pendente) e entre em contato com o suporte da Sensora respondendo este e-mail.</p>',
+      });
+    } catch (erro) {
+      this.logger.error(
+        'Falha ao avisar o e-mail antigo sobre a troca de e-mail da conta.',
+        erro instanceof Error ? erro.stack : String(erro),
+      );
+    }
   }
 
   // Limite de reenvio por e-mail-alvo (aprovado, requisito 12): sem coluna
@@ -397,9 +504,9 @@ export class AuthService {
         ? 'Confirme seu novo endereço de e-mail'
         : 'Confirme seu e-mail',
       html:
-        `<p>Olá, ${usuario.nome}.</p>` +
+        `<p>Olá, ${escaparHtml(usuario.nome)}.</p>` +
         (trocaDeEmail
-          ? '<p>O endereço de e-mail da sua conta na Sensora foi alterado para este. Clique no link abaixo para confirmar o novo endereço:</p>'
+          ? '<p>Foi solicitada a troca do e-mail da sua conta na Sensora para este endereço. Clique no link abaixo para confirmar o novo endereço:</p>'
           : '<p>Obrigado por criar sua conta na Sensora! Clique no link abaixo para confirmar seu e-mail:</p>') +
         `<p><a href="${link}">${link}</a></p>` +
         `<p>Este link expira em ${EMAIL_VERIFICATION_VALIDADE_HORAS} horas.</p>` +
@@ -520,7 +627,7 @@ export class AuthService {
       to: usuario.email,
       subject: 'Redefinição de senha — Sensora',
       html:
-        `<p>Olá, ${usuario.nome}.</p>` +
+        `<p>Olá, ${escaparHtml(usuario.nome)}.</p>` +
         // Etapa 8.0 (achado da auditoria): o template original nunca
         // mencionava "Sensora" no corpo/assunto (diferente do e-mail de
         // confirmação) — corrigido para identificar claramente o
@@ -566,4 +673,10 @@ export class AuthService {
   private hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
   }
+}
+
+// "joao.silva@gmail.com" -> "jo***@gmail.com" (aviso ao e-mail antigo).
+function mascararEmail(email: string): string {
+  const [local, dominio] = email.split('@');
+  return `${local.slice(0, Math.min(2, local.length - 1))}***@${dominio}`;
 }

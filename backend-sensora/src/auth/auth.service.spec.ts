@@ -1,4 +1,11 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  HttpException,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -53,6 +60,8 @@ describe('AuthService', () => {
     revogarRefreshTokenSeAtivo: jest.Mock;
     findOne: jest.Mock;
     atualizarMeusDados: jest.Mock;
+    buscarPorHashEmailPendente: jest.Mock;
+    confirmarEmailPendenteSeHashValido: jest.Mock;
   };
   let mailService: { enviarEmail: jest.Mock };
   let jwtService: { sign: jest.Mock };
@@ -75,6 +84,8 @@ describe('AuthService', () => {
       revogarRefreshTokenSeAtivo: jest.fn(),
       findOne: jest.fn(),
       atualizarMeusDados: jest.fn(),
+      buscarPorHashEmailPendente: jest.fn(),
+      confirmarEmailPendenteSeHashValido: jest.fn(),
     };
     mailService = { enviarEmail: jest.fn() };
     jwtService = { sign: jest.fn(() => 'access-token-fake') };
@@ -223,6 +234,34 @@ describe('AuthService', () => {
       expect(resultado).not.toHaveProperty('refresh_token');
       expect(usuariosService.criarRefreshToken).not.toHaveBeenCalled();
       expect(jwtService.sign).not.toHaveBeenCalled();
+    });
+
+    it('nome com HTML é escapado no e-mail de confirmação', async () => {
+      const nomeMalicioso = '<a href="https://mal.example">Clique</a>';
+      usuariosService.buscarPorEmail.mockResolvedValueOnce(null);
+      usuariosService.create.mockResolvedValueOnce({
+        id: 1,
+        nome: nomeMalicioso,
+        email: 'cliente@sensora.dev',
+        perfil: PerfilUsuario.CLIENTE,
+        ativo: true,
+        emailVerificado: false,
+      });
+
+      await service.register({
+        nome: nomeMalicioso,
+        email: 'cliente@sensora.dev',
+        senha: 'senhaSegura123',
+        cpf: '529.982.247-25',
+      });
+
+      const [{ html }] = mailService.enviarEmail.mock.calls[0] as [
+        { html: string },
+      ];
+      expect(html).not.toContain('<a href="https://mal.example">');
+      expect(html).toContain(
+        'Olá, &lt;a href=&quot;https://mal.example&quot;&gt;Clique&lt;/a&gt;.',
+      );
     });
   });
 
@@ -427,7 +466,7 @@ describe('AuthService', () => {
     });
   });
 
-  describe('atualizarMeusDados — troca de e-mail exige nova confirmação', () => {
+  describe('atualizarMeusDados — troca de e-mail fica pendente até a confirmação', () => {
     const atual = {
       id: 7,
       nome: 'Cliente',
@@ -435,9 +474,56 @@ describe('AuthService', () => {
       perfil: PerfilUsuario.CLIENTE,
       ativo: true,
       emailVerificado: true,
+      emailPendente: null,
     };
+    const VALIDADE_VERIFICACAO_MS = 48 * 60 * 60 * 1000;
 
-    it('e-mail igual (mesmo com outra caixa/espaços): só repassa, sem token nem e-mail', async () => {
+    // Conta completa (com hash da senha) devolvida por buscarPorEmail.
+    function conta(
+      emailPendenteExpiraEm: Date | null = null,
+      emailVerificationExpiry: Date | null = null,
+    ) {
+      return {
+        ...atual,
+        senha: SENHA_HASH_TESTE,
+        emailVerificationExpiry,
+        emailPendenteExpiraEm,
+      };
+    }
+
+    function prepararTroca(contaAtual = conta()) {
+      usuariosService.findOne.mockResolvedValueOnce(atual);
+      usuariosService.buscarPorEmail.mockResolvedValueOnce(contaAtual);
+      usuariosService.atualizarMeusDados.mockResolvedValueOnce({
+        ...atual,
+        emailPendente: 'novo@gmail.com',
+      });
+    }
+
+    function trocar(senhaAtual?: string) {
+      return service.atualizarMeusDados(7, {
+        nome: 'Cliente',
+        email: 'NOVO@GMAIL.COM',
+        senhaAtual,
+      });
+    }
+
+    function emailPara(destinatario: string) {
+      const chamada = mailService.enviarEmail.mock.calls.find(
+        ([params]) => (params as { to: string }).to === destinatario,
+      ) as [{ to: string; subject: string; html: string }] | undefined;
+      return chamada?.[0];
+    }
+
+    function nadaAconteceu() {
+      expect(usuariosService.atualizarMeusDados).not.toHaveBeenCalled();
+      expect(
+        usuariosService.revogarTodosRefreshTokensAtivos,
+      ).not.toHaveBeenCalled();
+      expect(mailService.enviarEmail).not.toHaveBeenCalled();
+    }
+
+    it('e-mail igual (mesmo com outra caixa/espaços): só repassa, sem senha, token nem e-mail', async () => {
       usuariosService.findOne.mockResolvedValueOnce(atual);
       usuariosService.atualizarMeusDados.mockResolvedValueOnce(atual);
 
@@ -450,44 +536,497 @@ describe('AuthService', () => {
         nome: 'Cliente',
         email: ' CLIENTE@Sensora.dev ',
       });
+      expect(usuariosService.buscarPorEmail).not.toHaveBeenCalled();
+      expect(
+        usuariosService.revogarTodosRefreshTokensAtivos,
+      ).not.toHaveBeenCalled();
       expect(mailService.enviarEmail).not.toHaveBeenCalled();
     });
 
-    it('e-mail novo: grava o hash (nunca o token) na mesma chamada e envia o link para o endereço NOVO', async () => {
+    it('só nome/CPF/telefone mudando (mesmo e-mail): não exige senha', async () => {
       usuariosService.findOne.mockResolvedValueOnce(atual);
-      usuariosService.atualizarMeusDados.mockResolvedValueOnce({
-        ...atual,
-        email: 'novo@gmail.com',
-        emailVerificado: false,
+      usuariosService.atualizarMeusDados.mockResolvedValueOnce(atual);
+
+      await service.atualizarMeusDados(7, {
+        nome: 'Outro Nome',
+        email: 'cliente@sensora.dev',
+        cpf: '529.982.247-25',
+        telefone: '(41) 99999-9999',
       });
 
-      const resultado = await service.atualizarMeusDados(7, {
-        nome: 'Cliente',
-        email: 'NOVO@GMAIL.COM',
-      });
+      expect(usuariosService.atualizarMeusDados).toHaveBeenCalledTimes(1);
+      expect(usuariosService.buscarPorEmail).not.toHaveBeenCalled();
+      expect(mailService.enviarEmail).not.toHaveBeenCalled();
+    });
 
-      expect(resultado.emailVerificado).toBe(false);
-      const [, , verificacao] = usuariosService.atualizarMeusDados.mock.calls[0] as [
+    it('troca sem senhaAtual é rejeitada (400), sem gravar, gerar token, revogar sessões nem enviar e-mail', async () => {
+      prepararTroca();
+
+      await expect(trocar()).rejects.toThrow(
+        new BadRequestException('Senha atual incorreta.'),
+      );
+      nadaAconteceu();
+    });
+
+    it('senha atual incorreta é rejeitada com a mesma mensagem e status 400 (nunca 401), sem alterar nada', async () => {
+      prepararTroca();
+
+      const erro = await trocar('senhaErrada').catch((e: unknown) => e);
+
+      expect(erro).toBeInstanceOf(BadRequestException);
+      expect((erro as BadRequestException).getStatus()).toBe(400);
+      expect((erro as BadRequestException).message).toBe(
+        'Senha atual incorreta.',
+      );
+      nadaAconteceu();
+    });
+
+    it('senha correta: grava só a troca pendente (hash do token, validade de 48h); e-mail oficial e verificação não mudam', async () => {
+      prepararTroca();
+
+      const resultado = await trocar('senhaCorreta123');
+
+      expect(resultado.email).toBe('cliente@sensora.dev');
+      expect(resultado.emailVerificado).toBe(true);
+      expect(resultado.emailPendente).toBe('novo@gmail.com');
+
+      const [, , pendente] = usuariosService.atualizarMeusDados.mock
+        .calls[0] as [
         number,
         unknown,
-        { emailVerificationHash: string; emailVerificationExpiry: Date },
+        { emailPendenteTokenHash: string; emailPendenteExpiraEm: Date },
       ];
-      expect(verificacao.emailVerificationHash).toMatch(/^[a-f0-9]{64}$/);
-      expect(verificacao.emailVerificationExpiry.getTime()).toBeGreaterThan(Date.now());
+      expect(pendente.emailPendenteTokenHash).toMatch(/^[a-f0-9]{64}$/);
+      const validade = pendente.emailPendenteExpiraEm.getTime() - Date.now();
+      expect(validade).toBeGreaterThan(VALIDADE_VERIFICACAO_MS - 5000);
+      expect(validade).toBeLessThanOrEqual(VALIDADE_VERIFICACAO_MS);
 
-      expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
-      const enviado = mailService.enviarEmail.mock.calls[0][0] as {
-        to: string;
-        html: string;
-      };
-      expect(enviado.to).toBe('novo@gmail.com');
-      // Texto de troca de endereço, nunca o de cadastro.
-      expect(enviado.html).toContain('foi alterado');
-      expect(enviado.html).not.toContain('Obrigado por criar sua conta');
-      const token = /token=([a-f0-9]+)/.exec(enviado.html)?.[1];
+      // O link vai SÓ para o endereço pendente; o banco recebe só o hash.
+      const confirmacao = emailPara('novo@gmail.com');
+      expect(confirmacao).toBeDefined();
+      expect(confirmacao!.html).toContain('Foi solicitada a troca');
+      expect(confirmacao!.html).not.toContain('Obrigado por criar sua conta');
+      const token = /token=([a-f0-9]+)/.exec(confirmacao!.html)?.[1];
       expect(token).toBeDefined();
-      // O link carrega o token; o banco recebe só o hash dele.
-      expect(token).not.toBe(verificacao.emailVerificationHash);
+      expect(token).not.toBe(pendente.emailPendenteTokenHash);
+      expect(sha256(token as string)).toBe(pendente.emailPendenteTokenHash);
+    });
+
+    it('senha correta: avisa o e-mail ATUAL que a troca está pendente, sem token nem link, com o novo mascarado', async () => {
+      prepararTroca();
+
+      await trocar('senhaCorreta123');
+
+      expect(mailService.enviarEmail).toHaveBeenCalledTimes(2);
+      const aviso = emailPara('cliente@sensora.dev');
+      expect(aviso).toBeDefined();
+      expect(aviso!.subject).toBe('Alteração de e-mail solicitada — Sensora');
+      expect(aviso!.html).toContain('no***@gmail.com');
+      expect(aviso!.html).toContain('fica pendente até ser confirmado');
+      expect(aviso!.html).toContain('continua sendo o e-mail da sua conta');
+      expect(aviso!.html).not.toContain('novo@gmail.com');
+      expect(aviso!.html).not.toContain('token=');
+      expect(aviso!.html).not.toContain('href');
+      expect(aviso!.html).toContain('suporte da Sensora');
+    });
+
+    it('aviso ao e-mail atual escapa HTML do nome', async () => {
+      usuariosService.findOne.mockResolvedValueOnce({
+        ...atual,
+        nome: '<a href="https://mal.example">Clique</a>',
+      });
+      usuariosService.buscarPorEmail.mockResolvedValueOnce(conta());
+      usuariosService.atualizarMeusDados.mockResolvedValueOnce({
+        ...atual,
+        emailPendente: 'novo@gmail.com',
+      });
+
+      await trocar('senhaCorreta123');
+
+      const aviso = emailPara('cliente@sensora.dev');
+      expect(aviso!.html).not.toContain('<a href');
+      expect(aviso!.html).toContain(
+        'Olá, &lt;a href=&quot;https://mal.example&quot;&gt;Clique&lt;/a&gt;.',
+      );
+    });
+
+    it('falha no envio do aviso ao e-mail atual não desfaz a troca pendente', async () => {
+      prepararTroca();
+      mailService.enviarEmail.mockImplementation(({ to }: { to: string }) =>
+        to === 'cliente@sensora.dev'
+          ? Promise.reject(new Error('Resend fora'))
+          : Promise.resolve(),
+      );
+      const erroLog = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      const resultado = await trocar('senhaCorreta123');
+
+      expect(resultado.emailPendente).toBe('novo@gmail.com');
+      expect(usuariosService.atualizarMeusDados).toHaveBeenCalledTimes(1);
+      expect(erroLog).toHaveBeenCalledWith(
+        'Falha ao avisar o e-mail antigo sobre a troca de e-mail da conta.',
+        expect.any(String),
+      );
+      erroLog.mockRestore();
+    });
+
+    it('e-mail oficial de outra conta continua 409, sem revogar sessões nem enviar e-mails', async () => {
+      usuariosService.findOne.mockResolvedValueOnce(atual);
+      usuariosService.buscarPorEmail.mockResolvedValueOnce(conta());
+      usuariosService.atualizarMeusDados.mockRejectedValueOnce(
+        new ConflictException('Este e-mail já está em uso por outra conta.'),
+      );
+
+      await expect(trocar('senhaCorreta123')).rejects.toThrow(
+        ConflictException,
+      );
+      expect(
+        usuariosService.revogarTodosRefreshTokensAtivos,
+      ).not.toHaveBeenCalled();
+      expect(mailService.enviarEmail).not.toHaveBeenCalled();
+    });
+
+    it('segunda troca dentro do cooldown (troca pendente pedida há 10s) é rejeitada (429), sem gravar, revogar nem enviar e-mails', async () => {
+      prepararTroca(
+        conta(new Date(Date.now() + VALIDADE_VERIFICACAO_MS - 10_000)),
+      );
+
+      const erro = await trocar('senhaCorreta123').catch((e: unknown) => e);
+
+      expect(erro).toBeInstanceOf(HttpException);
+      expect((erro as HttpException).getStatus()).toBe(429);
+      nadaAconteceu();
+    });
+
+    it('troca depois do cooldown (troca pendente pedida há 61s) funciona', async () => {
+      prepararTroca(
+        conta(new Date(Date.now() + VALIDADE_VERIFICACAO_MS - 61_000)),
+      );
+
+      const resultado = await trocar('senhaCorreta123');
+
+      expect(resultado.emailPendente).toBe('novo@gmail.com');
+      expect(usuariosService.atualizarMeusDados).toHaveBeenCalledTimes(1);
+      expect(mailService.enviarEmail).toHaveBeenCalledTimes(2);
+    });
+
+    it('cadastro/reenvio de confirmação recente (emailVerificationExpiry de 10s atrás) não bloqueia a troca', async () => {
+      prepararTroca(
+        conta(null, new Date(Date.now() + VALIDADE_VERIFICACAO_MS - 10_000)),
+      );
+
+      const resultado = await trocar('senhaCorreta123');
+
+      expect(resultado.emailPendente).toBe('novo@gmail.com');
+      expect(usuariosService.atualizarMeusDados).toHaveBeenCalledTimes(1);
+    });
+
+    it('troca aceita revoga os refresh tokens ativos do usuário, depois da gravação', async () => {
+      prepararTroca();
+
+      await trocar('senhaCorreta123');
+
+      expect(
+        usuariosService.revogarTodosRefreshTokensAtivos,
+      ).toHaveBeenCalledWith(7);
+      const ordemGravacao =
+        usuariosService.atualizarMeusDados.mock.invocationCallOrder[0];
+      const ordemRevogacao =
+        usuariosService.revogarTodosRefreshTokensAtivos.mock
+          .invocationCallOrder[0];
+      expect(ordemRevogacao).toBeGreaterThan(ordemGravacao);
+    });
+  });
+
+  // MÉDIO-3 — ciclo completo com um "banco" em memória: pedido da troca,
+  // confirmação pelo link (fluxo B do verifyEmail) e efeitos em login,
+  // forgot-password e resend-verification enquanto a troca está pendente.
+  describe('troca de e-mail pendente — confirmação e demais fluxos (MÉDIO-3)', () => {
+    let estado: {
+      email: string;
+      emailVerificado: boolean;
+      emailPendente: string | null;
+      emailPendenteTokenHash: string | null;
+      emailPendenteExpiraEm: Date | null;
+    };
+
+    function contaCompleta() {
+      return {
+        id: 7,
+        nome: 'Cliente',
+        perfil: PerfilUsuario.CLIENTE,
+        ativo: true,
+        senha: SENHA_HASH_TESTE,
+        emailVerificationExpiry: null,
+        ...estado,
+      };
+    }
+
+    beforeEach(() => {
+      estado = {
+        email: 'a@sensora.dev',
+        emailVerificado: true,
+        emailPendente: null,
+        emailPendenteTokenHash: null,
+        emailPendenteExpiraEm: null,
+      };
+      usuariosService.findOne.mockImplementation(() => ({
+        ...contaCompleta(),
+      }));
+      // Igual ao real: procura só pelo e-mail oficial.
+      usuariosService.buscarPorEmail.mockImplementation((email: string) =>
+        email.trim().toLowerCase() === estado.email ? contaCompleta() : null,
+      );
+      usuariosService.atualizarMeusDados.mockImplementation(
+        (
+          _id: number,
+          dto: { email: string },
+          pendente?: {
+            emailPendenteTokenHash: string;
+            emailPendenteExpiraEm: Date;
+          },
+        ) => {
+          const email = dto.email.trim().toLowerCase();
+          if (email !== estado.email && pendente) {
+            estado.emailPendente = email;
+            estado.emailPendenteTokenHash = pendente.emailPendenteTokenHash;
+            estado.emailPendenteExpiraEm = pendente.emailPendenteExpiraEm;
+          }
+          return contaCompleta();
+        },
+      );
+      usuariosService.buscarPorHashVerificacaoEmail.mockResolvedValue(null);
+      usuariosService.buscarPorHashEmailPendente.mockImplementation(
+        (hash: string) =>
+          hash === estado.emailPendenteTokenHash
+            ? {
+                id: 7,
+                emailPendente: estado.emailPendente,
+                emailPendenteExpiraEm: estado.emailPendenteExpiraEm,
+              }
+            : null,
+      );
+      usuariosService.confirmarEmailPendenteSeHashValido.mockImplementation(
+        (_id: number, hash: string, novoEmail: string) => {
+          if (hash !== estado.emailPendenteTokenHash) return 0;
+          estado.email = novoEmail;
+          estado.emailVerificado = true;
+          estado.emailPendente = null;
+          estado.emailPendenteTokenHash = null;
+          estado.emailPendenteExpiraEm = null;
+          return 1;
+        },
+      );
+    });
+
+    async function pedirTroca(novoEmail: string): Promise<string> {
+      mailService.enviarEmail.mockClear();
+      await service.atualizarMeusDados(7, {
+        nome: 'Cliente',
+        email: novoEmail,
+        senhaAtual: 'senhaCorreta123',
+      });
+      const confirmacao = mailService.enviarEmail.mock.calls
+        .map(([params]) => params as { to: string; html: string })
+        .find((params) => params.to === novoEmail);
+      return /token=([a-f0-9]+)/.exec(confirmacao!.html)![1];
+    }
+
+    // Simula a passagem do tempo para sair do cooldown de 60s.
+    function passarCooldown() {
+      estado.emailPendenteExpiraEm = new Date(
+        estado.emailPendenteExpiraEm!.getTime() - 61_000,
+      );
+    }
+
+    it('confirmação válida promove o pendente a e-mail oficial e limpa a troca', async () => {
+      const token = await pedirTroca('b@sensora.dev');
+      expect(estado.email).toBe('a@sensora.dev');
+      expect(estado.emailPendente).toBe('b@sensora.dev');
+
+      const resposta = await service.verifyEmail({ token });
+
+      expect(resposta.message).toBe('E-mail confirmado com sucesso.');
+      expect(
+        usuariosService.confirmarEmailPendenteSeHashValido,
+      ).toHaveBeenCalledWith(7, sha256(token), 'b@sensora.dev');
+      expect(estado).toMatchObject({
+        email: 'b@sensora.dev',
+        emailVerificado: true,
+        emailPendente: null,
+        emailPendenteTokenHash: null,
+        emailPendenteExpiraEm: null,
+      });
+      // Confirmar não cria sessão.
+      expect(jwtService.sign).not.toHaveBeenCalled();
+      expect(usuariosService.criarRefreshToken).not.toHaveBeenCalled();
+    });
+
+    it('A → B e depois A → C: o token de B deixa de valer e o de C efetiva a troca', async () => {
+      const tokenB = await pedirTroca('b@sensora.dev');
+      passarCooldown();
+      const tokenC = await pedirTroca('c@sensora.dev');
+
+      await expect(service.verifyEmail({ token: tokenB })).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(estado.email).toBe('a@sensora.dev');
+
+      await service.verifyEmail({ token: tokenC });
+      expect(estado.email).toBe('c@sensora.dev');
+    });
+
+    it('A → B e logo em seguida A → C (dentro do cooldown): 429 e B continua pendente', async () => {
+      await pedirTroca('b@sensora.dev');
+
+      await expect(pedirTroca('c@sensora.dev')).rejects.toMatchObject({
+        status: 429,
+      });
+      expect(estado.emailPendente).toBe('b@sensora.dev');
+    });
+
+    it('enviar o mesmo e-mail atual com a troca pendente não cancela o pendente', async () => {
+      const token = await pedirTroca('b@sensora.dev');
+
+      await service.atualizarMeusDados(7, {
+        nome: 'Outro Nome',
+        email: 'a@sensora.dev',
+      });
+
+      expect(estado.emailPendente).toBe('b@sensora.dev');
+      await service.verifyEmail({ token });
+      expect(estado.email).toBe('b@sensora.dev');
+    });
+
+    it('token expirado é rejeitado sem efetivar a troca', async () => {
+      const token = await pedirTroca('b@sensora.dev');
+      estado.emailPendenteExpiraEm = new Date(Date.now() - 1000);
+
+      await expect(service.verifyEmail({ token })).rejects.toThrow(
+        new UnauthorizedException('Token inválido ou expirado'),
+      );
+      expect(
+        usuariosService.confirmarEmailPendenteSeHashValido,
+      ).not.toHaveBeenCalled();
+      expect(estado.email).toBe('a@sensora.dev');
+    });
+
+    it('token inválido (nem de cadastro nem de troca) é rejeitado', async () => {
+      await expect(
+        service.verifyEmail({ token: 'token-que-nao-existe' }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(
+        usuariosService.confirmarEmailPendenteSeHashValido,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('confirmação concorrente perdida (count 0) responde "já confirmado" sem efetivar de novo', async () => {
+      const token = await pedirTroca('b@sensora.dev');
+      usuariosService.confirmarEmailPendenteSeHashValido.mockResolvedValueOnce(
+        0,
+      );
+
+      const resposta = await service.verifyEmail({ token });
+
+      expect(resposta.message).toBe('Este e-mail já foi confirmado.');
+      expect(estado.email).toBe('a@sensora.dev');
+    });
+
+    it('P2002 na confirmação (endereço já em uso por outra conta) chega como 409', async () => {
+      const token = await pedirTroca('b@sensora.dev');
+      usuariosService.confirmarEmailPendenteSeHashValido.mockRejectedValueOnce(
+        new ConflictException('Este e-mail já está em uso por outra conta.'),
+      );
+
+      await expect(service.verifyEmail({ token })).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('conta antiga em transição (troca antes do MÉDIO-3) ainda confirma por emailVerificationHash', async () => {
+      usuariosService.buscarPorHashVerificacaoEmail.mockResolvedValueOnce({
+        id: 9,
+        nome: 'Conta Antiga',
+        email: 'novo-antigo@sensora.dev',
+        emailVerificado: false,
+        emailVerificationExpiry: new Date(Date.now() + 60 * 60 * 1000),
+      });
+      usuariosService.confirmarEmailSeHashValido.mockResolvedValueOnce(1);
+
+      const resposta = await service.verifyEmail({ token: 'token-antigo' });
+
+      expect(resposta.message).toBe('E-mail confirmado com sucesso.');
+      expect(usuariosService.confirmarEmailSeHashValido).toHaveBeenCalledWith(
+        9,
+        sha256('token-antigo'),
+      );
+      expect(usuariosService.buscarPorHashEmailPendente).not.toHaveBeenCalled();
+    });
+
+    it('login com o e-mail atual funciona durante a troca pendente', async () => {
+      await pedirTroca('b@sensora.dev');
+
+      const resultado = await service.login({
+        email: 'a@sensora.dev',
+        senha: 'senhaCorreta123',
+      });
+
+      expect(resultado.access_token).toBe('access-token-fake');
+    });
+
+    it('login com o e-mail pendente falha como credencial inválida', async () => {
+      await pedirTroca('b@sensora.dev');
+
+      await expect(
+        service.login({ email: 'b@sensora.dev', senha: 'senhaCorreta123' }),
+      ).rejects.toThrow(new UnauthorizedException('Credenciais inválidas'));
+      expect(jwtService.sign).not.toHaveBeenCalled();
+    });
+
+    it('forgot-password pelo e-mail atual manda o reset para o atual', async () => {
+      await pedirTroca('b@sensora.dev');
+      mailService.enviarEmail.mockClear();
+
+      await service.forgotPassword({ email: 'a@sensora.dev' });
+
+      expect(mailService.enviarEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'a@sensora.dev',
+          subject: 'Redefinição de senha — Sensora',
+        }),
+      );
+    });
+
+    it('forgot-password pelo e-mail pendente não encontra a conta (resposta genérica, sem e-mail)', async () => {
+      await pedirTroca('b@sensora.dev');
+      mailService.enviarEmail.mockClear();
+
+      const resposta = await service.forgotPassword({ email: 'b@sensora.dev' });
+
+      expect(resposta.message).toContain('Se existir uma conta');
+      expect(usuariosService.salvarTokenReset).not.toHaveBeenCalled();
+      expect(mailService.enviarEmail).not.toHaveBeenCalled();
+    });
+
+    it('resend-verification não envia nada para conta verificada com troca pendente (nem ao atual, nem ao pendente)', async () => {
+      await pedirTroca('b@sensora.dev');
+      mailService.enviarEmail.mockClear();
+
+      const atualResp = await service.resendVerification({
+        email: 'a@sensora.dev',
+      });
+      const pendenteResp = await service.resendVerification({
+        email: 'b@sensora.dev',
+      });
+
+      expect(atualResp.message).toBe(pendenteResp.message);
+      expect(
+        usuariosService.emitirTokenVerificacaoEmail,
+      ).not.toHaveBeenCalled();
+      expect(mailService.enviarEmail).not.toHaveBeenCalled();
+      expect(estado.emailPendente).toBe('b@sensora.dev');
     });
   });
 
@@ -615,6 +1154,22 @@ describe('AuthService', () => {
           subject: 'Redefinição de senha — Sensora',
         }),
       );
+    });
+
+    it('nome com HTML é escapado no e-mail de redefinição de senha', async () => {
+      usuariosService.buscarPorEmail.mockResolvedValueOnce({
+        id: 1,
+        nome: '<img src=x onerror=alert(1)>',
+        email: 'cliente@sensora.dev',
+      });
+
+      await service.forgotPassword({ email: 'cliente@sensora.dev' });
+
+      const [{ html }] = mailService.enviarEmail.mock.calls[0] as [
+        { html: string },
+      ];
+      expect(html).not.toContain('<img');
+      expect(html).toContain('Olá, &lt;img src=x onerror=alert(1)&gt;.');
     });
 
     it('C: EXPOSE_RESET_TOKEN="true" inclui o token na resposta (fail-safe opt-in, nunca por padrão)', async () => {

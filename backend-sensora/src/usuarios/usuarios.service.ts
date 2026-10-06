@@ -214,7 +214,7 @@ export class UsuariosService {
     id: number,
     updateUsuarioDto: UpdateUsuarioDto,
   ): Promise<UsuarioPublico> {
-    await this.localizar(id);
+    const atual = await this.localizar(id);
     const { senha, cpf, telefone, ...rest } = updateUsuarioDto;
 
     const data: Prisma.UsuarioUpdateInput = { ...rest };
@@ -229,6 +229,13 @@ export class UsuariosService {
         throw new ConflictException(
           'Este e-mail já está em uso por outra conta.',
         );
+      }
+      // O e-mail definido pelo ADMIN passa a ser o oficial: descarta uma
+      // troca pendente, para que um link antigo não sobrescreva esta troca.
+      if (data.email !== atual.email) {
+        data.emailPendente = null;
+        data.emailPendenteTokenHash = null;
+        data.emailPendenteExpiraEm = null;
       }
     }
 
@@ -279,19 +286,19 @@ export class UsuariosService {
   // mesmo raciocínio é aplicado ao CPF logo abaixo, em
   // normalizarEValidarCpfParaUsuario.
   //
-  // Troca de e-mail: o endereço novo ainda não foi provado, então a conta
-  // volta a `emailVerificado:false` NA MESMA escrita que troca o e-mail —
-  // nunca existe um instante em que o e-mail novo aparece como verificado.
-  // `verificacao` (hash + validade do token novo, gerados em AuthService,
-  // que também envia o link) entra nessa mesma escrita; sem ela, o hash
-  // anterior é limpo (um link antigo jamais confirma o endereço novo) e o
-  // usuário pode pedir um link pelo reenvio de confirmação.
+  // Troca de e-mail (MÉDIO-3): `email` e `emailVerificado` NÃO mudam aqui —
+  // o endereço oficial continua o atual até o novo ser confirmado. O novo
+  // vai para `emailPendente`, junto com `pendente` (hash + validade do
+  // token, gerados em AuthService, que também envia o link). Uma nova troca
+  // sobrescreve os três campos, invalidando o token anterior. Mandar o
+  // mesmo e-mail atual não mexe no pendente (o formulário envia o e-mail em
+  // toda edição de nome/CPF/telefone).
   async atualizarMeusDados(
     id: number,
     dto: AtualizarMeusDadosDto,
-    verificacao?: {
-      emailVerificationHash: string;
-      emailVerificationExpiry: Date;
+    pendente?: {
+      emailPendenteTokenHash: string;
+      emailPendenteExpiraEm: Date;
     },
   ): Promise<UsuarioPublico> {
     const atual = await this.localizar(id);
@@ -304,15 +311,12 @@ export class UsuariosService {
 
     const data: Prisma.UsuarioUpdateInput = {
       nome: dto.nome,
-      email,
     };
 
     if (email !== atual.email) {
-      data.emailVerificado = false;
-      data.emailVerificadoEm = null;
-      data.emailVerificationHash = verificacao?.emailVerificationHash ?? null;
-      data.emailVerificationExpiry =
-        verificacao?.emailVerificationExpiry ?? null;
+      data.emailPendente = email;
+      data.emailPendenteTokenHash = pendente?.emailPendenteTokenHash ?? null;
+      data.emailPendenteExpiraEm = pendente?.emailPendenteExpiraEm ?? null;
     }
 
     if (dto.cpf !== undefined) {
@@ -480,6 +484,11 @@ export class UsuariosService {
         // (mesmo raciocínio de confirmarEmailSeHashValido).
         resetTokenHash: null,
         resetTokenExpiry: null,
+        // MÉDIO-3: recuperar a conta descarta uma troca de e-mail pendente
+        // (um link de troca antigo não vale depois do reset).
+        emailPendente: null,
+        emailPendenteTokenHash: null,
+        emailPendenteExpiraEm: null,
       },
     });
   }
@@ -550,6 +559,64 @@ export class UsuariosService {
     return resultado.count;
   }
 
+  // MÉDIO-3 — localiza a troca de e-mail pendente pelo HASH do token
+  // (calculado em AuthService), nunca pelo token em texto puro.
+  async buscarPorHashEmailPendente(emailPendenteTokenHash: string): Promise<{
+    id: number;
+    emailPendente: string | null;
+    emailPendenteExpiraEm: Date | null;
+  } | null> {
+    return this.prisma.usuario.findFirst({
+      where: { emailPendenteTokenHash },
+      select: { id: true, emailPendente: true, emailPendenteExpiraEm: true },
+    });
+  }
+
+  // MÉDIO-3 — efetiva a troca: o pendente vira o `email` oficial numa única
+  // escrita condicionada ao hash (uso único; duas confirmações simultâneas
+  // nunca efetivam duas vezes — a segunda recebe count 0). Se outra conta
+  // passou a usar o endereço depois do pedido, o @unique de `email` recusa a
+  // escrita inteira (P2002, nada é gravado): a troca pendente é descartada e
+  // a confirmação vira 409.
+  async confirmarEmailPendenteSeHashValido(
+    id: number,
+    emailPendenteTokenHash: string,
+    novoEmail: string,
+  ): Promise<number> {
+    try {
+      const resultado = await this.prisma.usuario.updateMany({
+        where: { id, emailPendenteTokenHash, emailPendente: novoEmail },
+        data: {
+          email: novoEmail,
+          emailVerificado: true,
+          emailVerificadoEm: new Date(),
+          emailPendente: null,
+          emailPendenteTokenHash: null,
+          emailPendenteExpiraEm: null,
+        },
+      });
+      return resultado.count;
+    } catch (erro) {
+      if (
+        erro instanceof Prisma.PrismaClientKnownRequestError &&
+        erro.code === 'P2002'
+      ) {
+        await this.prisma.usuario.updateMany({
+          where: { id, emailPendenteTokenHash },
+          data: {
+            emailPendente: null,
+            emailPendenteTokenHash: null,
+            emailPendenteExpiraEm: null,
+          },
+        });
+        throw new ConflictException(
+          'Este e-mail já está em uso por outra conta.',
+        );
+      }
+      throw erro;
+    }
+  }
+
   // Task 27 — só o hash (SHA-256, calculado em AuthService) é gravado;
   // o refresh token em texto puro nunca chega ao banco.
   async criarRefreshToken(
@@ -610,6 +677,10 @@ export class UsuariosService {
   }
 
   private paraPublico(usuario: UsuarioPrisma): UsuarioPublico {
+    // Troca pendente só aparece enquanto o link vale.
+    const pendenteValido =
+      usuario.emailPendenteExpiraEm !== null &&
+      usuario.emailPendenteExpiraEm > new Date();
     return {
       id: usuario.id,
       nome: usuario.nome,
@@ -617,6 +688,7 @@ export class UsuariosService {
       perfil: usuario.perfil as PerfilUsuario,
       ativo: usuario.ativo,
       emailVerificado: usuario.emailVerificado,
+      emailPendente: pendenteValido ? usuario.emailPendente : null,
       cpf: usuario.cpf,
       telefone: usuario.telefone,
     };

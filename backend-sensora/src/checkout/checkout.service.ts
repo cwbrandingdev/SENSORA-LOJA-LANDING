@@ -9,8 +9,10 @@ import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import Stripe from 'stripe';
 import { AsaasService } from '../asaas/asaas.service';
+import { escaparHtml } from '../common/utils/html.util';
 import { DevolucoesService } from '../devolucoes/devolucoes.service';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
 import { EnderecosService } from '../enderecos/enderecos.service';
@@ -98,6 +100,7 @@ export class CheckoutService {
     private readonly usuariosService: UsuariosService,
     private readonly melhorEnvioService: MelhorEnvioService,
     private readonly devolucoesService: DevolucoesService,
+    private readonly mailService: MailService,
   ) {
     this.gateway =
       (this.configService.get<string>('CHECKOUT_GATEWAY') as
@@ -890,7 +893,7 @@ export class CheckoutService {
       return;
     }
 
-    await this.prisma.$transaction(async (tx) => {
+    const pagamentoConfirmado = await this.prisma.$transaction(async (tx) => {
       // Idempotência real (não só "checar antes"): esta UPDATE só afeta a
       // linha se o status ainda for PENDENTE no exato instante da escrita —
       // o próprio Postgres serializa duas transações concorrentes tentando
@@ -905,7 +908,7 @@ export class CheckoutService {
       });
 
       if (resultado.count === 0) {
-        return;
+        return false;
       }
 
       // Quantidade vem exclusivamente dos itens do PEDIDO já persistidos no
@@ -933,6 +936,76 @@ export class CheckoutService {
           data: { estoqueBaixado: true },
         });
       }
+      return true;
     });
+
+    // Só quem fez a transição PENDENTE -> PAGO avisa o cliente (uma vez),
+    // depois do commit. Reentregas do webhook encontram count 0 e não chegam
+    // aqui; as reversões REEMBOLSO_SOLICITADO -> PAGO (PedidosService) não
+    // passam por este método.
+    if (pagamentoConfirmado) {
+      await this.avisarClientePagamentoConfirmado(pedido.id);
+    }
   }
+
+  // E-mail "Pedido confirmado". Destinatário: e-mail da conta do usuário ou,
+  // se ele não existir mais, o e-mail gravado no pedido. Todo texto variável
+  // é escapado antes de entrar no HTML. Nunca lança.
+  private async avisarClientePagamentoConfirmado(
+    pedidoId: number,
+  ): Promise<void> {
+    try {
+      const pedido = await this.prisma.pedido.findUnique({
+        where: { id: pedidoId },
+        include: {
+          usuario: { select: { nome: true, email: true } },
+          itens: { include: { produto: { select: { nome: true } } } },
+        },
+      });
+      if (!pedido) {
+        return;
+      }
+
+      const destinatario = pedido.usuario?.email ?? pedido.clienteEmail;
+      if (!destinatario) {
+        this.logger.warn(
+          `Pedido ${pedidoId} sem e-mail de cliente — aviso de pedido confirmado não enviado.`,
+        );
+        return;
+      }
+
+      const nome = escaparHtml(
+        pedido.usuario?.nome ?? pedido.clienteNome ?? 'cliente',
+      );
+      const numero = escaparHtml(pedido.numero);
+      const itens = pedido.itens
+        .map(
+          (item) =>
+            `<li>${escaparHtml(item.produto.nome)} — ${item.quantidade} × ${formatarReais(item.precoUnitario)} = ${formatarReais(item.subtotal)}</li>`,
+        )
+        .join('');
+
+      await this.mailService.enviarEmail({
+        to: destinatario,
+        subject: 'Pedido confirmado — Sensora',
+        html:
+          `<p>Olá, ${nome}.</p>` +
+          `<p>Seu pedido ${numero} foi confirmado e o pagamento foi aprovado.</p>` +
+          `<ul>${itens}</ul>` +
+          `<p>Frete: ${formatarReais(pedido.freteValor ?? 0)}</p>` +
+          `<p>Total: ${formatarReais(pedido.total)}</p>` +
+          `<p>Acesse Minha Conta &gt; Meus pedidos &gt; pedido ${numero} para ver os detalhes.</p>` +
+          '<p>Se tiver dúvidas, é só responder este e-mail.</p>',
+      });
+    } catch (erro) {
+      this.logger.error(
+        `Falha ao avisar o cliente sobre o pedido confirmado ${pedidoId}.`,
+        erro instanceof Error ? erro.stack : String(erro),
+      );
+    }
+  }
+}
+
+function formatarReais(valor: unknown): string {
+  return `R$ ${Number(valor).toFixed(2).replace('.', ',')}`;
 }
