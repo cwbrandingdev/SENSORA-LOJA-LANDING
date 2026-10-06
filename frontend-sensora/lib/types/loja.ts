@@ -245,6 +245,7 @@ export type Pedido = {
   // para envios marcados à noite no horário de Brasília.
   statusEnvio: StatusEnvio;
   enviadoEm?: string | null;
+  codigoRastreio?: string | null;
 
   // Infraestrutura Fiscal (preparação arquitetural) — só para alinhar com o
   // que GET /pedidos/:id já devolve (PedidosService.findOne); sempre `null`

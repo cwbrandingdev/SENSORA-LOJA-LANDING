@@ -17,6 +17,7 @@ import FormButton from "@/components/ui/FormButton";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import QuantityStepper from "@/components/ui/QuantityStepper";
 import Skeleton from "@/components/ui/Skeleton";
+import EnderecoCard from "@/components/loja/EnderecoCard";
 import { BackLink } from "@/components/conta/AccountPageHeader";
 import StatusPedidoBadge from "@/components/conta/StatusPedidoBadge";
 import AcompanhamentoPedido from "@/components/conta/AcompanhamentoPedido";
@@ -29,13 +30,17 @@ import {
   listarMinhasDevolucoes,
   solicitarDevolucaoMeuPedido,
   solicitarReembolsoMeuPedido,
+  atualizarEnderecoMeuPedido,
 } from "@/services/pedidos";
+import { listarEnderecos } from "@/services/enderecos";
+import { normalizarCep } from "@/lib/cep";
 import { ROUTES } from "@/lib/routes";
 import { ROTAS_LEGAIS } from "@/lib/empresa";
 import {
   StatusEnvio,
   StatusPedido,
   type DevolucoesDoPedido,
+  type Endereco,
   type Pedido,
   type PedidoComItensDetalhado,
 } from "@/lib/types/loja";
@@ -94,6 +99,10 @@ export default function MeuPedidoDetalhePage() {
   const [devolucoesDoPedido, setDevolucoesDoPedido] = useState<DevolucoesDoPedido | null>(
     null,
   );
+  const [modalEnderecoAberto, setModalEnderecoAberto] = useState(false);
+  const [enderecosConta, setEnderecosConta] = useState<Endereco[]>([]);
+  const [enderecoEscolhidoId, setEnderecoEscolhidoId] = useState<number | null>(null);
+  const [salvandoEndereco, setSalvandoEndereco] = useState(false);
 
   // Só pedido PAGO já ENVIADO tem devolução; para os outros, não busca nada.
   async function carregarDevolucoes(pedido: Pedido) {
@@ -187,6 +196,41 @@ export default function MeuPedidoDetalhePage() {
   function handleFecharModalReembolso() {
     if (solicitandoReembolso) return;
     setModalReembolsoAberto(false);
+  }
+
+  async function handleAbrirModalEndereco() {
+    if (!dados) return;
+    try {
+      const lista = await listarEnderecos();
+      setEnderecosConta(lista);
+      setEnderecoEscolhidoId(null);
+      setModalEnderecoAberto(true);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Não foi possível carregar seus endereços."));
+    }
+  }
+
+  function handleFecharModalEndereco() {
+    if (salvandoEndereco) return;
+    setModalEnderecoAberto(false);
+  }
+
+  async function handleConfirmarEndereco() {
+    if (!dados || !enderecoEscolhidoId || salvandoEndereco) return;
+    setSalvandoEndereco(true);
+    try {
+      const pedidoAtualizado = await atualizarEnderecoMeuPedido(
+        dados.pedido.id,
+        enderecoEscolhidoId,
+      );
+      setDados((atual) => (atual ? { ...atual, pedido: pedidoAtualizado } : atual));
+      setModalEnderecoAberto(false);
+      toast.success("Endereço de entrega atualizado.");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Não foi possível alterar o endereço."));
+    } finally {
+      setSalvandoEndereco(false);
+    }
   }
 
   async function handleConfirmarReembolso() {
@@ -437,6 +481,7 @@ export default function MeuPedidoDetalhePage() {
                 status={dados.pedido.status}
                 statusEnvio={dados.pedido.statusEnvio}
                 enviadoEm={dados.pedido.enviadoEm}
+                codigoRastreio={dados.pedido.codigoRastreio}
               />
             </div>
           </div>
@@ -484,17 +529,29 @@ export default function MeuPedidoDetalhePage() {
                 nunca têm esses campos preenchidos — o fallback abaixo
                 preserva exatamente a mensagem que já existia para eles. */}
             {possuiEnderecoCompleto(dados.pedido) ? (
-              <address className="mt-3 text-sm leading-relaxed text-slate-600 not-italic">
-                <p>
-                  {dados.pedido.enderecoRua}, {dados.pedido.enderecoNumero}
-                </p>
-                {dados.pedido.enderecoComplemento && <p>{dados.pedido.enderecoComplemento}</p>}
-                <p>{dados.pedido.enderecoBairro}</p>
-                <p>
-                  {dados.pedido.enderecoCidade} / {dados.pedido.enderecoEstado}
-                </p>
-                <p>CEP {dados.pedido.enderecoCep}</p>
-              </address>
+              <>
+                <address className="mt-3 text-sm leading-relaxed text-slate-600 not-italic">
+                  <p>
+                    {dados.pedido.enderecoRua}, {dados.pedido.enderecoNumero}
+                  </p>
+                  {dados.pedido.enderecoComplemento && <p>{dados.pedido.enderecoComplemento}</p>}
+                  <p>{dados.pedido.enderecoBairro}</p>
+                  <p>
+                    {dados.pedido.enderecoCidade} / {dados.pedido.enderecoEstado}
+                  </p>
+                  <p>CEP {dados.pedido.enderecoCep}</p>
+                </address>
+                {dados.pedido.status === StatusPedido.PAGO && !pedidoEnviado && (
+                  <FormButton
+                    type="button"
+                    variant="secondary"
+                    className="mt-4"
+                    onClick={handleAbrirModalEndereco}
+                  >
+                    Alterar endereço
+                  </FormButton>
+                )}
+              </>
             ) : (
               <p className="mt-3 text-sm text-slate-500">
                 Endereço de entrega não disponível para este pedido.
@@ -644,6 +701,57 @@ export default function MeuPedidoDetalhePage() {
             confirming={enviandoDevolucao}
             onConfirm={handleConfirmarDevolucao}
             onCancel={handleFecharModalDevolucao}
+          />
+          <ConfirmDialog
+            open={modalEnderecoAberto}
+            title="Alterar endereço de entrega"
+            description={
+              <div className="flex flex-col gap-3">
+                <p>
+                  Só endereços no mesmo CEP do frete já pago. Para outro CEP,
+                  cadastre o endereço em{" "}
+                  <Link
+                    href={ROUTES.CONTA_ENDERECOS}
+                    className="text-brand-navy underline underline-offset-4"
+                  >
+                    Minha Conta → Endereços
+                  </Link>
+                  .
+                </p>
+                {enderecosConta.filter(
+                  (endereco) =>
+                    normalizarCep(endereco.cep) ===
+                    normalizarCep(dados.pedido.enderecoCep ?? ""),
+                ).length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    Nenhum outro endereço cadastrado neste CEP.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2" role="radiogroup">
+                    {enderecosConta
+                      .filter(
+                        (endereco) =>
+                          normalizarCep(endereco.cep) ===
+                          normalizarCep(dados.pedido.enderecoCep ?? ""),
+                      )
+                      .map((endereco) => (
+                        <EnderecoCard
+                          key={endereco.id}
+                          endereco={endereco}
+                          selecionado={enderecoEscolhidoId === endereco.id}
+                          onSelecionar={() => setEnderecoEscolhidoId(endereco.id)}
+                        />
+                      ))}
+                  </div>
+                )}
+              </div>
+            }
+            confirmLabel="Usar este endereço"
+            confirmingLabel="Salvando..."
+            confirmVariant="primary"
+            confirming={salvandoEndereco}
+            onConfirm={handleConfirmarEndereco}
+            onCancel={handleFecharModalEndereco}
           />
         </>
       )}

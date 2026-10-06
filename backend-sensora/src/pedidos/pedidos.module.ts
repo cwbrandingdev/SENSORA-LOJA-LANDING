@@ -1,5 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { AsaasModule } from '../asaas/asaas.module';
+import { EnderecosModule } from '../enderecos/enderecos.module';
 import { ItensPedidoModule } from '../itens-pedido/itens-pedido.module';
 import { ProdutosModule } from '../produtos/produtos.module';
 import { PedidosController } from './pedidos.controller';
@@ -14,7 +15,12 @@ import { PedidosService } from './pedidos.service';
   // Etapa 5B.4 — PedidosService.solicitarReembolso() precisa de AsaasService
   // (resolverPaymentIdPorCheckout/consultarEstornos/estornarPagamento). Sem
   // forwardRef pelo mesmo motivo: AsaasModule não depende de PedidosModule.
-  imports: [forwardRef(() => ItensPedidoModule), ProdutosModule, AsaasModule],
+  imports: [
+    forwardRef(() => ItensPedidoModule),
+    ProdutosModule,
+    AsaasModule,
+    EnderecosModule,
+  ],
   controllers: [PedidosController],
   providers: [PedidosService],
   exports: [PedidosService],

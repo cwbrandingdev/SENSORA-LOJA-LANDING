@@ -11,6 +11,7 @@ import {
   AsaasService,
 } from '../asaas/asaas.service';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
+import { EnderecosService } from '../enderecos/enderecos.service';
 import { ItensPedidoService } from '../itens-pedido/itens-pedido.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
@@ -159,6 +160,7 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
         { provide: ItensPedidoService, useValue: {} },
         { provide: ProdutosService, useValue: {} },
         { provide: AsaasService, useValue: asaasService },
+        { provide: EnderecosService, useValue: {} },
       ],
     }).compile();
 
@@ -621,6 +623,7 @@ describe('PedidosService — create/update (Etapa 8.1, fechamento do HIGH-01 + e
         { provide: ItensPedidoService, useValue: {} },
         { provide: ProdutosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
+        { provide: EnderecosService, useValue: {} },
       ],
     }).compile();
 
@@ -815,6 +818,7 @@ describe('PedidosService — remove (Etapa 8.2, fechamento do HIGH-02)', () => {
         { provide: ItensPedidoService, useValue: {} },
         { provide: ProdutosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
+        { provide: EnderecosService, useValue: {} },
       ],
     }).compile();
 
@@ -942,6 +946,7 @@ describe('PedidosService — findAll (ordenação da listagem do Admin)', () => 
         { provide: ItensPedidoService, useValue: {} },
         { provide: ProdutosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
+        { provide: EnderecosService, useValue: {} },
       ],
     }).compile();
 
@@ -988,6 +993,7 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
     pedido: {
       findUnique: jest.Mock;
       updateMany: jest.Mock;
+      update: jest.Mock;
     };
   };
   let pedidoFake: {
@@ -996,6 +1002,7 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
     status: StatusPedido;
     statusEnvio: StatusEnvio;
     enviadoEm: Date | null;
+    codigoRastreio: string | null;
     numero: string;
     data: Date;
     total: number;
@@ -1019,6 +1026,7 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
       status: StatusPedido.PAGO,
       statusEnvio: StatusEnvio.NAO_ENVIADO,
       enviadoEm: null,
+      codigoRastreio: null,
       numero: 'PED-1',
       data: new Date('2026-09-01'),
       total: 39.9,
@@ -1027,6 +1035,10 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
     prisma = {
       pedido: {
         findUnique: jest.fn(() => ({ ...pedidoFake })),
+        update: jest.fn(({ data }: { data: Record<string, unknown> }) => {
+          Object.assign(pedidoFake, data);
+          return { ...pedidoFake };
+        }),
         // Mesmo raciocínio do updateMany de solicitarReembolso: só aplica
         // (e retorna count:1) se TODAS as condições do WHERE baterem com o
         // estado atual — é isso que torna o claim atômico testável tanto
@@ -1070,6 +1082,7 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
         { provide: ItensPedidoService, useValue: {} },
         { provide: ProdutosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
+        { provide: EnderecosService, useValue: {} },
       ],
     }).compile();
 
@@ -1178,5 +1191,178 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
       NotFoundException,
     );
     expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('J: código de rastreio informado na marcação é gravado no pedido', async () => {
+    const resultado = await service.marcarComoEnviado(1, ADMIN, ' AA123456789BR ');
+
+    expect(resultado.statusEnvio).toBe(StatusEnvio.ENVIADO);
+    expect(resultado.codigoRastreio).toBe('AA123456789BR');
+  });
+
+  it('K: pedido já ENVIADO pode receber código de rastreio depois, sem alterar enviadoEm', async () => {
+    const dataOriginal = new Date('2026-09-01T12:00:00.000Z');
+    pedidoFake.statusEnvio = StatusEnvio.ENVIADO;
+    pedidoFake.enviadoEm = dataOriginal;
+
+    const resultado = await service.marcarComoEnviado(1, ADMIN, 'ME123');
+
+    expect(resultado.codigoRastreio).toBe('ME123');
+    expect(resultado.enviadoEm).toEqual(dataOriginal);
+    expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+    expect(prisma.pedido.update).toHaveBeenCalled();
+  });
+});
+
+describe('PedidosService — atualizarEnderecoEntrega', () => {
+  let service: PedidosService;
+  let prisma: {
+    pedido: {
+      findUnique: jest.Mock;
+      updateMany: jest.Mock;
+    };
+  };
+  let enderecosService: { findOneForUsuario: jest.Mock };
+  let pedidoFake: {
+    id: number;
+    usuarioId: number;
+    status: StatusPedido;
+    statusEnvio: StatusEnvio;
+    enviadoEm: Date | null;
+    codigoRastreio: string | null;
+    numero: string;
+    data: Date;
+    total: number;
+    enderecoCep: string;
+    enderecoRua: string;
+    enderecoNumero: string;
+    enderecoComplemento: string | null;
+    enderecoBairro: string;
+    enderecoCidade: string;
+    enderecoEstado: string;
+  };
+
+  const CLIENTE_DONO: UsuarioAutenticado = {
+    id: 7,
+    email: 'cliente@sensora.dev',
+    perfil: PerfilUsuario.CLIENTE,
+  };
+
+  const ENDERECO_MESMO_CEP = {
+    id: 2,
+    usuarioId: 7,
+    rua: 'Rua Nova',
+    numero: '50',
+    complemento: 'Ap 1',
+    bairro: 'Batel',
+    cidade: 'Curitiba',
+    estado: 'PR',
+    cep: '80000000',
+    padrao: false,
+  };
+
+  beforeEach(async () => {
+    pedidoFake = {
+      id: 1,
+      usuarioId: CLIENTE_DONO.id,
+      status: StatusPedido.PAGO,
+      statusEnvio: StatusEnvio.NAO_ENVIADO,
+      enviadoEm: null,
+      codigoRastreio: null,
+      numero: 'PED-1',
+      data: new Date('2026-09-01'),
+      total: 39.9,
+      enderecoCep: '80000-000',
+      enderecoRua: 'Rua das Flores',
+      enderecoNumero: '123',
+      enderecoComplemento: null,
+      enderecoBairro: 'Centro',
+      enderecoCidade: 'Curitiba',
+      enderecoEstado: 'PR',
+    };
+
+    enderecosService = {
+      findOneForUsuario: jest.fn(() => ENDERECO_MESMO_CEP),
+    };
+
+    prisma = {
+      pedido: {
+        findUnique: jest.fn(() => ({ ...pedidoFake })),
+        updateMany: jest.fn(
+          ({
+            where,
+            data,
+          }: {
+            where: {
+              status?: StatusPedido;
+              statusEnvio?: StatusEnvio;
+              usuarioId?: number;
+            };
+            data: Record<string, unknown>;
+          }) => {
+            const ownerOk =
+              where.usuarioId === undefined ||
+              where.usuarioId === pedidoFake.usuarioId;
+            const statusOk =
+              where.status === undefined || where.status === pedidoFake.status;
+            const statusEnvioOk =
+              where.statusEnvio === undefined ||
+              where.statusEnvio === pedidoFake.statusEnvio;
+            if (ownerOk && statusOk && statusEnvioOk) {
+              Object.assign(pedidoFake, data);
+              return { count: 1 };
+            }
+            return { count: 0 };
+          },
+        ),
+      },
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        PedidosService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: ItensPedidoService, useValue: {} },
+        { provide: ProdutosService, useValue: {} },
+        { provide: AsaasService, useValue: {} },
+        { provide: EnderecosService, useValue: enderecosService },
+      ],
+    }).compile();
+
+    service = module.get(PedidosService);
+  });
+
+  it('copia o snapshot quando o CEP é o mesmo', async () => {
+    const resultado = await service.atualizarEnderecoEntrega(
+      1,
+      2,
+      CLIENTE_DONO,
+    );
+
+    expect(enderecosService.findOneForUsuario).toHaveBeenCalledWith(2, 7);
+    expect(resultado.enderecoRua).toBe('Rua Nova');
+    expect(resultado.enderecoNumero).toBe('50');
+    expect(resultado.enderecoCep).toBe('80000000');
+  });
+
+  it('recusa CEP diferente do frete já pago', async () => {
+    enderecosService.findOneForUsuario.mockResolvedValueOnce({
+      ...ENDERECO_MESMO_CEP,
+      cep: '01310-100',
+    });
+
+    await expect(
+      service.atualizarEnderecoEntrega(1, 2, CLIENTE_DONO),
+    ).rejects.toThrow(ConflictException);
+    expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('recusa pedido já enviado', async () => {
+    pedidoFake.statusEnvio = StatusEnvio.ENVIADO;
+
+    await expect(
+      service.atualizarEnderecoEntrega(1, 2, CLIENTE_DONO),
+    ).rejects.toThrow(ConflictException);
+    expect(enderecosService.findOneForUsuario).not.toHaveBeenCalled();
   });
 });

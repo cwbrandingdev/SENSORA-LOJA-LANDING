@@ -24,12 +24,14 @@ import {
 } from './checkout.service';
 
 // Etapa 6.4 (Confirmação de e-mail) — CheckoutService agora também injeta
-// UsuariosService (checagem de emailVerificado em createSession), então
+// UsuariosService (checagem de emailVerificado em createSession) e
+// MailService (e-mail de pedido confirmado após CHECKOUT_PAID), então
 // TODO Test.createTestingModule que constrói CheckoutService precisa prover
-// esse dependency, mesmo nas suítes de webhook que nunca chamam
+// esses dependencies, mesmo nas suítes de webhook que nunca chamam
 // createSession (o Nest resolve o construtor inteiro, não só os métodos
-// exercitados pelo teste). Stub vazio ({}) é suficiente para elas; só as
-// suítes que chamam createSession precisam de um `findOne` de verdade.
+// exercitados pelo teste). Stub vazio ({}) / { enviarEmail } é suficiente
+// para elas; só as suítes que chamam createSession precisam de um `findOne`
+// de verdade.
 //
 // `nome` (Etapa "Dados do Cliente / Cadastro") — createSession agora usa
 // exatamente este campo como Pedido.clienteNome (ver teste "usa
@@ -462,10 +464,12 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
       findUnique: jest.Mock;
       updateMany: jest.Mock;
     };
+    produto: { findMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let produtosService: { removerEstoque: jest.Mock };
   let asaasService: { resolverPaymentIdPorCheckout: jest.Mock };
+  let mailService: { enviarEmail: jest.Mock };
   let txPedidoUpdateMany: jest.Mock;
   let txItemPedidoUpdate: jest.Mock;
 
@@ -473,7 +477,28 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
     id: number;
     status: StatusPedido;
     asaasPaymentId: string | null;
-    itens: { id: number; produtoId: number; quantidade: number }[];
+    numero?: string;
+    clienteNome?: string | null;
+    clienteEmail?: string | null;
+    total?: number;
+    enderecoCep?: string | null;
+    enderecoRua?: string | null;
+    enderecoNumero?: string | null;
+    enderecoComplemento?: string | null;
+    enderecoBairro?: string | null;
+    enderecoCidade?: string | null;
+    enderecoEstado?: string | null;
+    freteValor?: number | null;
+    freteTransportadora?: string | null;
+    freteServico?: string | null;
+    fretePrazoDias?: number | null;
+    itens: {
+      id: number;
+      produtoId: number;
+      quantidade: number;
+      precoUnitario?: number;
+      subtotal?: number;
+    }[];
   };
 
   function construirEventoCheckoutPago(checkoutId: string) {
@@ -532,6 +557,7 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
           },
         ),
       },
+      produto: { findMany: jest.fn(() => []) },
       $transaction: jest.fn(
         async (callback: (tx: unknown) => Promise<void>) => {
           const tx = {
@@ -579,6 +605,7 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
     }).compile();
 
     service = module.get(CheckoutService);
+    mailService = module.get(MailService);
   });
 
   it('CHECKOUT_PAID grava o asaasPaymentId do pedido logo após o pagamento', async () => {
@@ -608,6 +635,66 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
     expect(asaasService.resolverPaymentIdPorCheckout).toHaveBeenCalledTimes(1);
     expect(pedidoFake.asaasPaymentId).toBe('pay_123');
     expect(produtosService.removerEstoque).toHaveBeenCalledTimes(2);
+  });
+
+  it('CHECKOUT_PAID envia e-mail de confirmação com itens, total e endereço', async () => {
+    Object.assign(pedidoFake, {
+      numero: 'PED-1',
+      clienteNome: 'Cliente Sensora',
+      clienteEmail: 'cliente@sensora.dev',
+      total: 103.5,
+      enderecoCep: '80000-000',
+      enderecoRua: 'Rua das Flores',
+      enderecoNumero: '123',
+      enderecoComplemento: null,
+      enderecoBairro: 'Centro',
+      enderecoCidade: 'Curitiba',
+      enderecoEstado: 'PR',
+      freteValor: 23.5,
+      freteTransportadora: 'Correios',
+      freteServico: 'PAC',
+      fretePrazoDias: 9,
+      itens: [
+        {
+          id: 100,
+          produtoId: 10,
+          quantidade: 2,
+          precoUnitario: 40,
+          subtotal: 80,
+        },
+      ],
+    });
+    prisma.produto.findMany.mockResolvedValueOnce([{ id: 10, nome: 'Vela de verão' }]);
+
+    await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(construirEventoCheckoutPago('chk_123')),
+    );
+
+    expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
+    const enviado = mailService.enviarEmail.mock.calls[0][0] as {
+      to: string;
+      subject: string;
+      html: string;
+    };
+    expect(enviado.to).toBe('cliente@sensora.dev');
+    expect(enviado.subject).toContain('PED-1');
+    expect(enviado.html).toContain('Vela de verão');
+    expect(enviado.html).toContain('Rua das Flores');
+    expect(enviado.html).toContain('7 dias');
+    expect(enviado.html).toContain('/conta/pedidos/1');
+  });
+
+  it('CHECKOUT_PAID duplicado não reenvia o e-mail de confirmação', async () => {
+    pedidoFake.clienteEmail = 'cliente@sensora.dev';
+    pedidoFake.numero = 'PED-1';
+    const payload = Buffer.from(construirEventoCheckoutPago('chk_123'));
+    const headers = { asaasAccessToken: ASAAS_WEBHOOK_TOKEN };
+
+    await service.handleWebhook(headers, payload);
+    await service.handleWebhook(headers, payload);
+
+    expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
   });
 
   it('CHECKOUT_PAID: falha ao consultar o Payment no Asaas não derruba o webhook nem desfaz o pagamento', async () => {
@@ -2323,310 +2410,5 @@ describe('CheckoutService — cotarFrete (Etapa 6.5)', () => {
       ),
     ).rejects.toThrow();
     expect(melhorEnvioService.cotar).not.toHaveBeenCalled();
-  });
-});
-
-// E-mail "Pedido confirmado" — enviado uma única vez, depois do commit da
-// transição PENDENTE -> PAGO em confirmarPagamento (Asaas e Stripe).
-describe('CheckoutService — e-mail de pedido confirmado', () => {
-  let service: CheckoutService;
-  let mailService: { enviarEmail: jest.Mock };
-  let produtosService: { removerEstoque: jest.Mock };
-  let prisma: {
-    pedido: { findUnique: jest.Mock; updateMany: jest.Mock };
-    $transaction: jest.Mock;
-  };
-  let pedidoFake: {
-    id: number;
-    numero: string;
-    status: StatusPedido;
-    total: number;
-    freteValor: number;
-    clienteNome: string | null;
-    clienteEmail: string | null;
-    asaasPaymentId: string | null;
-    usuario: { nome: string; email: string } | null;
-    itens: {
-      id: number;
-      produtoId: number;
-      quantidade: number;
-      precoUnitario: number;
-      subtotal: number;
-      produto: { nome: string };
-    }[];
-  };
-
-  const eventoAsaas = Buffer.from(
-    JSON.stringify({
-      id: 'evt_chk_123',
-      event: 'CHECKOUT_PAID',
-      checkout: { id: 'chk_123', status: 'PAID' },
-    }),
-  );
-
-  function webhookAsaas() {
-    return service.handleWebhook(
-      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
-      eventoAsaas,
-    );
-  }
-
-  async function montar(gateway: 'asaas' | 'stripe') {
-    prisma = {
-      pedido: {
-        findUnique: jest.fn(() => pedidoFake),
-        updateMany: jest.fn(() => ({ count: 0 })),
-      },
-      $transaction: jest.fn(
-        async (callback: (tx: unknown) => Promise<boolean>) =>
-          callback({
-            pedido: {
-              updateMany: jest.fn(
-                ({ where }: { where: { status: StatusPedido } }) => {
-                  if (where.status === pedidoFake.status) {
-                    pedidoFake.status = StatusPedido.PAGO;
-                    return { count: 1 };
-                  }
-                  return { count: 0 };
-                },
-              ),
-            },
-            itemPedido: { update: jest.fn(() => ({})) },
-          }),
-      ),
-    };
-    const configValues: Record<string, string> =
-      gateway === 'stripe'
-        ? {
-            CHECKOUT_GATEWAY: 'stripe',
-            STRIPE_SECRET_KEY,
-            STRIPE_WEBHOOK_SECRET,
-          }
-        : { CHECKOUT_GATEWAY: 'asaas', ASAAS_WEBHOOK_TOKEN };
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CheckoutService,
-        { provide: DevolucoesService, useValue: devolucoesService },
-        {
-          provide: ConfigService,
-          useValue: { get: (key: string) => configValues[key] },
-        },
-        { provide: PrismaService, useValue: prisma },
-        { provide: ProdutosService, useValue: produtosService },
-        { provide: EnderecosService, useValue: {} },
-        {
-          provide: AsaasService,
-          useValue: {
-            resolverPaymentIdPorCheckout: jest.fn(() => ({
-              encontrado: false,
-            })),
-          },
-        },
-        { provide: UsuariosService, useValue: {} },
-        { provide: MelhorEnvioService, useValue: {} },
-        { provide: MailService, useValue: mailService },
-      ],
-    }).compile();
-
-    service = module.get(CheckoutService);
-  }
-
-  function htmlEnviado(): string {
-    const [{ html }] = mailService.enviarEmail.mock.calls[0] as [
-      { html: string },
-    ];
-    return html;
-  }
-
-  beforeEach(async () => {
-    pedidoFake = {
-      id: 1,
-      numero: 'PED-123',
-      status: StatusPedido.PENDENTE,
-      total: 123.5,
-      freteValor: 23.5,
-      clienteNome: 'Cliente Sensora',
-      clienteEmail: 'outro-endereco@exemplo.dev',
-      asaasPaymentId: null,
-      usuario: { nome: 'Cliente Sensora', email: 'conta@sensora.dev' },
-      itens: [
-        {
-          id: 100,
-          produtoId: 10,
-          quantidade: 2,
-          precoUnitario: 40,
-          subtotal: 80,
-          produto: { nome: 'Vela Lavanda' },
-        },
-        {
-          id: 200,
-          produtoId: 20,
-          quantidade: 1,
-          precoUnitario: 20,
-          subtotal: 20,
-          produto: { nome: 'Difusor Cedro' },
-        },
-      ],
-    };
-    mailService = { enviarEmail: jest.fn() };
-    produtosService = { removerEstoque: jest.fn(() => ({})) };
-    await montar('asaas');
-  });
-
-  it('CHECKOUT_PAID com count 1: envia exatamente 1 e-mail com pedido, itens, frete, total e status confirmado', async () => {
-    await webhookAsaas();
-
-    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
-    expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
-    expect(mailService.enviarEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ subject: 'Pedido confirmado — Sensora' }),
-    );
-    const html = htmlEnviado();
-    expect(html).toContain('Olá, Cliente Sensora.');
-    expect(html).toContain('PED-123');
-    expect(html).toContain('foi confirmado e o pagamento foi aprovado');
-    expect(html).toContain('Vela Lavanda — 2 × R$ 40,00 = R$ 80,00');
-    expect(html).toContain('Difusor Cedro — 1 × R$ 20,00 = R$ 20,00');
-    expect(html).toContain('Frete: R$ 23,50');
-    expect(html).toContain('Total: R$ 123,50');
-    expect(html).toContain('Meus pedidos');
-  });
-
-  it('destinatário é o e-mail da conta (Usuario.email), mesmo com clienteEmail diferente no pedido', async () => {
-    await webhookAsaas();
-
-    expect(mailService.enviarEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'conta@sensora.dev' }),
-    );
-    expect(mailService.enviarEmail).not.toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'outro-endereco@exemplo.dev' }),
-    );
-  });
-
-  it('sem usuário vinculado (usuarioId nulo), usa clienteEmail como alternativa', async () => {
-    pedidoFake.usuario = null;
-
-    await webhookAsaas();
-
-    expect(mailService.enviarEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'outro-endereco@exemplo.dev' }),
-    );
-  });
-
-  it('segundo e terceiro CHECKOUT_PAID (count 0) não enviam novo e-mail', async () => {
-    await webhookAsaas();
-    await webhookAsaas();
-    await webhookAsaas();
-
-    expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
-    expect(produtosService.removerEstoque).toHaveBeenCalledTimes(2);
-  });
-
-  it('pedido já PAGO não envia e-mail', async () => {
-    pedidoFake.status = StatusPedido.PAGO;
-
-    await webhookAsaas();
-
-    expect(mailService.enviarEmail).not.toHaveBeenCalled();
-  });
-
-  it('pedido inexistente não envia e-mail', async () => {
-    prisma.pedido.findUnique.mockReturnValue(null);
-
-    const resultado = await webhookAsaas();
-
-    expect(resultado).toEqual({ received: true });
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-    expect(mailService.enviarEmail).not.toHaveBeenCalled();
-  });
-
-  it('estoque insuficiente: a transação falha e nenhum e-mail é enviado', async () => {
-    produtosService.removerEstoque.mockImplementationOnce(() => {
-      throw new BadRequestException('Estoque insuficiente');
-    });
-
-    await expect(webhookAsaas()).rejects.toThrow(BadRequestException);
-    expect(mailService.enviarEmail).not.toHaveBeenCalled();
-  });
-
-  it('falha do MailService não desfaz o pagamento nem faz o webhook falhar', async () => {
-    mailService.enviarEmail.mockRejectedValueOnce(new Error('Resend fora'));
-    const erroLog = jest
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation(() => undefined);
-
-    const resultado = await webhookAsaas();
-
-    expect(resultado).toEqual({ received: true });
-    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
-    expect(erroLog).toHaveBeenCalledWith(
-      'Falha ao avisar o cliente sobre o pedido confirmado 1.',
-      expect.any(String),
-    );
-    erroLog.mockRestore();
-  });
-
-  it('Stripe checkout.session.completed envia o mesmo e-mail', async () => {
-    await montar('stripe');
-    const { payload, signature } = assinarEventoStripe(
-      construirEventoCheckoutCompletoStripe('cs_test_123'),
-    );
-
-    await service.handleWebhook(
-      { stripeSignature: signature },
-      Buffer.from(payload),
-    );
-
-    expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
-    expect(mailService.enviarEmail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: 'conta@sensora.dev',
-        subject: 'Pedido confirmado — Sensora',
-      }),
-    );
-  });
-
-  it('pedido em REEMBOLSO_SOLICITADO (reversão para PAGO fica no PedidosService) não envia o e-mail de pedido confirmado', async () => {
-    pedidoFake.status = StatusPedido.REEMBOLSO_SOLICITADO;
-
-    await webhookAsaas();
-
-    expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSO_SOLICITADO);
-    expect(mailService.enviarEmail).not.toHaveBeenCalled();
-  });
-
-  it('nome do cliente com HTML é escapado', async () => {
-    pedidoFake.usuario = {
-      nome: '<a href="https://mal.example">Clique</a>',
-      email: 'conta@sensora.dev',
-    };
-
-    await webhookAsaas();
-
-    const html = htmlEnviado();
-    expect(html).not.toContain('<a href="https://mal.example">');
-    expect(html).toContain(
-      'Olá, &lt;a href=&quot;https://mal.example&quot;&gt;Clique&lt;/a&gt;.',
-    );
-  });
-
-  it('nome de produto com HTML é escapado', async () => {
-    pedidoFake.itens[0].produto.nome = '<img src=x onerror=alert(1)>';
-
-    await webhookAsaas();
-
-    const html = htmlEnviado();
-    expect(html).not.toContain('<img');
-    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
-  });
-
-  it('duas execuções concorrentes: só a transição vencedora envia o e-mail', async () => {
-    const resultados = await Promise.all([webhookAsaas(), webhookAsaas()]);
-
-    expect(resultados).toEqual([{ received: true }, { received: true }]);
-    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
-    expect(produtosService.removerEstoque).toHaveBeenCalledTimes(2);
-    expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
   });
 });

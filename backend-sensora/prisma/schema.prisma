@@ -173,10 +173,11 @@ model Pedido {
 
   // Etapa 6.5 (Frete) — snapshot do endereço de entrega usado NESTA compra,
   // copiado de Endereco no momento da criação do pedido (CheckoutService.
-  // createSession). Deliberadamente SEM relação/FK com Endereco: um pedido
-  // já criado nunca pode mudar de endereço de entrega junto com uma edição
-  // futura do cadastro do cliente, nem sumir se o cliente excluir aquele
-  // endereço depois — por isso são campos soltos, não uma referência.
+  // createSession). Deliberadamente SEM relação/FK com Endereco: editar ou
+  // excluir o cadastro do cliente não altera um pedido já criado. O snapshot
+  // só muda por PedidosService.atualizarEnderecoEntrega, e só enquanto o
+  // pedido está PAGO + NAO_ENVIADO, para outro endereço do mesmo CEP (o
+  // frete já foi pago para esse CEP).
   // `clienteNome` (já existente acima) é reaproveitado como nome do
   // destinatário: é o mesmo nome informado no checkout para o mesmo pedido,
   // nunca um segundo campo redundante para a mesma informação.
@@ -210,6 +211,11 @@ model Pedido {
   // UpdatePedidoDto), então não há como um pedido nascer "ENVIADO".
   statusEnvio StatusEnvio @default(NAO_ENVIADO)
   enviadoEm   DateTime?
+  // Código de rastreio da ida, colado pelo admin ao marcar como enviado
+  // (ou atualizado depois). Não vem do Melhor Envio nesta etapa — a compra
+  // de etiqueta de ida continua fora do sistema; isto só guarda o código
+  // para o cliente ver em Meus Pedidos (Decreto 7.962/2013, art. 2º, V).
+  codigoRastreio String?
 
   // Achado da auditoria: usuarioId já era usado pela aplicação (ver
   // PedidosService.podeAcessar) para restringir VENDEDOR aos próprios

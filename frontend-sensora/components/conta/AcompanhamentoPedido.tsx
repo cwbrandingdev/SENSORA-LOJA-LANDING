@@ -1,13 +1,13 @@
 "use client";
 
 // Etapa 2 (Minha Conta / Acompanhar Pedido) — usa SOMENTE o dado que
-// realmente existe (Pedido.status). A lista de `etapas` foi pensada desde o
-// início para crescer: quando existir uma etapa logística real, ela entra
-// como item novo no array devolvido por montarEtapas, sem precisar
-// redesenhar este componente — é exatamente o que a Etapa 6.6 (Status de
-// Envio) faz agora, acrescentando uma 3ª etapa só no ramo PAGO. Ainda não
-// inventa rastreio de transportadora/código — isso continua fora do schema
-// (ver auditoria da Etapa 6.6).
+// realmente existe (Pedido.status / statusEnvio / codigoRastreio). A lista
+// de `etapas` foi pensada desde o início para crescer: quando existir uma
+// etapa logística real, ela entra como item novo no array devolvido por
+// montarEtapas, sem precisar redesenhar este componente — é exatamente o
+// que a Etapa 6.6 (Status de Envio) faz agora, acrescentando uma 3ª etapa
+// só no ramo PAGO. O código de rastreio da ida, quando o admin cola ao
+// marcar como enviado, aparece abaixo da timeline.
 import { useEffect, useState } from "react";
 import { StatusEnvio, StatusPedido } from "@/lib/types/loja";
 
@@ -84,12 +84,14 @@ type AcompanhamentoPedidoProps = {
   status: StatusPedido;
   statusEnvio: StatusEnvio;
   enviadoEm?: string | null;
+  codigoRastreio?: string | null;
 };
 
 export default function AcompanhamentoPedido({
   status,
   statusEnvio,
   enviadoEm,
+  codigoRastreio,
 }: AcompanhamentoPedidoProps) {
   const etapas = montarEtapas(status, statusEnvio);
   const cancelado = status === StatusPedido.CANCELADO;
@@ -157,8 +159,16 @@ export default function AcompanhamentoPedido({
 
       {statusEnvio === StatusEnvio.ENVIADO && enviadoEm ? (
         <p className="mt-6 text-xs leading-relaxed text-slate-500">
-          Enviado em {formatarDataEnvio(enviadoEm)}. Ainda não temos código de
-          rastreio disponível para este pedido.
+          Enviado em {formatarDataEnvio(enviadoEm)}.
+          {codigoRastreio ? (
+            <>
+              {" "}
+              Código de rastreio:{" "}
+              <span className="font-mono text-brand-navy">{codigoRastreio}</span>
+            </>
+          ) : (
+            " Ainda não temos código de rastreio disponível para este pedido."
+          )}
         </p>
       ) : (
         <p className="mt-6 text-xs leading-relaxed text-slate-500">

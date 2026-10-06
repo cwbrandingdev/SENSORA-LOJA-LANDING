@@ -14,6 +14,7 @@ import { Prisma } from '../../generated/prisma/client';
 import { AsaasErroHttpError, AsaasService } from '../asaas/asaas.service';
 import { StatusDevolucao } from '../devolucoes/enums/status-devolucao.enum';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
+import { EnderecosService } from '../enderecos/enderecos.service';
 import { NotaFiscalResumo } from '../fiscal/entities/nota-fiscal.entity';
 import { StatusFiscal } from '../fiscal/enums/status-fiscal.enum';
 import { ItemPedido } from '../itens-pedido/entities/item-pedido.entity';
@@ -48,6 +49,10 @@ const DEVOLUCAO_QUE_IMPEDE_REEMBOLSO_INTEGRAL = {
 const PEDIDO_ENVIADO_MENSAGEM =
   'Pedido já enviado não pode ser reembolsado diretamente. Solicite a devolução.';
 
+function soDigitosCep(valor: string | null | undefined): string {
+  return (valor ?? '').replace(/\D/g, '');
+}
+
 @Injectable()
 export class PedidosService {
   constructor(
@@ -56,6 +61,7 @@ export class PedidosService {
     private readonly itensPedidoService: ItensPedidoService,
     private readonly produtosService: ProdutosService,
     private readonly asaasService: AsaasService,
+    private readonly enderecosService: EnderecosService,
   ) {}
 
   // Etapa 10 / Task 5 (achado A6): ADMIN continua vendo/editando qualquer
@@ -547,14 +553,26 @@ export class PedidosService {
   // escreve `enviadoEm` — a perdedora nunca sobrescreve o momento real do
   // envio (item 7 da etapa), só devolve o pedido já atualizado pela
   // primeira (idempotência, item 5).
-  async marcarComoEnviado(id: number, user: UsuarioAutenticado): Promise<Pedido> {
+  async marcarComoEnviado(
+    id: number,
+    user: UsuarioAutenticado,
+    codigoRastreio?: string,
+  ): Promise<Pedido> {
     const pedidoAtual = await this.findOne(id, user);
+    const codigo = codigoRastreio?.trim() || null;
 
     // Idempotência de negócio: reenvio (double-click, retry) sobre um
     // pedido já enviado nunca tenta a transição de novo — só devolve o
-    // estado atual, sem tocar em enviadoEm. Mesmo raciocínio do early-return
-    // de solicitarReembolso para REEMBOLSO_SOLICITADO/REEMBOLSADO.
+    // estado atual, sem tocar em enviadoEm. Se vier um código de rastreio
+    // novo, atualiza só esse campo (o admin pode colar depois).
     if (pedidoAtual.statusEnvio === StatusEnvio.ENVIADO) {
+      if (codigo && codigo !== (pedidoAtual.codigoRastreio ?? '')) {
+        await this.prisma.pedido.update({
+          where: { id },
+          data: { codigoRastreio: codigo },
+        });
+        return this.findOne(id, user);
+      }
       return pedidoAtual;
     }
 
@@ -574,7 +592,11 @@ export class PedidosService {
         status: StatusPedido.PAGO,
         statusEnvio: StatusEnvio.NAO_ENVIADO,
       },
-      data: { statusEnvio: StatusEnvio.ENVIADO, enviadoEm: new Date() },
+      data: {
+        statusEnvio: StatusEnvio.ENVIADO,
+        enviadoEm: new Date(),
+        ...(codigo ? { codigoRastreio: codigo } : {}),
+      },
     });
 
     if (claim.count === 0) {
@@ -590,6 +612,84 @@ export class PedidosService {
       }
       throw new ConflictException(
         `Pedido com status ${atual.status} não pode ser marcado como enviado.`,
+      );
+    }
+
+    return this.findOne(id, user);
+  }
+
+  // Troca o snapshot de entrega de um pedido PAGO ainda NAO_ENVIADO por
+  // outro endereço já salvo na conta, no MESMO CEP do frete pago. Depois de
+  // postado, o destino não muda — o cliente usa devolução.
+  async atualizarEnderecoEntrega(
+    id: number,
+    enderecoId: number,
+    user: UsuarioAutenticado,
+  ): Promise<Pedido> {
+    const pedidoAtual = await this.findOne(id, user);
+
+    if (pedidoAtual.status !== StatusPedido.PAGO) {
+      throw new ConflictException(
+        `Pedido com status ${pedidoAtual.status} não pode ter o endereço de entrega alterado.`,
+      );
+    }
+    if (pedidoAtual.statusEnvio !== StatusEnvio.NAO_ENVIADO) {
+      throw new ConflictException(
+        'Pedido já enviado não pode ter o endereço de entrega alterado.',
+      );
+    }
+
+    const cepAtual = soDigitosCep(pedidoAtual.enderecoCep);
+    if (!cepAtual) {
+      throw new ConflictException(
+        'Pedido sem endereço de entrega gravado não pode ter o destino alterado.',
+      );
+    }
+
+    if (!pedidoAtual.usuarioId) {
+      throw new ConflictException(
+        'Pedido sem dono associado não pode ter o endereço de entrega alterado.',
+      );
+    }
+
+    const endereco = await this.enderecosService.findOneForUsuario(
+      enderecoId,
+      pedidoAtual.usuarioId,
+    );
+
+    if (soDigitosCep(endereco.cep) !== cepAtual) {
+      throw new ConflictException(
+        'O novo endereço precisa ser no mesmo CEP do frete já pago.',
+      );
+    }
+
+    const ownerFilter =
+      user.perfil === PerfilUsuario.ADMIN ? {} : { usuarioId: user.id };
+
+    const resultado = await this.prisma.pedido.updateMany({
+      where: {
+        id,
+        ...ownerFilter,
+        status: StatusPedido.PAGO,
+        statusEnvio: StatusEnvio.NAO_ENVIADO,
+      },
+      data: {
+        enderecoCep: endereco.cep,
+        enderecoRua: endereco.rua,
+        enderecoNumero: endereco.numero,
+        enderecoComplemento: endereco.complemento ?? null,
+        enderecoBairro: endereco.bairro,
+        enderecoCidade: endereco.cidade,
+        enderecoEstado: endereco.estado,
+      },
+    });
+
+    if (resultado.count === 0) {
+      const atual = await this.findOne(id, user);
+      throw new ConflictException(
+        atual.statusEnvio !== StatusEnvio.NAO_ENVIADO
+          ? 'Pedido já enviado não pode ter o endereço de entrega alterado.'
+          : `Pedido com status ${atual.status} não pode ter o endereço de entrega alterado.`,
       );
     }
 
@@ -729,6 +829,7 @@ export class PedidosService {
       fretePrazoDias: pedido.fretePrazoDias ?? undefined,
       statusEnvio: pedido.statusEnvio as StatusEnvio,
       enviadoEm: pedido.enviadoEm ?? undefined,
+      codigoRastreio: pedido.codigoRastreio ?? undefined,
     };
   }
 

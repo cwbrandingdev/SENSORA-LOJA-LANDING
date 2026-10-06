@@ -37,8 +37,8 @@ export default function PoliticaDePrivacidadePage() {
 
       <Secao title="Quais dados usamos">
         <ul className="list-disc space-y-2 pl-5">
-          <li>Cadastro: nome, e-mail e senha de acesso.</li>
-          <li>Opcionais no perfil: CPF e telefone.</li>
+          <li>Cadastro: nome, e-mail, senha e CPF.</li>
+          <li>Opcional no perfil: telefone.</li>
           <li>Endereços de entrega que você salva.</li>
           <li>
             Pedido: itens, quantidades, frete escolhido, valor e status de

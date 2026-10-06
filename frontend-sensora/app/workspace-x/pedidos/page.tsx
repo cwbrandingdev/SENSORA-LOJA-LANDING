@@ -17,6 +17,7 @@ import PedidosFiltros, {
 } from "@/components/admin/PedidosFiltros";
 import TableSkeleton from "@/components/ui/TableSkeleton";
 import InlineErrorState from "@/components/ui/InlineErrorState";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import {
@@ -42,6 +43,8 @@ export default function PedidosPage() {
   // enviado" em andamento: desabilita só o botão daquela linha (não a
   // tabela inteira) e evita clique duplicado disparando duas chamadas.
   const [marcandoEnviadoId, setMarcandoEnviadoId] = useState<number | null>(null);
+  const [pedidoParaEnviar, setPedidoParaEnviar] = useState<Pedido | null>(null);
+  const [codigoRastreio, setCodigoRastreio] = useState("");
 
   // Destaque "Pedidos para enviar" + filtros — inteiramente client-side
   // sobre a lista já carregada (nenhum parâmetro novo em GET /pedidos).
@@ -162,17 +165,27 @@ export default function PedidosPage() {
   // pesado reservado hoje só para as ações de Minha Conta (cancelar/
   // solicitar reembolso) — evita disparo acidental sem introduzir um
   // padrão de UI novo nesta tela.
-  async function handleMarcarEnviado(pedido: Pedido) {
+  function handleAbrirMarcarEnviado(pedido: Pedido) {
     if (marcandoEnviadoId !== null) return;
+    setPedidoParaEnviar(pedido);
+    setCodigoRastreio(pedido.codigoRastreio ?? "");
+  }
 
-    if (!window.confirm(`Marcar o pedido "${pedido.numero}" como enviado?`)) {
-      return;
-    }
+  function handleFecharMarcarEnviado() {
+    if (marcandoEnviadoId !== null) return;
+    setPedidoParaEnviar(null);
+    setCodigoRastreio("");
+  }
 
-    setMarcandoEnviadoId(pedido.id);
+  async function handleConfirmarMarcarEnviado() {
+    if (!pedidoParaEnviar || marcandoEnviadoId !== null) return;
+
+    setMarcandoEnviadoId(pedidoParaEnviar.id);
     try {
-      await marcarPedidoComoEnviado(pedido.id);
+      await marcarPedidoComoEnviado(pedidoParaEnviar.id, codigoRastreio);
       toast.success("Pedido marcado como enviado.");
+      setPedidoParaEnviar(null);
+      setCodigoRastreio("");
       await carregarPedidos();
     } catch (err) {
       toast.error(getErrorMessage(err, "Não foi possível marcar o pedido como enviado."));
@@ -209,12 +222,44 @@ export default function PedidosPage() {
             pedidos={pedidosFiltrados}
             onEdit={handleEdit}
             onRemove={handleRemove}
-            onMarcarEnviado={handleMarcarEnviado}
+            onMarcarEnviado={handleAbrirMarcarEnviado}
             marcandoEnviadoId={marcandoEnviadoId}
             filtrosAtivos={temFiltroAtivo(filtros)}
           />
         </>
       )}
+
+      <ConfirmDialog
+        open={pedidoParaEnviar !== null}
+        title="Marcar como enviado?"
+        description={
+          <div className="flex flex-col gap-3">
+            <p>
+              Marcar o pedido {pedidoParaEnviar?.numero} como enviado. O código
+              de rastreio aparece para o cliente em Meus Pedidos.
+            </p>
+            <label className="flex flex-col gap-1">
+              <span className="font-medium text-slate-700">
+                Código de rastreio (opcional)
+              </span>
+              <input
+                type="text"
+                value={codigoRastreio}
+                onChange={(event) => setCodigoRastreio(event.target.value)}
+                maxLength={80}
+                disabled={marcandoEnviadoId !== null}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm transition-colors duration-200 focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy"
+              />
+            </label>
+          </div>
+        }
+        confirmLabel="Confirmar envio"
+        confirmingLabel="Marcando..."
+        confirmVariant="primary"
+        confirming={marcandoEnviadoId !== null}
+        onConfirm={handleConfirmarMarcarEnviado}
+        onCancel={handleFecharMarcarEnviado}
+      />
     </div>
   );
 }

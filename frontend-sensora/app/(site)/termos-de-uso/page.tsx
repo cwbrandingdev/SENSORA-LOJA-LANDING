@@ -37,10 +37,9 @@ export default function TermosDeUsoPage() {
 
       <Secao title="Conta">
         <p>
-          A compra pede uma conta com nome, e-mail e senha. Você é responsável
-          por manter a senha e por dados verdadeiros. CPF e telefone são
-          opcionais no cadastro; o CPF é o dado usado na nota fiscal. Se
-          estiver em branco, pedimos por e-mail antes de emitir o documento.
+          A compra pede uma conta com nome, e-mail, senha e CPF. Você é
+          responsável por manter a senha e por dados verdadeiros. O CPF é o
+          dado usado na nota fiscal. Telefone é opcional.
         </p>
       </Secao>
 
