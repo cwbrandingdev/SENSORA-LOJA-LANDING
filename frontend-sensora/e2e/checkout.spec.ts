@@ -1,4 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
+import { loadEnvConfig } from "@next/env";
+
+// Mesma origem de API que o dev server do Next injeta em services/api.ts
+// (NEXT_PUBLIC_API_URL via .env*) — o Playwright não carrega .env sozinho.
+loadEnvConfig(process.cwd(), true);
+const API_ORIGIN = new URL(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000").origin;
 
 // Task 9 (layout/resumo/endereços) + Task 10 (POST /checkout/session) +
 // Task 11 (redirecionamento para a URL de pagamento retornada) + Task 21
@@ -25,9 +31,15 @@ const CART_STORAGE_KEY = "sensora_carrinho";
 const CART_STORAGE_KEY_CONTA = `${CART_STORAGE_KEY}_1`;
 
 async function aceitarTermosDeCompra(page: Page) {
+  await page.getByRole("button", { name: /Continuar para pagamento/ }).waitFor();
+
   const aceite = page.getByRole("checkbox", { name: /Termos de Uso/ });
+
   if ((await aceite.count()) === 0) return;
-  if (!(await aceite.isChecked())) await aceite.check();
+
+  if (!(await aceite.isChecked())) {
+    await aceite.check();
+  }
 }
 
 function base64Url(payload: Record<string, unknown>): string {
@@ -418,14 +430,15 @@ test.describe("Checkout — resumo do carrinho", () => {
 
     await page.goto(CHECKOUT_URL);
 
-    // Escopado à linha do resumo (não ao texto solto) porque o mesmo nome
-    // também aparece como `label`/alt do PlaceholderImage (sem imagemUrl no
-    // item de teste) — getByText("Vela Aromática Lavanda") sozinho bate nos
-    // dois lugares e quebra o modo estrito do Playwright.
-    const linhaResumo = page.locator("li").filter({ hasText: "Vela Aromática Lavanda" });
-    await expect(linhaResumo).toBeVisible();
-    await expect(linhaResumo).toContainText("Qtd. 2 · R$ 59,90 un.");
-    await expect(linhaResumo).toContainText("R$ 119,80");
+    // CheckoutItemsShowcase é renderizado duas vezes (lg:hidden e
+    // hidden lg:block) — escopa à instância visível no viewport atual.
+    const showcase = page
+      .locator('[aria-label="Produtos selecionados"]')
+      .filter({ visible: true });
+    await expect(showcase).toBeVisible();
+    await expect(showcase).toContainText("Vela Aromática Lavanda");
+    await expect(showcase).toContainText("Qtd. 2");
+    await expect(showcase).toContainText("R$ 119,80");
 
     const subtotalEsperado = "R$ 119,80";
     // exact: true evita que "Total" bata em "Subtotal" por substring.
@@ -585,7 +598,7 @@ test.describe("Checkout — endereços", () => {
     await page.getByLabel("Rua").fill(novoEndereco.rua);
     await page.getByLabel("Número").fill(novoEndereco.numero);
     await page.getByLabel("Bairro").fill(novoEndereco.bairro);
-    await page.getByLabel("Cidade").fill(novoEndereco.cidade);
+    await page.getByLabel("Cidade", { exact: true }).fill(novoEndereco.cidade);
     await page.getByLabel("Estado (UF)").fill(novoEndereco.estado);
     await page.getByLabel("CEP").fill(novoEndereco.cep);
     await page.getByRole("button", { name: "Salvar endereço" }).click();
@@ -711,7 +724,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
     const urlsChamadas: { method: string; url: string }[] = [];
     page.on("request", (request) => {
       const url = new URL(request.url());
-      if (url.hostname === "localhost" && url.port === "3000") {
+      if (url.origin === API_ORIGIN) {
         urlsChamadas.push({ method: request.method(), url: url.pathname });
       }
       // Nenhuma chamada à API REST do Asaas (api-sandbox.asaas.com/
@@ -779,7 +792,17 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
   test("sem token válido no momento do clique: não chama o service e redireciona para login (fluxo da Task 7)", async ({
     page,
   }) => {
-    await seedSession(page);
+    // Não usa seedSession(): o addInitScript dele recolocaria o token na
+    // navegação para /login. Aqui a sessão é semeada uma única vez por aba
+    // (marcador em sessionStorage, que sobrevive às navegações).
+    await page.addInitScript(
+      ([tokenKey, token]) => {
+        if (window.sessionStorage.getItem("e2e_sessao_semeada")) return;
+        window.sessionStorage.setItem("e2e_sessao_semeada", "1");
+        window.localStorage.setItem(tokenKey, token);
+      },
+      [TOKEN_KEY, fakeToken()] as const,
+    );
     await seedCart(page, [CART_ITEM]);
     await mockEnderecos(page, [ENDERECO_PADRAO]);
     await mockCheckoutSession(page);
@@ -789,8 +812,10 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
     await page.getByRole("radiogroup", { name: "Selecione um endereço" }).waitFor();
 
     // Simula a sessão sendo limpa depois que a página já carregou (ex.:
-    // logout em outra aba, expiração) — antes do clique em continuar.
+    // logout em outra aba) — igual a removeToken() (lib/storage.ts):
+    // localStorage E o cookie que o middleware de /login lê.
     await page.evaluate((key) => window.localStorage.removeItem(key), TOKEN_KEY);
+    await page.context().clearCookies({ name: TOKEN_KEY });
 
     await aceitarTermosDeCompra(page);
     await page.getByRole("button", { name: "Continuar para pagamento →" }).click();
@@ -1204,6 +1229,21 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
     await mockEnderecos(page, [ENDERECO_PADRAO]);
     await mockCheckoutSessionError(page, 500, "Internal server error");
     const sessionRequests = captureCheckoutSessionRequests(page);
+
+    await page.addInitScript(() => {
+      window.localStorage.setItem(
+        "sensora_cookie_consent",
+        JSON.stringify({
+          version: 2,
+          decidedAt: new Date().toISOString(),
+          categories: {
+            essential: true,
+            analytics: false,
+            marketing: false,
+          },
+        }),
+      );
+    });
 
     await page.goto(CHECKOUT_URL);
     const button = page.getByRole("button", { name: "Continuar para pagamento →" });
