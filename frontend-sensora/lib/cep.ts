@@ -9,3 +9,10 @@ export function normalizarCep(valor: string): string {
 export function cepCompleto(valor: string): boolean {
   return normalizarCep(valor).length === 8;
 }
+
+// Máscara 00000-000 enquanto a pessoa digita: só dígitos (no máximo 8), com
+// o hífen depois do quinto.
+export function formatarCep(valor: string): string {
+  const digitos = normalizarCep(valor).slice(0, 8);
+  return digitos.length > 5 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : digitos;
+}

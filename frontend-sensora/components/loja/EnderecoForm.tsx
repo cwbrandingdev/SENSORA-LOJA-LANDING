@@ -14,9 +14,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import FormButton from "@/components/ui/FormButton";
-import { cepCompleto, normalizarCep } from "@/lib/cep";
+import { cepCompleto, formatarCep, normalizarCep } from "@/lib/cep";
 import { buscarEnderecoPorCep } from "@/services/via-cep";
 import type { Endereco } from "@/lib/types/loja";
+import { CampoComIcone, LayoutComPrevia } from "@/components/loja/EnderecoFormPrevia";
 
 // Preenchimento automático via ViaCEP — só dispara quando o CEP muda para
 // um valor diferente do que reset()/initialData acabou de carregar (ver
@@ -51,7 +52,7 @@ function toDefaultValues(endereco?: Endereco): EnderecoFormValues {
     bairro: endereco?.bairro ?? "",
     cidade: endereco?.cidade ?? "",
     estado: endereco?.estado ?? "",
-    cep: endereco?.cep ?? "",
+    cep: formatarCep(endereco?.cep ?? ""),
   };
 }
 
@@ -64,9 +65,18 @@ type EnderecoFormProps = {
   initialData?: Endereco;
   onSubmit: (data: EnderecoFormValues) => void | Promise<void>;
   onCancel?: () => void;
+  // Minha Conta > Endereços: campos com ícone + cartão de progresso e prévia
+  // da entrega (EnderecoFormPrevia). Sem ele, a apresentação simples, usada
+  // no checkout.
+  comPrevia?: boolean;
 };
 
-export default function EnderecoForm({ initialData, onSubmit, onCancel }: EnderecoFormProps) {
+export default function EnderecoForm({
+  initialData,
+  onSubmit,
+  onCancel,
+  comPrevia = false,
+}: EnderecoFormProps) {
   const {
     register,
     handleSubmit,
@@ -125,6 +135,16 @@ export default function EnderecoForm({ initialData, onSubmit, onCancel }: Endere
   // efeitos. Por isso o gatilho da busca mora aqui, reagindo a `watch("cep")`
   // (estado do próprio react-hook-form, não uma ref nossa) dentro de um
   // efeito, com debounce local via setTimeout/clearTimeout.
+  // O hífen do CEP entra sozinho enquanto a pessoa digita (00000-000).
+  const registroCep = register("cep", {
+    onChange: (evento: React.ChangeEvent<HTMLInputElement>) => {
+      const formatado = formatarCep(evento.target.value);
+      if (formatado !== evento.target.value) {
+        setValue("cep", formatado);
+      }
+    },
+  });
+
   const cepAtual = watch("cep");
   useEffect(() => {
     const cepDigitos = normalizarCep(cepAtual ?? "");
@@ -148,11 +168,110 @@ export default function EnderecoForm({ initialData, onSubmit, onCancel }: Endere
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cepAtual]);
 
+  if (comPrevia) {
+    const avisoCep = !errors.cep && statusBuscaCep !== "ocioso" && (
+      <p className="mt-1.5 inline-flex items-center gap-2 text-xs text-slate-500">
+        {statusBuscaCep === "buscando" && (
+          <span
+            aria-hidden
+            className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-brand-navy"
+          />
+        )}
+        {statusBuscaCep === "buscando"
+          ? "Buscando endereço..."
+          : statusBuscaCep === "nao-encontrado"
+            ? "CEP não encontrado. Preencha o endereço manualmente."
+            : "Não foi possível buscar o endereço automaticamente. Preencha manualmente."}
+      </p>
+    );
+    const campo = (
+      nome: keyof EnderecoFormValues,
+      rotulo: string,
+      extra: Partial<Parameters<typeof CampoComIcone>[0]> = {},
+    ) => (
+      <CampoComIcone
+        nome={nome}
+        rotulo={rotulo}
+        registro={nome === "cep" ? registroCep : register(nome)}
+        erro={errors[nome]?.message}
+        {...extra}
+      />
+    );
+    return (
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <LayoutComPrevia
+          previa={watch()}
+          editando={Boolean(initialData)}
+          enviando={isSubmitting}
+          onCancel={onCancel}
+          erros={{
+            cep: errors.cep?.message,
+            rua: errors.rua?.message,
+            numero: errors.numero?.message,
+            complemento: errors.complemento?.message,
+            bairro: errors.bairro?.message,
+            cidade: errors.cidade?.message,
+            estado: errors.estado?.message,
+          }}
+          campos={{
+            cep: campo("cep", "CEP", {
+              placeholder: "00000-000",
+              abaixo: avisoCep,
+            }),
+            rua: campo("rua", "Rua"),
+            numero: campo("numero", "Número"),
+            complemento: campo("complemento", "Complemento", { opcional: true }),
+            bairro: campo("bairro", "Bairro"),
+            cidade: campo("cidade", "Cidade"),
+            estado: campo("estado", "UF", { maxLength: 2, maiusculas: true }),
+          }}
+        />
+      </form>
+    );
+  }
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
       className="flex flex-col gap-4 rounded-sm border border-slate-200 bg-white p-4 sm:p-6"
     >
+      {/* CEP primeiro: ao ser preenchido, busca e completa o restante do endereço. */}
+      <div className="sm:max-w-xs">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="cep" className={labelClass}>
+            CEP
+          </label>
+          <input
+            id="cep"
+            type="text"
+            inputMode="numeric"
+            maxLength={9}
+            placeholder="00000-000"
+            className={inputClass}
+            {...registroCep}
+          />
+          {errors.cep && <p className={errorClass}>{errors.cep.message}</p>}
+          {!errors.cep && statusBuscaCep === "buscando" && (
+            <p className="inline-flex items-center gap-2 text-xs text-slate-500">
+              <span
+                aria-hidden
+                className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-brand-navy"
+              />
+              Buscando endereço...
+            </p>
+          )}
+          {!errors.cep && statusBuscaCep === "nao-encontrado" && (
+            <p className="text-xs text-slate-500">
+              CEP não encontrado. Preencha o endereço manualmente.
+            </p>
+          )}
+          {!errors.cep && statusBuscaCep === "erro" && (
+            <p className="text-xs text-slate-500">
+              Não foi possível buscar o endereço automaticamente. Preencha manualmente.
+            </p>
+          )}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr]">
         <div className="flex flex-col gap-1">
           <label htmlFor="rua" className={labelClass}>
@@ -179,7 +298,7 @@ export default function EnderecoForm({ initialData, onSubmit, onCancel }: Endere
         {errors.complemento && <p className={errorClass}>{errors.complemento.message}</p>}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_2fr_1fr]">
         <div className="flex flex-col gap-1">
           <label htmlFor="bairro" className={labelClass}>
             Bairro
@@ -195,9 +314,7 @@ export default function EnderecoForm({ initialData, onSubmit, onCancel }: Endere
           <input id="cidade" type="text" className={inputClass} {...register("cidade")} />
           {errors.cidade && <p className={errorClass}>{errors.cidade.message}</p>}
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-[1fr_2fr]">
         <div className="flex flex-col gap-1">
           <label htmlFor="estado" className={labelClass}>
             Estado (UF)
@@ -210,33 +327,6 @@ export default function EnderecoForm({ initialData, onSubmit, onCancel }: Endere
             {...register("estado")}
           />
           {errors.estado && <p className={errorClass}>{errors.estado.message}</p>}
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label htmlFor="cep" className={labelClass}>
-            CEP
-          </label>
-          <input id="cep" type="text" placeholder="00000-000" className={inputClass} {...register("cep")} />
-          {errors.cep && <p className={errorClass}>{errors.cep.message}</p>}
-          {!errors.cep && statusBuscaCep === "buscando" && (
-            <p className="inline-flex items-center gap-2 text-xs text-slate-500">
-              <span
-                aria-hidden
-                className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-brand-navy"
-              />
-              Buscando endereço...
-            </p>
-          )}
-          {!errors.cep && statusBuscaCep === "nao-encontrado" && (
-            <p className="text-xs text-slate-500">
-              CEP não encontrado. Preencha o endereço manualmente.
-            </p>
-          )}
-          {!errors.cep && statusBuscaCep === "erro" && (
-            <p className="text-xs text-slate-500">
-              Não foi possível buscar o endereço automaticamente. Preencha manualmente.
-            </p>
-          )}
         </div>
       </div>
 

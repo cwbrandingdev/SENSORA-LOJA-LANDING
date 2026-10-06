@@ -166,6 +166,7 @@ export default function EnderecosPage() {
               initialData={editando}
               onSubmit={handleSubmit}
               onCancel={handleCancelarFormulario}
+              comPrevia
             />
           )}
 
