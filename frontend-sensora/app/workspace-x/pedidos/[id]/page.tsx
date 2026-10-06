@@ -23,7 +23,6 @@ import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import {
   buscarPedidoComItens,
-  atualizarPedido,
   solicitarReembolsoMeuPedido,
 } from "@/services/pedidos";
 import { atualizarItemPedido, removerItemPedido } from "@/services/itensPedido";
@@ -119,11 +118,6 @@ export default function PedidoDetalhePage() {
       setProdutos(listaProdutos);
       setItens(pedidoComItens.itens);
       setPedido(pedidoComItens.pedido);
-
-      if (pedidoComItens.total !== pedidoComItens.pedido.total) {
-        await atualizarPedido(pedidoId, { total: pedidoComItens.total });
-        setPedido((prev) => (prev ? { ...prev, total: pedidoComItens.total } : prev));
-      }
     } catch (err) {
       // 404 é um resultado esperado (pedido inexistente/removido), não uma
       // falha a reportar por toast — os demais erros (500, timeout, rede)
