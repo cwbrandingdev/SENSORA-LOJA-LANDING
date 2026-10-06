@@ -40,6 +40,9 @@ const RESET_TOKEN_MENSAGEM =
   'Se existir uma conta com esse e-mail, você receberá instruções para redefinir sua senha.';
 const RESET_TOKEN_VALIDADE_MS = 60 * 60 * 1000;
 const RESET_TOKEN_VALIDADE_HORAS = RESET_TOKEN_VALIDADE_MS / (60 * 60 * 1000);
+// MÉDIO-5 — intervalo mínimo entre pedidos de redefinição para a mesma
+// conta. O último pedido é `resetTokenExpiry - RESET_TOKEN_VALIDADE_MS`.
+const RESET_SENHA_COOLDOWN_MS = 60 * 1000;
 const REFRESH_TOKEN_INVALIDO_MENSAGEM = 'Refresh token inválido ou expirado';
 
 // Etapa 6.4 (Confirmação de e-mail) — decisões já aprovadas: 48h de validade
@@ -178,8 +181,9 @@ export class AuthService {
       return { message: RESET_TOKEN_MENSAGEM };
     }
 
+    const agora = Date.now();
     const resetToken = randomBytes(32).toString('hex');
-    const resetTokenExpiry = new Date(Date.now() + RESET_TOKEN_VALIDADE_MS);
+    const resetTokenExpiry = new Date(agora + RESET_TOKEN_VALIDADE_MS);
 
     // Etapa 8.3 (achado HIGH da auditoria — resetToken em texto puro) —
     // persiste só o HASH (mesmo mecanismo já usado para o token de
@@ -187,11 +191,23 @@ export class AuthService {
     // texto puro nunca é persistido — só existe nesta função, para ser
     // enviado por e-mail logo abaixo (enviarEmailResetSenha) e, no máximo,
     // devolvido na resposta se EXPOSE_RESET_TOKEN estiver habilitado.
-    await this.usuariosService.salvarTokenReset(
+    //
+    // MÉDIO-5 — a gravação é o claim atômico do cooldown: só grava (e só
+    // então envia) se o último pedido foi há pelo menos
+    // RESET_SENHA_COOLDOWN_MS, isto é, validade anterior <= agora +
+    // validade - cooldown. Quem perde (dentro do cooldown ou corrida)
+    // descarta o token gerado acima — nunca gravado, enviado nem devolvido —
+    // e recebe a mesma resposta genérica (anti-enumeração: sem 429 nem
+    // Retry-After).
+    const tokenSalvo = await this.usuariosService.salvarTokenReset(
       usuario.id,
       this.hashToken(resetToken),
       resetTokenExpiry,
+      new Date(agora + RESET_TOKEN_VALIDADE_MS - RESET_SENHA_COOLDOWN_MS),
     );
+    if (!tokenSalvo) {
+      return { message: RESET_TOKEN_MENSAGEM };
+    }
 
     // MailService.enviarEmail() nunca lança (falha vira log, não exceção) —
     // o token já está persistido acima, então mesmo se o e-mail falhar

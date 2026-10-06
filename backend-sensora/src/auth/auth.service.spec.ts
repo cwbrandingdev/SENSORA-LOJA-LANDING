@@ -76,7 +76,7 @@ describe('AuthService', () => {
       buscarPorHashVerificacaoEmail: jest.fn(),
       confirmarEmailSeHashValido: jest.fn(),
       criarRefreshToken: jest.fn(),
-      salvarTokenReset: jest.fn(),
+      salvarTokenReset: jest.fn().mockResolvedValue(true),
       buscarPorResetToken: jest.fn(),
       redefinirSenha: jest.fn(),
       revogarTodosRefreshTokensAtivos: jest.fn(),
@@ -1373,6 +1373,173 @@ describe('AuthService', () => {
       ).rejects.toThrow(UnauthorizedException);
       expect(usuariosService.redefinirSenha).not.toHaveBeenCalled();
       expect(usuariosService.revogarTodosRefreshTokensAtivos).not.toHaveBeenCalled();
+    });
+  });
+
+  // MÉDIO-5 — cooldown de 60s por conta no "Esqueci minha senha". O
+  // `estado` faz o papel da linha do Usuario: salvarTokenReset aplica a
+  // mesma condição do updateMany real (sem pedido anterior ou validade
+  // anterior <= expiryAnteriorAte), de forma atômica.
+  describe('forgotPassword — cooldown por conta (MÉDIO-5)', () => {
+    const USUARIO = { id: 1, nome: 'Ana', email: 'ana@sensora.dev' };
+    const UMA_HORA = 60 * 60 * 1000;
+    let estado: {
+      resetTokenHash: string | null;
+      resetTokenExpiry: Date | null;
+    };
+
+    beforeEach(() => {
+      estado = { resetTokenHash: null, resetTokenExpiry: null };
+      usuariosService.buscarPorEmail.mockResolvedValue(USUARIO);
+      usuariosService.salvarTokenReset.mockImplementation(
+        (_id: number, hash: string, expiry: Date, expiryAnteriorAte: Date) => {
+          if (
+            estado.resetTokenExpiry !== null &&
+            estado.resetTokenExpiry > expiryAnteriorAte
+          ) {
+            return Promise.resolve(false);
+          }
+          estado = { resetTokenHash: hash, resetTokenExpiry: expiry };
+          return Promise.resolve(true);
+        },
+      );
+    });
+
+    const pedir = (email = USUARIO.email) => service.forgotPassword({ email });
+
+    function tokenDoEmail(indice: number): string {
+      const [{ html }] = mailService.enviarEmail.mock.calls[indice] as [
+        { html: string },
+      ];
+      const token = /reset-password\?token=([a-f0-9]{64})/.exec(html)?.[1];
+      expect(token).toBeDefined();
+      return token as string;
+    }
+
+    it('1: primeiro pedido grava só o hash do token, com validade de 1h, e envia 1 e-mail ao destinatário de sempre', async () => {
+      const resposta = await pedir();
+
+      expect(resposta).toEqual({ message: expect.any(String) as string });
+      expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
+      const token = tokenDoEmail(0);
+      expect(estado.resetTokenHash).toBe(sha256(token));
+      expect(estado.resetTokenHash).not.toBe(token);
+      const validadeMs =
+        (estado.resetTokenExpiry as Date).getTime() - Date.now();
+      expect(validadeMs).toBeGreaterThan(UMA_HORA - 5000);
+      expect(validadeMs).toBeLessThanOrEqual(UMA_HORA);
+      const [{ to, subject }] = mailService.enviarEmail.mock.calls[0] as [
+        { to: string; subject: string },
+      ];
+      expect(to).toBe(USUARIO.email);
+      expect(subject).toBe('Redefinição de senha — Sensora');
+    });
+
+    it('2: segundo pedido dentro de 60s responde igual, não altera o token e não envia e-mail', async () => {
+      const primeira = await pedir();
+      const estadoDepoisDoPrimeiro = { ...estado };
+
+      const segunda = await pedir();
+
+      expect(segunda).toEqual(primeira);
+      expect(estado).toEqual(estadoDepoisDoPrimeiro);
+      expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('3: pedido depois de 60s gera um novo token, substitui o anterior e envia novo e-mail', async () => {
+      // Último pedido feito há 61s.
+      estado = {
+        resetTokenHash: 'hash-anterior',
+        resetTokenExpiry: new Date(Date.now() + UMA_HORA - 61 * 1000),
+      };
+
+      await pedir();
+
+      expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
+      expect(estado.resetTokenHash).toBe(sha256(tokenDoEmail(0)));
+      expect(estado.resetTokenHash).not.toBe('hash-anterior');
+    });
+
+    it('limite: pedido anterior há 59s ainda está no cooldown', async () => {
+      estado = {
+        resetTokenHash: 'hash-anterior',
+        resetTokenExpiry: new Date(Date.now() + UMA_HORA - 59 * 1000),
+      };
+
+      await pedir();
+
+      expect(estado.resetTokenHash).toBe('hash-anterior');
+      expect(mailService.enviarEmail).not.toHaveBeenCalled();
+    });
+
+    it('4 / 13: e-mail inexistente, conta no cooldown e conta liberada recebem exatamente a mesma resposta', async () => {
+      const liberada = await pedir();
+      const noCooldown = await pedir();
+      usuariosService.buscarPorEmail.mockResolvedValueOnce(null);
+      const inexistente = await pedir('ninguem@sensora.dev');
+
+      expect(noCooldown).toEqual(liberada);
+      expect(inexistente).toEqual(liberada);
+      expect(Object.keys(liberada)).toEqual(['message']);
+      expect(usuariosService.salvarTokenReset).toHaveBeenCalledTimes(2);
+      expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('5: duas solicitações simultâneas — só uma grava o token e só uma envia e-mail', async () => {
+      const respostas = await Promise.all([pedir(), pedir()]);
+
+      expect(respostas[0]).toEqual(respostas[1]);
+      expect(usuariosService.salvarTokenReset).toHaveBeenCalledTimes(2);
+      expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
+      // O token que vale é exatamente o do único e-mail enviado.
+      expect(estado.resetTokenHash).toBe(sha256(tokenDoEmail(0)));
+    });
+
+    it('6: claim perdido (count 0) não envia e-mail e nunca devolve token, mesmo com EXPOSE_RESET_TOKEN', async () => {
+      configValues.EXPOSE_RESET_TOKEN = 'true';
+      usuariosService.salvarTokenReset.mockResolvedValueOnce(false);
+
+      const resposta = await pedir();
+
+      expect(resposta).toEqual({ message: expect.any(String) as string });
+      expect(resposta).not.toHaveProperty('token');
+      expect(mailService.enviarEmail).not.toHaveBeenCalled();
+    });
+
+    it('7 / 8: reset bem-sucedido mantém revogação e aviso, e libera um novo pedido imediatamente', async () => {
+      await pedir();
+      const token = tokenDoEmail(0);
+      usuariosService.buscarPorResetToken.mockImplementationOnce(
+        (hash: string) =>
+          Promise.resolve(
+            hash === estado.resetTokenHash
+              ? { id: 1, resetTokenExpiry: estado.resetTokenExpiry }
+              : null,
+          ),
+      );
+      // redefinirSenha (UsuariosService) limpa hash e validade.
+      usuariosService.redefinirSenha.mockImplementationOnce(() => {
+        estado = { resetTokenHash: null, resetTokenExpiry: null };
+        return Promise.resolve();
+      });
+      usuariosService.findOne.mockResolvedValueOnce(USUARIO);
+
+      await service.resetPassword({ token, novaSenha: 'novaSenhaSegura123' });
+
+      expect(
+        usuariosService.revogarTodosRefreshTokensAtivos,
+      ).toHaveBeenCalledWith(1);
+      // e-mail de redefinição + aviso de senha alterada (MÉDIO-4).
+      expect(mailService.enviarEmail).toHaveBeenCalledTimes(2);
+      const [{ subject }] = mailService.enviarEmail.mock.calls[1] as [
+        { subject: string },
+      ];
+      expect(subject).toBe('Senha alterada — Sensora');
+
+      // Logo depois do reset, um novo pedido já gera token e envia e-mail.
+      await pedir();
+      expect(mailService.enviarEmail).toHaveBeenCalledTimes(3);
+      expect(estado.resetTokenHash).toBe(sha256(tokenDoEmail(2)));
     });
   });
 

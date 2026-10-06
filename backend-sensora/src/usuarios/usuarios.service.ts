@@ -448,15 +448,29 @@ export class UsuariosService {
   // redefinição, nunca o token em texto puro — mesmo raciocínio de
   // emitirTokenVerificacaoEmail/criarRefreshToken. `resetTokenHash` é o
   // parâmetro (já hasheado por quem chama), não o token original.
+  //
+  // MÉDIO-5 — cooldown por conta, atômico: só grava se não houver pedido
+  // anterior ou se a validade anterior for <= `expiryAnteriorAte` (ou seja,
+  // o último pedido já saiu do cooldown — calculado em AuthService). Duas
+  // requisições simultâneas: o Postgres serializa a escrita, só uma tem
+  // count 1. Devolve true só para quem gravou.
   async salvarTokenReset(
     id: number,
     resetTokenHash: string,
     resetTokenExpiry: Date,
-  ): Promise<void> {
-    await this.prisma.usuario.update({
-      where: { id },
+    expiryAnteriorAte: Date,
+  ): Promise<boolean> {
+    const { count } = await this.prisma.usuario.updateMany({
+      where: {
+        id,
+        OR: [
+          { resetTokenExpiry: null },
+          { resetTokenExpiry: { lte: expiryAnteriorAte } },
+        ],
+      },
       data: { resetTokenHash, resetTokenExpiry },
     });
+    return count === 1;
   }
 
   // Recebe o HASH já calculado (AuthService.hashToken(tokenRecebido)),

@@ -842,7 +842,9 @@ describe('UsuariosService — create/update administrativo: CPF/telefone', () =>
 // confirmarEmailSeHashValido para emailVerificationHash).
 describe('UsuariosService — salvarTokenReset/buscarPorResetToken/redefinirSenha (Etapa 8.3)', () => {
   let service: UsuariosService;
-  let prisma: { usuario: { update: jest.Mock; findFirst: jest.Mock } };
+  let prisma: {
+    usuario: { update: jest.Mock; updateMany: jest.Mock; findFirst: jest.Mock };
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -851,6 +853,7 @@ describe('UsuariosService — salvarTokenReset/buscarPorResetToken/redefinirSenh
           id: 1,
           ...data,
         })),
+        updateMany: jest.fn(() => ({ count: 1 })),
         findFirst: jest.fn(() => null),
       },
     };
@@ -866,20 +869,48 @@ describe('UsuariosService — salvarTokenReset/buscarPorResetToken/redefinirSenh
     service = module.get(UsuariosService);
   });
 
-  it('salvarTokenReset(): grava no campo resetTokenHash (nunca em resetToken)', async () => {
+  it('salvarTokenReset(): grava no campo resetTokenHash (nunca em resetToken), condicionado ao cooldown, e devolve true', async () => {
     const expiry = new Date(Date.now() + 60 * 60 * 1000);
+    const expiryAnteriorAte = new Date(Date.now() + 59 * 60 * 1000);
 
-    await service.salvarTokenReset(1, 'hash-fake-64-caracteres', expiry);
+    const gravou = await service.salvarTokenReset(
+      1,
+      'hash-fake-64-caracteres',
+      expiry,
+      expiryAnteriorAte,
+    );
 
-    expect(prisma.usuario.update).toHaveBeenCalledWith({
-      where: { id: 1 },
+    expect(gravou).toBe(true);
+    expect(prisma.usuario.update).not.toHaveBeenCalled();
+    expect(prisma.usuario.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 1,
+        OR: [
+          { resetTokenExpiry: null },
+          { resetTokenExpiry: { lte: expiryAnteriorAte } },
+        ],
+      },
       data: { resetTokenHash: 'hash-fake-64-caracteres', resetTokenExpiry: expiry },
     });
-    const dataEnviada = prisma.usuario.update.mock.calls[0][0].data as Record<
-      string,
-      unknown
-    >;
+    const [[{ data: dataEnviada }]] = prisma.usuario.updateMany.mock.calls as [
+      [{ data: Record<string, unknown> }],
+    ];
     expect(dataEnviada).not.toHaveProperty('resetToken');
+  });
+
+  // MÉDIO-5 — dentro do cooldown (ou perdendo uma corrida) o updateMany
+  // condicional não afeta nenhuma linha: nada é gravado e devolve false.
+  it('salvarTokenReset(): count 0 (dentro do cooldown) devolve false', async () => {
+    prisma.usuario.updateMany.mockReturnValueOnce({ count: 0 });
+
+    const gravou = await service.salvarTokenReset(
+      1,
+      'hash-fake-64-caracteres',
+      new Date(Date.now() + 60 * 60 * 1000),
+      new Date(Date.now() + 59 * 60 * 1000),
+    );
+
+    expect(gravou).toBe(false);
   });
 
   it('buscarPorResetToken(): consulta pelo campo resetTokenHash (nunca resetToken)', async () => {
