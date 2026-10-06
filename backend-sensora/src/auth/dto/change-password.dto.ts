@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
 
 // Etapa 3 (Minha Conta / Segurança) — DTO próprio, nunca reaproveita
 // UpdateUsuarioDto (administrativo) nem ResetPasswordDto (fluxo de token,
@@ -15,5 +15,6 @@ export class AlterarMinhaSenhaDto {
   // (Etapa 10 / Task 6, achado H11): mínimo de 8 caracteres.
   @IsString()
   @MinLength(8)
+  @MaxLength(72)
   novaSenha: string;
 }

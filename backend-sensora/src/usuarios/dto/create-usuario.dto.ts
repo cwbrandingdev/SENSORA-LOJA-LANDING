@@ -25,6 +25,7 @@ export class CreateUsuarioDto {
   // Etapa 10 / Task 6 (achado H11): mínimo elevado de 6 para 8 caracteres.
   @IsString()
   @MinLength(8)
+  @MaxLength(72)
   senha: string;
 
   @IsEnum(PerfilUsuario)

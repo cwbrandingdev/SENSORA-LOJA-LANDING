@@ -15,5 +15,6 @@ export class ResetPasswordDto {
   @IsString()
   @IsNotEmpty()
   @MinLength(8)
+  @MaxLength(72)
   novaSenha: string;
 }

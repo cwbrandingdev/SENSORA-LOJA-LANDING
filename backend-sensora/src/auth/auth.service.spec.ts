@@ -1099,6 +1099,97 @@ describe('AuthService', () => {
     });
   });
 
+  // Vistoria de proteção de dados — login de e-mail inexistente e de conta
+  // desativada.
+  describe('login — e-mail inexistente e conta desativada', () => {
+    // O namespace importado não aceita spy; o módulo real (o mesmo que o
+    // AuthService usa) aceita.
+    const bcryptReal = jest.requireActual<typeof bcrypt>('bcrypt');
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('e-mail inexistente: roda bcrypt.compare contra um hash fixo e responde "Credenciais inválidas", sem criar tokens', async () => {
+      const compare = jest.spyOn(bcryptReal, 'compare');
+      usuariosService.buscarPorEmail.mockResolvedValueOnce(null);
+
+      await expect(
+        service.login({ email: 'ninguem@sensora.dev', senha: 'qualquer123' }),
+      ).rejects.toThrow(new UnauthorizedException('Credenciais inválidas'));
+
+      expect(compare).toHaveBeenCalledTimes(1);
+      const [senhaComparada, hashUsado] = compare.mock.calls[0];
+      expect(senhaComparada).toBe('qualquer123');
+      expect(bcrypt.getRounds(hashUsado)).toBe(10);
+      expect(jwtService.sign).not.toHaveBeenCalled();
+      expect(usuariosService.criarRefreshToken).not.toHaveBeenCalled();
+    });
+
+    it('e-mail inexistente: o hash fixo é sempre o mesmo (não é gerado a cada tentativa)', async () => {
+      const compare = jest.spyOn(bcryptReal, 'compare');
+      usuariosService.buscarPorEmail.mockResolvedValue(null);
+
+      await expect(
+        service.login({ email: 'a@sensora.dev', senha: 'qualquer123' }),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.login({ email: 'b@sensora.dev', senha: 'outra12345' }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(compare.mock.calls[0][1]).toBe(compare.mock.calls[1][1]);
+    });
+
+    it('conta desativada com a senha correta: mesma mensagem genérica, sem tokens nem RefreshToken', async () => {
+      usuariosService.buscarPorEmail.mockResolvedValueOnce({
+        id: 1,
+        nome: 'Cliente',
+        email: 'cliente@sensora.dev',
+        senha: SENHA_HASH_TESTE,
+        perfil: PerfilUsuario.CLIENTE,
+        ativo: false,
+        emailVerificado: true,
+      });
+
+      await expect(
+        service.login({
+          email: 'cliente@sensora.dev',
+          senha: 'senhaCorreta123',
+        }),
+      ).rejects.toThrow(new UnauthorizedException('Credenciais inválidas'));
+
+      expect(jwtService.sign).not.toHaveBeenCalled();
+      expect(usuariosService.criarRefreshToken).not.toHaveBeenCalled();
+    });
+
+    it('conta desativada recebe exatamente a mesma resposta de uma senha errada', async () => {
+      const usuario = {
+        id: 1,
+        nome: 'Cliente',
+        email: 'cliente@sensora.dev',
+        senha: SENHA_HASH_TESTE,
+        perfil: PerfilUsuario.CLIENTE,
+        ativo: true,
+        emailVerificado: true,
+      };
+      usuariosService.buscarPorEmail
+        .mockResolvedValueOnce(usuario)
+        .mockResolvedValueOnce({ ...usuario, ativo: false });
+
+      const senhaErrada = await service
+        .login({ email: 'cliente@sensora.dev', senha: 'senhaErrada' })
+        .catch((erro: UnauthorizedException) => erro);
+      const desativada = await service
+        .login({ email: 'cliente@sensora.dev', senha: 'senhaCorreta123' })
+        .catch((erro: UnauthorizedException) => erro);
+
+      expect(desativada).toBeInstanceOf(UnauthorizedException);
+      expect((desativada as UnauthorizedException).getResponse()).toEqual(
+        (senhaErrada as UnauthorizedException).getResponse(),
+      );
+    });
+  });
+
   // Etapa 8.0 (Finalização do e-mail/Resend) — primeira suíte automatizada
   // de forgotPassword()/resetPassword(): a suíte original (Etapa 6.4,
   // comentário no topo deste arquivo) deliberadamente não cobria este

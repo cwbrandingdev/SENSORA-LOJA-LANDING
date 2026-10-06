@@ -74,6 +74,11 @@ const TOKEN_VERIFICACAO_INVALIDO_MENSAGEM = 'Token inválido ou expirado';
 const CODIGO_EMAIL_NAO_VERIFICADO = 'EMAIL_NAO_VERIFICADO';
 const EMAIL_NAO_VERIFICADO_MENSAGEM =
   'Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada ou solicite um novo link de confirmação.';
+// Hash bcrypt fixo (custo 10, o mesmo de SALT_ROUNDS) de um valor aleatório
+// descartado — nenhuma senha bate com ele. Só serve para o login de um
+// e-mail inexistente também executar bcrypt.compare.
+const HASH_LOGIN_FICTICIO =
+  '$2b$10$Teq7S1eig6OhCNECmZ4wOOHb6fLPpwDSvpEXhZ1XInP0CPpiB38iO';
 
 @Injectable()
 export class AuthService {
@@ -88,12 +93,16 @@ export class AuthService {
 
   async login(loginDto: LoginDto): Promise<AuthToken> {
     const usuario = await this.usuariosService.buscarPorEmail(loginDto.email);
-    if (!usuario) {
-      throw new UnauthorizedException('Credenciais inválidas');
-    }
 
-    const senhaValida = await bcrypt.compare(loginDto.senha, usuario.senha);
-    if (!senhaValida) {
+    // E-mail inexistente também passa pelo bcrypt (contra um hash fixo),
+    // para levar o mesmo tempo de um e-mail existente com senha errada.
+    const senhaValida = await bcrypt.compare(
+      loginDto.senha,
+      usuario?.senha ?? HASH_LOGIN_FICTICIO,
+    );
+
+    // Conta desativada recebe a mesma resposta genérica, sem gerar sessão.
+    if (!usuario || !senhaValida || !usuario.ativo) {
       throw new UnauthorizedException('Credenciais inválidas');
     }
 
