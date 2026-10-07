@@ -111,6 +111,67 @@ describe('AsaasService', () => {
     );
   });
 
+  // Ocorrências — o motivo do Asaas fica só em propriedades internas do
+  // erro (truncado); a resposta HTTP continua genérica.
+  describe('motivo da recusa (uso interno)', () => {
+    function recusa(corpo: string) {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        text: () => Promise.resolve(corpo),
+      });
+      return service
+        .estornarPagamento('pay_123')
+        .then(
+          () => {
+            throw new Error('esperava AsaasErroHttpError');
+          },
+          (erro: unknown) => erro as AsaasErroHttpError,
+        );
+    }
+
+    it('guarda errors[0].code/description; a resposta HTTP não muda', async () => {
+      const erro = await recusa(
+        JSON.stringify({
+          errors: [
+            { code: 'invalid_action', description: 'Saldo insuficiente.' },
+            { code: 'outro', description: 'ignorado' },
+          ],
+        }),
+      );
+
+      expect(erro).toBeInstanceOf(AsaasErroHttpError);
+      expect(erro.codigoAsaas).toBe('invalid_action');
+      expect(erro.descricaoAsaas).toBe('Saldo insuficiente.');
+      expect(erro.message).toBe('O Asaas recusou a requisição');
+      expect(JSON.stringify(erro.getResponse())).not.toContain('Saldo');
+    });
+
+    it('trunca code (100) e description (200)', async () => {
+      const erro = await recusa(
+        JSON.stringify({
+          errors: [{ code: 'c'.repeat(150), description: 'd'.repeat(300) }],
+        }),
+      );
+
+      expect(erro.codigoAsaas).toHaveLength(100);
+      expect(erro.descricaoAsaas).toHaveLength(200);
+    });
+
+    it.each([
+      ['corpo que não é JSON', '<html>erro</html>'],
+      ['JSON sem errors', JSON.stringify({ message: 'x' })],
+      ['errors com tipos inesperados', JSON.stringify({ errors: [{ code: 1, description: { a: 1 } }] })],
+    ])('%s: sem motivo, mesmo erro', async (_caso, corpo) => {
+      const erro = await recusa(corpo);
+
+      expect(erro).toBeInstanceOf(AsaasErroHttpError);
+      expect(erro.codigoAsaas).toBeUndefined();
+      expect(erro.descricaoAsaas).toBeUndefined();
+    });
+  });
+
   it('falha de rede: lança BadGatewayException', async () => {
     fetchMock.mockRejectedValueOnce(new Error('ECONNREFUSED'));
 

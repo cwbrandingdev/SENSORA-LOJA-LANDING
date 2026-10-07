@@ -117,7 +117,15 @@ export class AsaasIndisponivelError extends BadGatewayException {}
 // O Asaas respondeu, mas recusou a requisição (4xx/5xx que não seja o 404
 // tratado como "não encontrado" por um método específico). Aqui SIM há
 // certeza: a requisição foi recebida e rejeitada.
-export class AsaasErroHttpError extends BadGatewayException {}
+//
+// `codigoAsaas`/`descricaoAsaas`: o primeiro item de `errors` da resposta
+// (ex.: invalid_action / "Saldo insuficiente."), truncado — só para uso
+// interno (ocorrências). Nunca entram na resposta HTTP, que continua com a
+// mensagem genérica.
+export class AsaasErroHttpError extends BadGatewayException {
+  codigoAsaas?: string;
+  descricaoAsaas?: string;
+}
 
 // HTTP 200/201 do Asaas, mas corpo que não é o JSON esperado — resposta
 // inconsistente, não um erro de comunicação.
@@ -370,13 +378,43 @@ export class AsaasService {
       this.logger.error(
         `Asaas recusou ${method} ${path} -> ${response.status} ${response.statusText}: ${corpoErro}`,
       );
-      throw new AsaasErroHttpError('O Asaas recusou a requisição');
+      const erro = new AsaasErroHttpError('O Asaas recusou a requisição');
+      const motivo = this.motivoDoErro(corpoErro);
+      erro.codigoAsaas = motivo.codigo;
+      erro.descricaoAsaas = motivo.descricao;
+      throw erro;
     }
 
     try {
       return (await response.json()) as T;
     } catch {
       throw new AsaasRespostaInvalidaError('Resposta inválida do Asaas');
+    }
+  }
+
+  // Só `errors[0].code` e `errors[0].description` (texto, truncados) — nunca
+  // o corpo inteiro. Corpo fora desse formato não gera motivo.
+  private motivoDoErro(corpo: string): {
+    codigo?: string;
+    descricao?: string;
+  } {
+    try {
+      const json = JSON.parse(corpo) as {
+        errors?: { code?: unknown; description?: unknown }[];
+      };
+      const primeiro = Array.isArray(json?.errors) ? json.errors[0] : undefined;
+      return {
+        codigo:
+          typeof primeiro?.code === 'string'
+            ? primeiro.code.slice(0, 100)
+            : undefined,
+        descricao:
+          typeof primeiro?.description === 'string'
+            ? primeiro.description.slice(0, 200)
+            : undefined,
+      };
+    } catch {
+      return {};
     }
   }
 }

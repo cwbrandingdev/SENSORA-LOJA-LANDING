@@ -18,6 +18,7 @@ import { FiscalModule } from './fiscal/fiscal.module';
 import { ImagekitModule } from './imagekit/imagekit.module';
 import { ItensPedidoModule } from './itens-pedido/itens-pedido.module';
 import { MelhorEnvioModule } from './melhor-envio/melhor-envio.module';
+import { OcorrenciasModule } from './ocorrencias/ocorrencias.module';
 import { PedidosModule } from './pedidos/pedidos.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProdutosModule } from './produtos/produtos.module';
@@ -157,6 +158,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     AuthModule,
     PublicModule,
     ImagekitModule,
+    OcorrenciasModule,
   ],
   controllers: [AppController],
   providers: [

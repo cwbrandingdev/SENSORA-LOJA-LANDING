@@ -11,7 +11,11 @@ import type {
   Pedido as PedidoPrisma,
 } from '../../generated/prisma/client';
 import { Prisma } from '../../generated/prisma/client';
-import { AsaasErroHttpError, AsaasService } from '../asaas/asaas.service';
+import {
+  AsaasErroHttpError,
+  AsaasIndisponivelError,
+  AsaasService,
+} from '../asaas/asaas.service';
 import { StatusDevolucao } from '../devolucoes/enums/status-devolucao.enum';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { EnderecosService } from '../enderecos/enderecos.service';
@@ -19,6 +23,12 @@ import { NotaFiscalResumo } from '../fiscal/entities/nota-fiscal.entity';
 import { StatusFiscal } from '../fiscal/enums/status-fiscal.enum';
 import { ItemPedido } from '../itens-pedido/entities/item-pedido.entity';
 import { ItensPedidoService } from '../itens-pedido/itens-pedido.service';
+import { ResultadoOcorrencia } from '../ocorrencias/enums/resultado-ocorrencia.enum';
+import { TipoOcorrencia } from '../ocorrencias/enums/tipo-ocorrencia.enum';
+import {
+  OcorrenciasService,
+  RegistrarOcorrenciaInput,
+} from '../ocorrencias/ocorrencias.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
@@ -69,6 +79,7 @@ export class PedidosService {
     private readonly produtosService: ProdutosService,
     private readonly asaasService: AsaasService,
     private readonly enderecosService: EnderecosService,
+    private readonly ocorrenciasService: OcorrenciasService,
   ) {}
 
   // Etapa 10 / Task 5 (achado A6): ADMIN continua vendo/editando qualquer
@@ -467,6 +478,18 @@ export class PedidosService {
       where: { id },
     });
 
+    // Ocorrências: só depois do claim ganho (count 1), fora de transação.
+    const base = this.baseOcorrenciaReembolso(pedidoAtualizado, user.id);
+    await this.ocorrenciasService.registrar({
+      ...base,
+      resultado: ResultadoOcorrencia.INFO,
+      codigo: 'REEMBOLSO_SOLICITADO',
+      mensagem:
+        user.perfil === PerfilUsuario.ADMIN
+          ? 'Reembolso integral solicitado pela administração.'
+          : 'Reembolso integral solicitado pelo cliente.',
+    });
+
     const paymentId = await this.resolverPaymentId(pedidoAtualizado);
 
     if (!paymentId) {
@@ -500,6 +523,7 @@ export class PedidosService {
           where: { id },
           data: { status: StatusPedido.REEMBOLSADO },
         });
+        await this.registrarReembolsoConcluido(base, paymentId);
         return this.paraPedido(pedidoAtualizado);
       }
 
@@ -527,6 +551,7 @@ export class PedidosService {
           where: { id },
           data: { status: StatusPedido.REEMBOLSADO },
         });
+        await this.registrarReembolsoConcluido(base, paymentId);
       }
 
       return this.paraPedido(pedidoAtualizado);
@@ -542,13 +567,69 @@ export class PedidosService {
           where: { id, status: StatusPedido.REEMBOLSO_SOLICITADO },
           data: { status: StatusPedido.PAGO },
         });
+        // Cada tentativa recusada é uma ocorrência (sem chave).
+        await this.ocorrenciasService.registrar({
+          ...base,
+          resultado: ResultadoOcorrencia.FALHA,
+          codigo: 'ASAAS_RECUSOU_ESTORNO',
+          mensagem: erro.descricaoAsaas
+            ? `O Asaas recusou o estorno: ${erro.descricaoAsaas}`
+            : 'O Asaas recusou o estorno.',
+          referenciaExterna: paymentId,
+          detalhes: {
+            asaasCode: erro.codigoAsaas,
+            asaasDescription: erro.descricaoAsaas,
+          },
+        });
         throw new AsaasErroHttpError({
           message: REEMBOLSO_ASAAS_RECUSADO_MENSAGEM,
           code: CODIGO_ERRO_REEMBOLSO_ASAAS,
         });
       }
+      if (erro instanceof AsaasIndisponivelError) {
+        await this.ocorrenciasService.registrar({
+          ...base,
+          resultado: ResultadoOcorrencia.ALERTA,
+          codigo: 'REEMBOLSO_ASAAS_INDISPONIVEL',
+          mensagem:
+            'Não foi possível falar com o Asaas durante o reembolso. Não se sabe se o estorno foi criado: o pedido continua em reembolso solicitado e precisa ser conferido no Asaas.',
+          referenciaExterna: paymentId,
+        });
+      }
       throw erro;
     }
+  }
+
+  // Campos comuns às ocorrências de reembolso integral deste pedido.
+  private baseOcorrenciaReembolso(
+    pedido: { id: number; numero: string; total: unknown },
+    usuarioId: number | null,
+  ): Omit<RegistrarOcorrenciaInput, 'resultado' | 'codigo' | 'mensagem'> {
+    return {
+      tipo: TipoOcorrencia.REEMBOLSO,
+      etapa: 'solicitarReembolso',
+      usuarioId,
+      pedidoId: pedido.id,
+      pedidoNumero: pedido.numero,
+      valor: Number(pedido.total),
+      gateway: 'asaas',
+    };
+  }
+
+  // Um pedido só é reembolsado integralmente uma vez: a chave impede
+  // duplicar a ocorrência entre este fluxo e o webhook PAYMENT_REFUNDED.
+  private async registrarReembolsoConcluido(
+    base: Omit<RegistrarOcorrenciaInput, 'resultado' | 'codigo' | 'mensagem'>,
+    paymentId: string,
+  ): Promise<void> {
+    await this.ocorrenciasService.registrar({
+      ...base,
+      resultado: ResultadoOcorrencia.SUCESSO,
+      codigo: 'REEMBOLSO_CONCLUIDO',
+      mensagem: 'Reembolso integral concluído pelo Asaas.',
+      referenciaExterna: paymentId,
+      chaveIdempotencia: `REEMBOLSO_CONCLUIDO:${base.pedidoId}`,
+    });
   }
 
   // Etapa 6.6 (Status de Envio) — MVP, ação administrativa manual

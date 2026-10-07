@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -10,6 +11,11 @@ import {
   AsaasRefund,
   AsaasService,
 } from '../asaas/asaas.service';
+import {
+  OcorrenciasService,
+  RegistrarOcorrenciaInput,
+  ResultadoRegistro,
+} from '../ocorrencias/ocorrencias.service';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { EnderecosService } from '../enderecos/enderecos.service';
 import { ItensPedidoService } from '../itens-pedido/itens-pedido.service';
@@ -27,6 +33,12 @@ import { CODIGO_ERRO_REEMBOLSO_ASAAS, PedidosService } from './pedidos.service';
 // banco real). O "banco" é um objeto em memória (`pedidoFake`) para que o
 // mock de `updateMany` consiga refletir corretamente o WHERE condicional
 // (claim atômico) — mesmo padrão já usado em checkout.service.spec.ts.
+
+// Ocorrências de negócio MOCKADAS (o registro em si é testado em
+// ocorrencias.service.spec.ts).
+const ocorrenciasService = {
+  registrar: jest.fn<Promise<ResultadoRegistro>, [RegistrarOcorrenciaInput]>(() => Promise.resolve('CRIADA')),
+};
 
 const CLIENTE = {
   id: 1,
@@ -161,6 +173,7 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
         { provide: ProdutosService, useValue: {} },
         { provide: AsaasService, useValue: asaasService },
         { provide: EnderecosService, useValue: {} },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
       ],
     }).compile();
 
@@ -543,6 +556,176 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
     expect(pedidoFake.status).toBe(StatusPedido.PAGO);
     expect(asaasService.estornarPagamento).not.toHaveBeenCalled();
   });
+
+  // Ocorrências de negócio do reembolso integral: registradas a partir do
+  // resultado real (claim, resposta do Asaas), nunca alteram o fluxo.
+  describe('ocorrências do reembolso', () => {
+    const registradas = (codigo?: string): RegistrarOcorrenciaInput[] =>
+      ocorrenciasService.registrar.mock.calls
+        .map(([ocorrencia]) => ocorrencia)
+        .filter((ocorrencia) => !codigo || ocorrencia.codigo === codigo);
+
+    function erroAsaas(): AsaasErroHttpError {
+      const erro = new AsaasErroHttpError('O Asaas recusou a requisição');
+      erro.codigoAsaas = 'invalid_action';
+      erro.descricaoAsaas = 'Saldo insuficiente.';
+      return erro;
+    }
+
+    beforeEach(() => {
+      ocorrenciasService.registrar.mockReset();
+      ocorrenciasService.registrar.mockResolvedValue('CRIADA');
+      pedidoFake.asaasPaymentId = 'pay_123';
+    });
+
+    it('claim ganho: registra REEMBOLSO_SOLICITADO (INFO) com usuário, pedido e valor, depois do claim', async () => {
+      asaasService.estornarPagamento.mockResolvedValueOnce(
+        refund({ status: 'PENDING' }),
+      );
+
+      await service.solicitarReembolso(1, CLIENTE);
+
+      expect(registradas('REEMBOLSO_SOLICITADO')).toEqual([
+        expect.objectContaining({
+          tipo: 'REEMBOLSO',
+          resultado: 'INFO',
+          etapa: 'solicitarReembolso',
+          usuarioId: CLIENTE.id,
+          pedidoId: 1,
+          pedidoNumero: 'PED-1',
+          valor: 39.9,
+        }),
+      ]);
+      expect(
+        prisma.pedido.updateMany.mock.invocationCallOrder[0],
+      ).toBeLessThan(ocorrenciasService.registrar.mock.invocationCallOrder[0]);
+    });
+
+    it('sem claim (já em reembolso solicitado): nenhuma ocorrência', async () => {
+      pedidoFake.status = StatusPedido.REEMBOLSO_SOLICITADO;
+
+      await service.solicitarReembolso(1, CLIENTE);
+
+      expect(ocorrenciasService.registrar).not.toHaveBeenCalled();
+    });
+
+    it('Asaas recusou: registra ASAAS_RECUSOU_ESTORNO com code/description seguros; a resposta HTTP continua genérica', async () => {
+      asaasService.estornarPagamento.mockRejectedValueOnce(erroAsaas());
+
+      const erro: unknown = await service
+        .solicitarReembolso(1, CLIENTE)
+        .catch((e: unknown) => e);
+
+      expect(registradas('ASAAS_RECUSOU_ESTORNO')).toEqual([
+        expect.objectContaining({
+          resultado: 'FALHA',
+          usuarioId: CLIENTE.id,
+          pedidoId: 1,
+          valor: 39.9,
+          gateway: 'asaas',
+          referenciaExterna: 'pay_123',
+          mensagem: 'O Asaas recusou o estorno: Saldo insuficiente.',
+          detalhes: {
+            asaasCode: 'invalid_action',
+            asaasDescription: 'Saldo insuficiente.',
+          },
+        }),
+      ]);
+      expect(registradas('ASAAS_RECUSOU_ESTORNO')[0].chaveIdempotencia).toBeUndefined();
+      expect((erro as AsaasErroHttpError).getResponse()).toEqual({
+        message: 'Problema com a plataforma Asaas, aguarde um momento.',
+        code: CODIGO_ERRO_REEMBOLSO_ASAAS,
+      });
+      expect(JSON.stringify((erro as AsaasErroHttpError).getResponse())).not.toContain(
+        'Saldo',
+      );
+      expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+    });
+
+    it('duas tentativas recusadas geram duas ocorrências de falha', async () => {
+      asaasService.estornarPagamento
+        .mockRejectedValueOnce(erroAsaas())
+        .mockRejectedValueOnce(erroAsaas());
+
+      await service.solicitarReembolso(1, CLIENTE).catch(() => undefined);
+      await service.solicitarReembolso(1, CLIENTE).catch(() => undefined);
+
+      expect(registradas('ASAAS_RECUSOU_ESTORNO')).toHaveLength(2);
+    });
+
+    it('Asaas indisponível: registra alerta de estado incerto e o pedido continua REEMBOLSO_SOLICITADO', async () => {
+      asaasService.estornarPagamento.mockRejectedValueOnce(
+        new AsaasIndisponivelError('Não foi possível se comunicar com o Asaas'),
+      );
+
+      await expect(service.solicitarReembolso(1, CLIENTE)).rejects.toThrow(
+        AsaasIndisponivelError,
+      );
+
+      expect(registradas('REEMBOLSO_ASAAS_INDISPONIVEL')).toEqual([
+        expect.objectContaining({
+          resultado: 'ALERTA',
+          pedidoId: 1,
+          referenciaExterna: 'pay_123',
+        }),
+      ]);
+      expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSO_SOLICITADO);
+    });
+
+    it('estorno DONE: registra REEMBOLSO_CONCLUIDO uma vez, com a chave do pedido', async () => {
+      asaasService.estornarPagamento.mockResolvedValueOnce(
+        refund({ status: 'DONE' }),
+      );
+
+      await service.solicitarReembolso(1, CLIENTE);
+      // Nova chamada com o pedido já REEMBOLSADO não gera outra.
+      await service.solicitarReembolso(1, CLIENTE);
+
+      expect(registradas('REEMBOLSO_CONCLUIDO')).toEqual([
+        expect.objectContaining({
+          resultado: 'SUCESSO',
+          pedidoId: 1,
+          referenciaExterna: 'pay_123',
+          chaveIdempotencia: 'REEMBOLSO_CONCLUIDO:1',
+        }),
+      ]);
+    });
+
+    it('estorno DONE já existente no Asaas: registra REEMBOLSO_CONCLUIDO', async () => {
+      asaasService.consultarEstornos.mockResolvedValueOnce([
+        refund({ status: 'DONE' }),
+      ]);
+
+      await service.solicitarReembolso(1, CLIENTE);
+
+      expect(registradas('REEMBOLSO_CONCLUIDO')).toHaveLength(1);
+      expect(asaasService.estornarPagamento).not.toHaveBeenCalled();
+    });
+
+    it('isolamento: falha ao gravar a ocorrência não quebra o reembolso', async () => {
+      const real = new OcorrenciasService({
+        ocorrencia: {
+          create: jest.fn(() => Promise.reject(new Error('banco fora'))),
+        },
+      } as unknown as PrismaService);
+      const silencio = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      ocorrenciasService.registrar.mockImplementation((ocorrencia) =>
+        real.registrar(ocorrencia),
+      );
+      asaasService.estornarPagamento.mockResolvedValueOnce(
+        refund({ status: 'DONE' }),
+      );
+
+      const pedido = await service.solicitarReembolso(1, CLIENTE);
+
+      expect(pedido.status).toBe(StatusPedido.REEMBOLSADO);
+      expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSADO);
+      expect(silencio).toHaveBeenCalled();
+      silencio.mockRestore();
+    });
+  });
 });
 
 // Etapa 8.1 (HIGH-01 — "Admin order CRUD can fabricate PAGO" — e o
@@ -645,6 +828,7 @@ describe('PedidosService — create/update (Etapa 8.1, fechamento do HIGH-01 + e
         { provide: ProdutosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
         { provide: EnderecosService, useValue: {} },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
       ],
     }).compile();
 
@@ -840,6 +1024,7 @@ describe('PedidosService — remove (Etapa 8.2, fechamento do HIGH-02)', () => {
         { provide: ProdutosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
         { provide: EnderecosService, useValue: {} },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
       ],
     }).compile();
 
@@ -968,6 +1153,7 @@ describe('PedidosService — findAll (ordenação da listagem do Admin)', () => 
         { provide: ProdutosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
         { provide: EnderecosService, useValue: {} },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
       ],
     }).compile();
 
@@ -1104,6 +1290,7 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
         { provide: ProdutosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
         { provide: EnderecosService, useValue: {} },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
       ],
     }).compile();
 
@@ -1347,6 +1534,7 @@ describe('PedidosService — atualizarEnderecoEntrega', () => {
         { provide: ProdutosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
         { provide: EnderecosService, useValue: enderecosService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
       ],
     }).compile();
 

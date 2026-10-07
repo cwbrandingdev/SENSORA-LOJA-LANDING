@@ -395,7 +395,8 @@ describe('DevolucoesAdminController — /admin/devolucoes (HTTP)', () => {
         .post('/admin/devolucoes/5/reembolso')
         .set('x-perfil', 'ADMIN')
         .expect(200);
-      expect(service.reprocessarReembolso).toHaveBeenCalledWith(5);
+      // O admin que reprocessou vai para as ocorrências do reembolso.
+      expect(service.reprocessarReembolso).toHaveBeenCalledWith(5, ADMIN_ID);
     });
   });
 });

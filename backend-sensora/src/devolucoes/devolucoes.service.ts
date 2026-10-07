@@ -12,7 +12,11 @@ import {
   type EvidenciaDevolucao as EvidenciaDevolucaoPrisma,
   type ItemDevolucao as ItemDevolucaoPrisma,
 } from '../../generated/prisma/client';
-import { AsaasService, type AsaasRefund } from '../asaas/asaas.service';
+import {
+  AsaasErroHttpError,
+  AsaasService,
+  type AsaasRefund,
+} from '../asaas/asaas.service';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { escaparHtml } from '../common/utils/html.util';
 import { ImagekitService } from '../imagekit/imagekit.service';
@@ -24,6 +28,12 @@ import {
   type MelhorEnvioReversaInput,
 } from '../melhor-envio/melhor-envio.service';
 import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
+import { ResultadoOcorrencia } from '../ocorrencias/enums/resultado-ocorrencia.enum';
+import { TipoOcorrencia } from '../ocorrencias/enums/tipo-ocorrencia.enum';
+import {
+  OcorrenciasService,
+  RegistrarOcorrenciaInput,
+} from '../ocorrencias/ocorrencias.service';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { PrismaService } from '../prisma/prisma.service';
 import { ItemConferidoDto } from './dto/concluir-conferencia.dto';
@@ -101,6 +111,15 @@ export function extensaoDaImagem(
   return null;
 }
 
+// Ocorrências do estorno de uma devolução: contexto montado e ocorrências
+// coletadas durante a transação, registradas só depois dela (ver
+// sincronizarReembolso). `conflito` marca os 409 que viram ocorrência.
+type EstadoReembolsoDevolucao = {
+  base?: Omit<RegistrarOcorrenciaInput, 'resultado' | 'codigo' | 'mensagem'>;
+  conflito: boolean;
+  ocorrencias: RegistrarOcorrenciaInput[];
+};
+
 @Injectable()
 export class DevolucoesService {
   private readonly logger = new Logger(DevolucoesService.name);
@@ -111,6 +130,7 @@ export class DevolucoesService {
     private readonly mailService: MailService,
     private readonly melhorEnvioService: MelhorEnvioService,
     private readonly asaasService: AsaasService,
+    private readonly ocorrenciasService: OcorrenciasService,
   ) {}
 
   // Cliente solicita a devolução de itens de um pedido já enviado. Tudo que
@@ -962,7 +982,7 @@ export class DevolucoesService {
       throw new NotFoundException('Devolução não encontrada');
     }
 
-    const valor = await this.prisma.$transaction(async (tx) => {
+    const conferida = await this.prisma.$transaction(async (tx) => {
       // Trava o pedido: conferências e estornos de devoluções do mesmo
       // pedido passam um de cada vez (mesma trava de `criar`).
       await tx.$queryRaw`SELECT id FROM "Pedido" WHERE id = ${alvo.pedidoId} FOR UPDATE`;
@@ -971,7 +991,7 @@ export class DevolucoesService {
         where: { id: devolucaoId },
         include: {
           itens: true,
-          pedido: { select: { status: true, total: true } },
+          pedido: { select: { status: true, total: true, numero: true } },
         },
       });
       if (
@@ -1063,13 +1083,34 @@ export class DevolucoesService {
           ...(valor === 0 ? { status: StatusDevolucao.CONCLUIDA } : {}),
         },
       });
-      return valor;
+      return { valor, pedidoNumero: devolucao.pedido.numero };
     });
+    const { valor, pedidoNumero } = conferida;
 
     if (valor === 0) {
       await this.avisarClienteDaConclusao(devolucaoId);
+      // Depois do commit (a conferência acima é a transição única).
+      await this.ocorrenciasService.registrar({
+        tipo: TipoOcorrencia.DEVOLUCAO,
+        resultado: ResultadoOcorrencia.INFO,
+        codigo: 'DEVOLUCAO_CONCLUIDA_SEM_REEMBOLSO',
+        etapa: 'concluirConferencia',
+        mensagem:
+          'Devolução concluída na conferência sem valor a reembolsar (nenhuma unidade com valor foi aceita).',
+        usuarioId: adminId,
+        pedidoId: alvo.pedidoId,
+        devolucaoId,
+        pedidoNumero,
+        valor: 0,
+        detalhes: {
+          unidadesDevolvidas: [...aceitas.values()].reduce(
+            (soma, quantidade) => soma + quantidade,
+            0,
+          ),
+        },
+      });
     } else {
-      await this.sincronizarReembolso(devolucaoId, true);
+      await this.sincronizarReembolso(devolucaoId, true, adminId);
     }
     return this.buscarParaAnalise(devolucaoId);
   }
@@ -1077,8 +1118,11 @@ export class DevolucoesService {
   // Retoma o reembolso de uma conferência já registrada: confere no Asaas se
   // o estorno desta devolução já existe (e se já foi concluído) antes de
   // pedir um novo. Nunca cria um segundo estorno para a mesma devolução.
-  async reprocessarReembolso(devolucaoId: number): Promise<DevolucaoAnalise> {
-    await this.sincronizarReembolso(devolucaoId, true);
+  async reprocessarReembolso(
+    devolucaoId: number,
+    adminId?: number,
+  ): Promise<DevolucaoAnalise> {
+    await this.sincronizarReembolso(devolucaoId, true, adminId);
     return this.buscarParaAnalise(devolucaoId);
   }
 
@@ -1122,9 +1166,15 @@ export class DevolucoesService {
   // estoqueRestauradoEm e CONCLUIDA, e as unidades aceitas voltam ao
   // estoque na mesma transação (nunca duas vezes; se falhar, nada fica pela
   // metade).
+  //
+  // Ocorrências: coletadas em `estado.ocorrencias` durante a transação e só
+  // registradas DEPOIS do commit (se ela for desfeita, são descartadas). As
+  // falhas são registradas no catch, também fora da transação. `adminId` é
+  // quem agiu (conferência/reprocessamento); sem ele (webhook), o cliente.
   private async sincronizarReembolso(
     devolucaoId: number,
     criar: boolean,
+    adminId?: number,
   ): Promise<void> {
     const alvo = await this.prisma.devolucao.findUnique({
       where: { id: devolucaoId },
@@ -1134,9 +1184,46 @@ export class DevolucoesService {
       throw new NotFoundException('Devolução não encontrada');
     }
 
-    const concluida = await this.prisma.$transaction(
+    const estado: EstadoReembolsoDevolucao = {
+      conflito: false,
+      ocorrencias: [],
+    };
+
+    let concluida: boolean;
+    try {
+      concluida = await this.transacaoDoReembolso(
+        alvo.pedidoId,
+        devolucaoId,
+        criar,
+        adminId,
+        estado,
+      );
+    } catch (erro) {
+      // Depois do rollback: registra a falha e relança o mesmo erro.
+      await this.registrarFalhaDoReembolsoDevolucao(erro, estado);
+      throw erro;
+    }
+
+    for (const ocorrencia of estado.ocorrencias) {
+      await this.ocorrenciasService.registrar(ocorrencia);
+    }
+    if (concluida) {
+      await this.avisarClienteDaConclusao(devolucaoId);
+    }
+  }
+
+  // Transação do estorno da devolução (ver sincronizarReembolso). Nunca
+  // registra ocorrência aqui dentro: só coleta em `estado.ocorrencias`.
+  private transacaoDoReembolso(
+    pedidoId: number,
+    devolucaoId: number,
+    criar: boolean,
+    adminId: number | undefined,
+    estado: EstadoReembolsoDevolucao,
+  ): Promise<boolean> {
+    return this.prisma.$transaction(
       async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "Pedido" WHERE id = ${alvo.pedidoId} FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM "Pedido" WHERE id = ${pedidoId} FOR UPDATE`;
 
         const devolucao = await tx.devolucao.findUniqueOrThrow({
           where: { id: devolucaoId },
@@ -1153,6 +1240,21 @@ export class DevolucoesService {
         });
         const { pedido } = devolucao;
         const valor = Number(devolucao.reembolsoValor ?? 0);
+        const base: Omit<
+          RegistrarOcorrenciaInput,
+          'resultado' | 'codigo' | 'mensagem'
+        > = {
+          tipo: TipoOcorrencia.DEVOLUCAO,
+          etapa: 'sincronizarReembolso',
+          usuarioId: adminId ?? pedido.usuarioId,
+          pedidoId: pedido.id,
+          devolucaoId,
+          pedidoNumero: pedido.numero,
+          valor,
+          gateway: 'asaas',
+          referenciaExterna: devolucao.asaasRefundId ?? pedido.asaasPaymentId,
+        };
+        estado.base = base;
         const pendente =
           (devolucao.status as StatusDevolucao) ===
             StatusDevolucao.EM_CONFERENCIA &&
@@ -1184,6 +1286,7 @@ export class DevolucoesService {
         }
         if (!paymentId) {
           if (criar) {
+            estado.conflito = true;
             throw new ConflictException(
               'Não há informação de pagamento no Asaas para reembolsar este pedido.',
             );
@@ -1210,6 +1313,15 @@ export class DevolucoesService {
             where: { id: devolucaoId },
             data: { asaasRefundId: null },
           });
+          estado.ocorrencias.push({
+            ...base,
+            resultado: ResultadoOcorrencia.ALERTA,
+            codigo: 'ESTORNO_DEVOLUCAO_CANCELADO',
+            mensagem:
+              'O Asaas cancelou o estorno desta devolução. Um novo estorno pode ser solicitado.',
+            referenciaExterna: refundId,
+            chaveIdempotencia: `ESTORNO_DEVOLUCAO_CANCELADO:${refundId}`,
+          });
           refundId = null;
         }
 
@@ -1220,6 +1332,7 @@ export class DevolucoesService {
             return false;
           }
           if ((pedido.status as StatusPedido) !== StatusPedido.PAGO) {
+            estado.conflito = true;
             throw new ConflictException(
               `O pedido desta devolução está com status ${pedido.status}; não é possível reembolsar.`,
             );
@@ -1246,6 +1359,7 @@ export class DevolucoesService {
               ),
           );
           if (semDono) {
+            estado.conflito = true;
             throw new ConflictException(
               'Já existe no Asaas um estorno deste pagamento que não pertence a nenhuma devolução. Confira no painel do Asaas antes de tentar de novo.',
             );
@@ -1258,6 +1372,7 @@ export class DevolucoesService {
             jaEstornado + Math.round(valor * 100) >
             Math.round(Number(pedido.total) * 100)
           ) {
+            estado.conflito = true;
             throw new ConflictException(
               'O reembolso desta devolução, somado aos estornos já feitos, passaria do valor pago no pedido.',
             );
@@ -1287,8 +1402,26 @@ export class DevolucoesService {
             data: { asaasRefundId: estorno.id },
           });
         }
+        const refundIdAtual =
+          typeof estorno.id === 'string' &&
+          estorno.id &&
+          estorno.id !== paymentId
+            ? estorno.id
+            : refundId;
         if (estorno.status !== 'DONE') {
           // Em processamento: quem conclui é o webhook ou um reprocessamento.
+          if (refundIdAtual) {
+            estado.ocorrencias.push({
+              ...base,
+              resultado: ResultadoOcorrencia.INFO,
+              codigo: 'REEMBOLSO_DEVOLUCAO_AGUARDANDO_ASAAS',
+              mensagem:
+                'Estorno da devolução solicitado ao Asaas; aguardando a confirmação.',
+              referenciaExterna: refundIdAtual,
+              detalhes: { statusAtual: estorno.status },
+              chaveIdempotencia: `REEMBOLSO_DEVOLUCAO_AGUARDANDO:${refundIdAtual}`,
+            });
+          }
           return false;
         }
 
@@ -1310,6 +1443,7 @@ export class DevolucoesService {
           return false;
         }
 
+        let unidadesDevolvidas = 0;
         for (const item of devolucao.itens) {
           const aceita = item.quantidadeAceita ?? 0;
           if (aceita === 0) {
@@ -1321,21 +1455,75 @@ export class DevolucoesService {
             this.logger.warn(
               `Estoque não restaurado para o item ${item.itemPedidoId} da devolução ${devolucaoId}: baixa de estoque não registrada na compra.`,
             );
+            estado.ocorrencias.push({
+              ...base,
+              resultado: ResultadoOcorrencia.ALERTA,
+              codigo: 'ESTOQUE_DEVOLUCAO_NAO_RESTAURADO',
+              etapa: 'restaurarEstoqueDevolucao',
+              mensagem:
+                'Unidades aceitas na devolução não voltaram ao estoque: a baixa de estoque deste item não foi registrada na compra. Requer reconciliação manual.',
+              detalhes: {
+                produtoId: item.itemPedido.produtoId,
+                unidadesDevolvidas: aceita,
+              },
+            });
             continue;
           }
           await tx.produto.update({
             where: { id: item.itemPedido.produtoId },
             data: { quantidade: { increment: aceita } },
           });
+          unidadesDevolvidas += aceita;
         }
+        // O claim acima (fechamento.count 1) é a transição única; a chave só
+        // reforça.
+        estado.ocorrencias.push({
+          ...base,
+          resultado: ResultadoOcorrencia.SUCESSO,
+          codigo: 'REEMBOLSO_DEVOLUCAO_CONCLUIDO',
+          mensagem:
+            'Reembolso da devolução confirmado pelo Asaas; devolução concluída e unidades aceitas devolvidas ao estoque.',
+          referenciaExterna: refundIdAtual,
+          detalhes: { unidadesDevolvidas },
+          chaveIdempotencia: `REEMBOLSO_DEVOLUCAO_CONCLUIDO:${devolucaoId}`,
+        });
         return true;
       },
       // A transação espera as respostas do Asaas.
       { timeout: 30_000 },
     );
+  }
 
-    if (concluida) {
-      await this.avisarClienteDaConclusao(devolucaoId);
+  // Falhas do estorno da devolução, registradas fora da transação (que já
+  // foi desfeita). Só os 4 conflitos marcados e a recusa do Asaas; a
+  // resposta HTTP continua a mesma (o erro é relançado por quem chama).
+  private async registrarFalhaDoReembolsoDevolucao(
+    erro: unknown,
+    estado: EstadoReembolsoDevolucao,
+  ): Promise<void> {
+    if (!estado.base) {
+      return;
+    }
+    if (estado.conflito && erro instanceof ConflictException) {
+      await this.ocorrenciasService.registrar({
+        ...estado.base,
+        resultado: ResultadoOcorrencia.ALERTA,
+        codigo: 'CONFLITO_REEMBOLSO_DEVOLUCAO',
+        mensagem: erro.message,
+      });
+    } else if (erro instanceof AsaasErroHttpError) {
+      await this.ocorrenciasService.registrar({
+        ...estado.base,
+        resultado: ResultadoOcorrencia.FALHA,
+        codigo: 'ASAAS_RECUSOU_REEMBOLSO_DEVOLUCAO',
+        mensagem: erro.descricaoAsaas
+          ? `O Asaas recusou o estorno da devolução: ${erro.descricaoAsaas}`
+          : 'O Asaas recusou o estorno da devolução.',
+        detalhes: {
+          asaasCode: erro.codigoAsaas,
+          asaasDescription: erro.descricaoAsaas,
+        },
+      });
     }
   }
 

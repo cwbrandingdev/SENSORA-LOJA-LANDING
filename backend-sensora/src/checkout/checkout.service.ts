@@ -13,6 +13,12 @@ import { escaparHtml } from '../common/utils/html.util';
 import { DevolucoesService } from '../devolucoes/devolucoes.service';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { MailService } from '../mail/mail.service';
+import { ResultadoOcorrencia } from '../ocorrencias/enums/resultado-ocorrencia.enum';
+import { TipoOcorrencia } from '../ocorrencias/enums/tipo-ocorrencia.enum';
+import {
+  OcorrenciasService,
+  RegistrarOcorrenciaInput,
+} from '../ocorrencias/ocorrencias.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
 import { EnderecosService } from '../enderecos/enderecos.service';
@@ -101,6 +107,7 @@ export class CheckoutService {
     private readonly melhorEnvioService: MelhorEnvioService,
     private readonly devolucoesService: DevolucoesService,
     private readonly mailService: MailService,
+    private readonly ocorrenciasService: OcorrenciasService,
   ) {
     this.gateway =
       (this.configService.get<string>('CHECKOUT_GATEWAY') as
@@ -711,6 +718,18 @@ export class CheckoutService {
       this.logger.warn(
         `Webhook Asaas ${evento} recebido para o pedido ${pedido.id} (status atual ${pedido.status}) — nenhuma transição de status aplicada nesta etapa.`,
       );
+      if (evento === 'PAYMENT_REFUND_DENIED') {
+        // Reentrega do mesmo evento não duplica (chave por payment).
+        await this.ocorrenciasService.registrar({
+          ...this.baseOcorrenciaWebhookReembolso(pedido, paymentId),
+          resultado: ResultadoOcorrencia.FALHA,
+          codigo: 'ASAAS_REFUND_DENIED',
+          mensagem:
+            'O Asaas negou o estorno deste pagamento. O pedido continua em reembolso solicitado e precisa de conferência manual.',
+          detalhes: { evento, statusAtual: pedido.status },
+          chaveIdempotencia: `REFUND_DENIED:${paymentId}`,
+        });
+      }
       return;
     }
 
@@ -752,10 +771,13 @@ export class CheckoutService {
         Math.round(reembolsadoEmDevolucoes * 100) >=
         Math.round(Number(pedido.total) * 100)
       ) {
-        await this.prisma.pedido.updateMany({
+        const integral = await this.prisma.pedido.updateMany({
           where: { id: pedido.id, status: StatusPedido.PAGO },
           data: { status: StatusPedido.REEMBOLSADO },
         });
+        if (integral.count === 1) {
+          await this.registrarReembolsoConcluido(pedido, paymentId);
+        }
       } else {
         this.logger.log(
           `Webhook Asaas PAYMENT_REFUNDED para o pedido ${pedido.id}: reembolso parcial por devolução — pedido continua PAGO.`,
@@ -768,7 +790,23 @@ export class CheckoutService {
       this.logger.warn(
         `Webhook Asaas PAYMENT_REFUNDED para o pedido ${pedido.id}, mas o status atual é ${pedido.status} (esperado REEMBOLSO_SOLICITADO) — nenhuma transição aplicada; requer investigação manual.`,
       );
+      await this.ocorrenciasService.registrar({
+        ...this.baseOcorrenciaWebhookReembolso(pedido, paymentId),
+        resultado: ResultadoOcorrencia.ALERTA,
+        codigo: 'REEMBOLSO_STATUS_INESPERADO',
+        mensagem: `O Asaas confirmou o reembolso, mas o pedido estava com status ${pedido.status}; nenhuma mudança foi aplicada. Requer investigação manual.`,
+        detalhes: {
+          evento,
+          statusAtual: pedido.status,
+          statusAnterior: StatusPedido.REEMBOLSO_SOLICITADO,
+        },
+        chaveIdempotencia: `REFUNDED_STATUS_INESPERADO:${paymentId}`,
+      });
       return;
+    }
+
+    if (resultado.count === 1) {
+      await this.registrarReembolsoConcluido(pedido, paymentId);
     }
 
     // Pedido já enviado: o produto saiu do estoque e está com o cliente.
@@ -787,6 +825,49 @@ export class CheckoutService {
     // restauração idempotente de estoque; é o próprio helper quem decide,
     // item a item, o que ainda precisa ser restaurado.
     await this.restaurarEstoqueAposReembolso(pedido.id);
+  }
+
+  // Ocorrências dos webhooks de reembolso — sempre fora de transação.
+  private baseOcorrenciaWebhookReembolso(
+    pedido: {
+      id: number;
+      numero: string;
+      total: unknown;
+      usuarioId: number | null;
+    },
+    paymentId: string,
+  ): Omit<RegistrarOcorrenciaInput, 'resultado' | 'codigo' | 'mensagem'> {
+    return {
+      tipo: TipoOcorrencia.REEMBOLSO,
+      etapa: 'processarEventoReembolsoAsaas',
+      usuarioId: pedido.usuarioId,
+      pedidoId: pedido.id,
+      pedidoNumero: pedido.numero,
+      valor: Number(pedido.total),
+      gateway: 'asaas',
+      referenciaExterna: paymentId,
+    };
+  }
+
+  // Mesma chave de PedidosService: o reembolso integral do pedido só é
+  // registrado uma vez, venha do fluxo direto ou do webhook.
+  private async registrarReembolsoConcluido(
+    pedido: {
+      id: number;
+      numero: string;
+      total: unknown;
+      usuarioId: number | null;
+    },
+    paymentId: string,
+  ): Promise<void> {
+    await this.ocorrenciasService.registrar({
+      ...this.baseOcorrenciaWebhookReembolso(pedido, paymentId),
+      resultado: ResultadoOcorrencia.SUCESSO,
+      codigo: 'REEMBOLSO_CONCLUIDO',
+      mensagem: 'Reembolso integral confirmado pelo Asaas.',
+      detalhes: { evento: 'PAYMENT_REFUNDED' },
+      chaveIdempotencia: `REEMBOLSO_CONCLUIDO:${pedido.id}`,
+    });
   }
 
   // Etapa 5B.6 — rotina única e reutilizável de restauração de estoque após

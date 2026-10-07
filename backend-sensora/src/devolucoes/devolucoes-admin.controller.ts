@@ -163,7 +163,8 @@ export class DevolucoesAdminController {
   @HttpCode(HttpStatus.OK)
   reprocessarReembolso(
     @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: UsuarioAutenticado,
   ): Promise<DevolucaoAnalise> {
-    return this.devolucoesService.reprocessarReembolso(id);
+    return this.devolucoesService.reprocessarReembolso(id, user.id);
   }
 }

@@ -6,6 +6,7 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma } from '../../generated/prisma/client';
 import { AsaasService } from '../asaas/asaas.service';
+import { OcorrenciasService } from '../ocorrencias/ocorrencias.service';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { ImagekitService } from '../imagekit/imagekit.service';
 import { MailService } from '../mail/mail.service';
@@ -385,6 +386,7 @@ describe('DevolucoesService — logística reversa (Etapa 8)', () => {
         { provide: MailService, useValue: mail },
         { provide: MelhorEnvioService, useValue: me },
         { provide: AsaasService, useValue: {} },
+        { provide: OcorrenciasService, useValue: { registrar: jest.fn() } },
       ],
     }).compile();
 

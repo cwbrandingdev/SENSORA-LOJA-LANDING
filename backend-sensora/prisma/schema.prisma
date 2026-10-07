@@ -75,6 +75,8 @@ model Usuario {
   devolucoes              Devolucao[]    @relation("DevolucaoUsuario")
   devolucoesAnalisadas    Devolucao[]    @relation("DevolucaoAnalisadoPor")
   devolucoesConferidas    Devolucao[]    @relation("DevolucaoConferidoPor")
+  // Ocorrências de negócio ligadas a este usuário (ver Ocorrencia).
+  ocorrencias             Ocorrencia[]
 }
 
 // Task 8 (Carrinho/Checkout) — endereços de entrega do próprio usuário
@@ -235,6 +237,9 @@ model Pedido {
   // Solicitações de devolução deste pedido (ver Devolucao, abaixo).
   devolucoes Devolucao[]
 
+  // Ocorrências de negócio deste pedido (ver Ocorrencia).
+  ocorrencias Ocorrencia[]
+
   // Vistoria do Dashboard operacional (Admin) — DashboardService agora
   // agrega Pedido por status (contagem/soma de total) e ordena/filtra por
   // data para as métricas do painel, além do uso já existente de `status`
@@ -333,6 +338,7 @@ model Devolucao {
   itens        ItemDevolucao[]
   evidencias   EvidenciaDevolucao[]
   envio        EnvioDevolucao?
+  ocorrencias  Ocorrencia[]
 
   // pedidoId/usuarioId: devoluções de um pedido e "minhas devoluções" do
   // cliente. status/solicitadaEm: fila e ordenação da listagem do Admin.
@@ -602,4 +608,63 @@ enum StatusFiscal {
   // após a emissão) — nenhuma regra de quando isso é permitido é definida
   // nesta etapa.
   CANCELADA
+}
+
+// Ocorrências de negócio — o que aconteceu com um cliente/pedido e por quê
+// (checkout, pagamento, reembolso, devolução), para o Admin. Diferente de log
+// técnico: só eventos esperados e tratados, com mensagem escrita pelo
+// sistema. Nunca guarda senha, token, CPF, cartão, endereço, headers nem
+// payload bruto de gateway; nome/e-mail do cliente são resolvidos na
+// consulta (usuarioId), nunca copiados. Retenção de 30 dias
+// (OcorrenciasService). As relações são SetNull: excluir usuário, pedido ou
+// devolução nunca apaga o histórico.
+model Ocorrencia {
+  id                Int                 @id @default(autoincrement())
+  criadoEm          DateTime            @default(now())
+  tipo              TipoOcorrencia
+  resultado         ResultadoOcorrencia
+  // Código estável para filtro (ex.: ESTOQUE_INSUFICIENTE).
+  codigo            String
+  // Onde no fluxo aconteceu (ex.: criarCheckout, confirmarPagamento).
+  etapa             String
+  mensagem          String
+  usuarioId         Int?
+  pedidoId          Int?
+  devolucaoId       Int?
+  // Snapshot legível do pedido (não é dado pessoal).
+  pedidoNumero      String?
+  valor             Decimal?            @db.Decimal(10, 2)
+  gateway           String?
+  // Id no gateway (checkout, payment ou refund) para conferir no painel dele.
+  referenciaExterna String?
+  // Contexto operacional pequeno e controlado (ver OcorrenciasService).
+  detalhes          Json?
+  // Só para eventos que podem se repetir (ex.: webhook reenviado); nulo
+  // quando duas ocorrências iguais são legítimas.
+  chaveIdempotencia String?             @unique
+
+  usuario   Usuario?   @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  pedido    Pedido?    @relation(fields: [pedidoId], references: [id], onDelete: SetNull)
+  devolucao Devolucao? @relation(fields: [devolucaoId], references: [id], onDelete: SetNull)
+
+  @@index([criadoEm(sort: Desc)])
+  @@index([tipo, criadoEm(sort: Desc)])
+  @@index([resultado, criadoEm(sort: Desc)])
+  @@index([usuarioId])
+  @@index([pedidoId])
+  @@index([devolucaoId])
+}
+
+enum TipoOcorrencia {
+  CHECKOUT
+  PAGAMENTO
+  REEMBOLSO
+  DEVOLUCAO
+}
+
+enum ResultadoOcorrencia {
+  SUCESSO
+  FALHA
+  ALERTA
+  INFO
 }

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -10,6 +11,10 @@ import {
   AsaasService,
   type AsaasRefund,
 } from '../asaas/asaas.service';
+import {
+  OcorrenciasService,
+  RegistrarOcorrenciaInput,
+} from '../ocorrencias/ocorrencias.service';
 import { ImagekitService } from '../imagekit/imagekit.service';
 import { MailService } from '../mail/mail.service';
 import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
@@ -142,6 +147,7 @@ describe('DevolucoesService — conferência e reembolso (Etapa 9.1)', () => {
   let falharEstoque: boolean;
   let prisma: Record<string, unknown>;
   let mail: { enviarEmail: jest.Mock };
+  let ocorrencias: { registrar: jest.Mock };
 
   // "Asaas" em memória.
   let estornos: AsaasRefund[];
@@ -372,6 +378,7 @@ describe('DevolucoesService — conferência e reembolso (Etapa 9.1)', () => {
       ),
     };
     mail = { enviarEmail: jest.fn(() => Promise.resolve()) };
+    ocorrencias = { registrar: jest.fn(() => Promise.resolve('CRIADA')) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -381,6 +388,7 @@ describe('DevolucoesService — conferência e reembolso (Etapa 9.1)', () => {
         { provide: MailService, useValue: mail },
         { provide: MelhorEnvioService, useValue: {} },
         { provide: AsaasService, useValue: asaas },
+        { provide: OcorrenciasService, useValue: ocorrencias },
       ],
     }).compile();
 
@@ -995,6 +1003,305 @@ describe('DevolucoesService — conferência e reembolso (Etapa 9.1)', () => {
       expect(devolucao(1).status).toBe(StatusDevolucao.EM_CONFERENCIA);
       expect(devolucao(2).status).toBe(StatusDevolucao.CONCLUIDA);
       expect(estado.estoque).toEqual({ 1: 10, 2: 5, 3: 1 });
+    });
+  });
+
+  // Ocorrências de negócio da devolução. O "banco" de ocorrências imita a
+  // chave @unique, e `dentroDaTransacao` prova que nenhuma é registrada
+  // dentro da transação de negócio.
+  describe('ocorrências', () => {
+    let gravadas: RegistrarOcorrenciaInput[];
+    let registradasDentroDaTransacao: number;
+    const doCodigo = (codigo: string) =>
+      gravadas.filter((ocorrencia) => ocorrencia.codigo === codigo);
+
+    beforeEach(() => {
+      gravadas = [];
+      registradasDentroDaTransacao = 0;
+      let dentroDaTransacao = 0;
+      const transacaoOriginal = prisma.$transaction as jest.Mock;
+      prisma.$transaction = jest.fn(
+        (fn: (tx: unknown) => Promise<unknown>, opcoes?: unknown) =>
+          transacaoOriginal(async (tx: unknown) => {
+            dentroDaTransacao += 1;
+            try {
+              return await fn(tx);
+            } finally {
+              dentroDaTransacao -= 1;
+            }
+          }, opcoes) as Promise<unknown>,
+      );
+      ocorrencias.registrar.mockImplementation(
+        (ocorrencia: RegistrarOcorrenciaInput) => {
+          if (dentroDaTransacao > 0) {
+            registradasDentroDaTransacao += 1;
+          }
+          const chave = ocorrencia.chaveIdempotencia;
+          if (chave && gravadas.some((g) => g.chaveIdempotencia === chave)) {
+            return Promise.resolve('DUPLICADA');
+          }
+          gravadas.push(ocorrencia);
+          return Promise.resolve('CRIADA');
+        },
+      );
+    });
+
+    afterEach(() => {
+      expect(registradasDentroDaTransacao).toBe(0);
+    });
+
+    function erroAsaas(): AsaasErroHttpError {
+      const erro = new AsaasErroHttpError('O Asaas recusou a requisição');
+      erro.codigoAsaas = 'invalid_action';
+      erro.descricaoAsaas = 'Saldo insuficiente.';
+      return erro;
+    }
+
+    it('nada aceito: registra DEVOLUCAO_CONCLUIDA_SEM_REEMBOLSO com admin, pedido, devolução e unidades', async () => {
+      await service.concluirConferencia(1, ADMIN_ID, aceitar(0, 0), 'Usado');
+
+      expect(gravadas).toEqual([
+        expect.objectContaining({
+          tipo: 'DEVOLUCAO',
+          resultado: 'INFO',
+          codigo: 'DEVOLUCAO_CONCLUIDA_SEM_REEMBOLSO',
+          etapa: 'concluirConferencia',
+          usuarioId: ADMIN_ID,
+          pedidoId: 10,
+          devolucaoId: 1,
+          pedidoNumero: 'PED-10',
+          valor: 0,
+          detalhes: { unidadesDevolvidas: 0 },
+        }),
+      ]);
+    });
+
+    it('reembolso concluído: registra REEMBOLSO_DEVOLUCAO_CONCLUIDO (SUCESSO) com unidades devolvidas e refundId', async () => {
+      await service.concluirConferencia(1, ADMIN_ID, aceitar(3, 1));
+
+      expect(doCodigo('REEMBOLSO_DEVOLUCAO_CONCLUIDO')).toEqual([
+        expect.objectContaining({
+          resultado: 'SUCESSO',
+          etapa: 'sincronizarReembolso',
+          usuarioId: ADMIN_ID,
+          pedidoId: 10,
+          devolucaoId: 1,
+          pedidoNumero: 'PED-10',
+          valor: 189.9,
+          gateway: 'asaas',
+          referenciaExterna: 'ref_1',
+          detalhes: { unidadesDevolvidas: 4 },
+          chaveIdempotencia: 'REEMBOLSO_DEVOLUCAO_CONCLUIDO:1',
+        }),
+      ]);
+      // A restauração de estoque segue exatamente igual.
+      expect(estado.estoque).toEqual({ 1: 13, 2: 6, 3: 0 });
+    });
+
+    it('estorno PENDING: registra AGUARDANDO uma vez (chave = refundId), mesmo com webhooks repetidos; depois a conclusão uma vez', async () => {
+      statusAoCriar = 'PENDING';
+
+      await service.concluirConferencia(1, ADMIN_ID, aceitar(3, 1));
+      await service.confirmarReembolsosDoPedido(10);
+      await service.confirmarReembolsosDoPedido(10);
+
+      expect(doCodigo('REEMBOLSO_DEVOLUCAO_AGUARDANDO_ASAAS')).toEqual([
+        expect.objectContaining({
+          resultado: 'INFO',
+          referenciaExterna: 'ref_1',
+          chaveIdempotencia: 'REEMBOLSO_DEVOLUCAO_AGUARDANDO:ref_1',
+        }),
+      ]);
+      expect(doCodigo('REEMBOLSO_DEVOLUCAO_CONCLUIDO')).toHaveLength(0);
+
+      estornos[0].status = 'DONE';
+      await Promise.all([
+        service.confirmarReembolsosDoPedido(10),
+        service.confirmarReembolsosDoPedido(10),
+      ]);
+      await service.confirmarReembolsosDoPedido(10);
+
+      expect(doCodigo('REEMBOLSO_DEVOLUCAO_CONCLUIDO')).toHaveLength(1);
+      // Sem admin (webhook): o usuário é o do pedido, se houver.
+      expect(estado.estoque).toEqual({ 1: 13, 2: 6, 3: 0 });
+    });
+
+    it('estorno cancelado pelo Asaas: registra ESTORNO_DEVOLUCAO_CANCELADO uma vez', async () => {
+      statusAoCriar = 'PENDING';
+      await service.concluirConferencia(1, ADMIN_ID, aceitar(3, 1));
+      estornos[0].status = 'CANCELLED';
+
+      await service.confirmarReembolsosDoPedido(10);
+      await service.confirmarReembolsosDoPedido(10);
+
+      expect(doCodigo('ESTORNO_DEVOLUCAO_CANCELADO')).toEqual([
+        expect.objectContaining({
+          resultado: 'ALERTA',
+          devolucaoId: 1,
+          referenciaExterna: 'ref_1',
+          chaveIdempotencia: 'ESTORNO_DEVOLUCAO_CANCELADO:ref_1',
+        }),
+      ]);
+      expect(devolucao().asaasRefundId).toBeNull();
+    });
+
+    it('Asaas recusou: registra ASAAS_RECUSOU_REEMBOLSO_DEVOLUCAO a cada tentativa; resposta e estado iguais', async () => {
+      falhaAoCriar = erroAsaas();
+
+      await expect(
+        service.concluirConferencia(1, ADMIN_ID, aceitar(3, 1)),
+      ).rejects.toBeInstanceOf(AsaasErroHttpError);
+      await expect(
+        service.reprocessarReembolso(1, ADMIN_ID),
+      ).rejects.toBeInstanceOf(AsaasErroHttpError);
+
+      expect(doCodigo('ASAAS_RECUSOU_REEMBOLSO_DEVOLUCAO')).toEqual([
+        expect.objectContaining({
+          resultado: 'FALHA',
+          usuarioId: ADMIN_ID,
+          pedidoId: 10,
+          devolucaoId: 1,
+          valor: 189.9,
+          mensagem: 'O Asaas recusou o estorno da devolução: Saldo insuficiente.',
+          detalhes: {
+            asaasCode: 'invalid_action',
+            asaasDescription: 'Saldo insuficiente.',
+          },
+        }),
+        expect.objectContaining({ codigo: 'ASAAS_RECUSOU_REEMBOLSO_DEVOLUCAO' }),
+      ]);
+      expect(devolucao().status).toBe(StatusDevolucao.EM_CONFERENCIA);
+      expect(estado.estoque).toEqual({ 1: 10, 2: 5, 3: 0 });
+    });
+
+    it.each([
+      [
+        'estorno sem dono no Asaas',
+        () => {
+          estornos.push({
+            id: 'ref_fora',
+            status: 'DONE',
+            value: 50,
+            description: 'Estorno feito no painel',
+          });
+        },
+      ],
+      [
+        'pagamento não localizado',
+        () => {
+          estado.pedido.asaasPaymentId = null;
+        },
+      ],
+    ])(
+      'conflito (%s): 409 igual e CONFLITO_REEMBOLSO_DEVOLUCAO a cada tentativa',
+      async (_caso, preparar) => {
+        preparar();
+
+        const erro: unknown = await service
+          .concluirConferencia(1, ADMIN_ID, aceitar(3, 1))
+          .catch((e: unknown) => e);
+        await expect(
+          service.reprocessarReembolso(1, ADMIN_ID),
+        ).rejects.toBeInstanceOf(ConflictException);
+
+        expect(erro).toBeInstanceOf(ConflictException);
+        expect(doCodigo('CONFLITO_REEMBOLSO_DEVOLUCAO')).toEqual([
+          expect.objectContaining({
+            resultado: 'ALERTA',
+            usuarioId: ADMIN_ID,
+            devolucaoId: 1,
+            valor: 189.9,
+            mensagem: (erro as ConflictException).message,
+          }),
+          expect.objectContaining({ codigo: 'CONFLITO_REEMBOLSO_DEVOLUCAO' }),
+        ]);
+        expect(asaas.estornarPagamento).not.toHaveBeenCalled();
+      },
+    );
+
+    it('pedido que deixou de estar PAGO: conflito registrado no reprocessamento', async () => {
+      falhaAoCriar = erroAsaas();
+      await service
+        .concluirConferencia(1, ADMIN_ID, aceitar(3, 1))
+        .catch(() => undefined);
+      falhaAoCriar = null;
+      estado.pedido.status = StatusPedido.REEMBOLSO_SOLICITADO;
+
+      await expect(
+        service.reprocessarReembolso(1, ADMIN_ID),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(doCodigo('CONFLITO_REEMBOLSO_DEVOLUCAO')).toHaveLength(1);
+    });
+
+    it('"sem reembolso pendente" (409 fora dos 4 conflitos) não vira ocorrência', async () => {
+      await service.concluirConferencia(1, ADMIN_ID, aceitar(3, 1));
+      gravadas = [];
+
+      await expect(
+        service.reprocessarReembolso(1, ADMIN_ID),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(gravadas).toEqual([]);
+    });
+
+    it('item sem baixa de estoque: alerta ESTOQUE_DEVOLUCAO_NAO_RESTAURADO e estoque igual ao de antes', async () => {
+      estado.itensPedido[200].estoqueBaixado = null;
+
+      await service.concluirConferencia(1, ADMIN_ID, aceitar(3, 1));
+
+      expect(doCodigo('ESTOQUE_DEVOLUCAO_NAO_RESTAURADO')).toEqual([
+        expect.objectContaining({
+          resultado: 'ALERTA',
+          etapa: 'restaurarEstoqueDevolucao',
+          devolucaoId: 1,
+          detalhes: { produtoId: 2, unidadesDevolvidas: 1 },
+        }),
+      ]);
+      expect(doCodigo('REEMBOLSO_DEVOLUCAO_CONCLUIDO')[0].detalhes).toEqual({
+        unidadesDevolvidas: 3,
+      });
+      expect(estado.estoque).toEqual({ 1: 13, 2: 5, 3: 0 });
+    });
+
+    it('transação desfeita (falha no estoque): nada coletado dentro dela é registrado; a nova tentativa registra uma vez', async () => {
+      falharEstoque = true;
+
+      await expect(
+        service.concluirConferencia(1, ADMIN_ID, aceitar(3, 1)),
+      ).rejects.toThrow('Falha simulada ao devolver o estoque');
+      expect(doCodigo('REEMBOLSO_DEVOLUCAO_CONCLUIDO')).toHaveLength(0);
+
+      falharEstoque = false;
+      await service.reprocessarReembolso(1, ADMIN_ID);
+
+      expect(doCodigo('REEMBOLSO_DEVOLUCAO_CONCLUIDO')).toHaveLength(1);
+      expect(estado.estoque).toEqual({ 1: 13, 2: 6, 3: 0 });
+    });
+
+    it('isolamento: falha ao gravar a ocorrência não quebra a devolução', async () => {
+      const real = new OcorrenciasService({
+        ocorrencia: {
+          create: jest.fn(() => Promise.reject(new Error('banco fora'))),
+        },
+      } as unknown as PrismaService);
+      const silencio = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      ocorrencias.registrar.mockImplementation(
+        (ocorrencia: RegistrarOcorrenciaInput) => real.registrar(ocorrencia),
+      );
+
+      const resultado = await service.concluirConferencia(
+        1,
+        ADMIN_ID,
+        aceitar(3, 1),
+      );
+
+      expect(resultado.status).toBe(StatusDevolucao.CONCLUIDA);
+      expect(estado.estoque).toEqual({ 1: 13, 2: 6, 3: 0 });
+      expect(silencio).toHaveBeenCalled();
+      silencio.mockRestore();
     });
   });
 });

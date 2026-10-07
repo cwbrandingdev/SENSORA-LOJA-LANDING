@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AsaasService } from '../asaas/asaas.service';
+import { OcorrenciasService } from '../ocorrencias/ocorrencias.service';
 import { ImagekitService } from '../imagekit/imagekit.service';
 import { MailService } from '../mail/mail.service';
 import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
@@ -213,6 +214,7 @@ describe('DevolucoesService — análise pelo ADMIN (Etapa 7)', () => {
         { provide: MailService, useValue: mail },
         { provide: MelhorEnvioService, useValue: {} },
         { provide: AsaasService, useValue: asaas },
+        { provide: OcorrenciasService, useValue: { registrar: jest.fn() } },
         { provide: ProdutosService, useValue: produtos },
       ],
     }).compile();

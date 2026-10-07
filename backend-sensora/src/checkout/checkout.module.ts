@@ -5,6 +5,7 @@ import { DevolucoesModule } from '../devolucoes/devolucoes.module';
 import { EnderecosModule } from '../enderecos/enderecos.module';
 import { MailModule } from '../mail/mail.module';
 import { MelhorEnvioModule } from '../melhor-envio/melhor-envio.module';
+import { OcorrenciasModule } from '../ocorrencias/ocorrencias.module';
 import { ProdutosModule } from '../produtos/produtos.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { CheckoutController } from './checkout.controller';
@@ -26,6 +27,7 @@ import { CheckoutService } from './checkout.service';
     MelhorEnvioModule,
     DevolucoesModule,
     MailModule,
+    OcorrenciasModule,
   ],
   controllers: [CheckoutController],
   providers: [CheckoutService],

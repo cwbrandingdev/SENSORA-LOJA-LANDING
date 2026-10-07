@@ -2,6 +2,7 @@ import { forwardRef, Module } from '@nestjs/common';
 import { AsaasModule } from '../asaas/asaas.module';
 import { EnderecosModule } from '../enderecos/enderecos.module';
 import { ItensPedidoModule } from '../itens-pedido/itens-pedido.module';
+import { OcorrenciasModule } from '../ocorrencias/ocorrencias.module';
 import { ProdutosModule } from '../produtos/produtos.module';
 import { PedidosController } from './pedidos.controller';
 import { PedidosService } from './pedidos.service';
@@ -20,6 +21,7 @@ import { PedidosService } from './pedidos.service';
     ProdutosModule,
     AsaasModule,
     EnderecosModule,
+    OcorrenciasModule,
   ],
   controllers: [PedidosController],
   providers: [PedidosService],

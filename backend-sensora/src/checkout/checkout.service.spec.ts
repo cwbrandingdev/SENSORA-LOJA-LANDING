@@ -9,6 +9,11 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import Stripe from 'stripe';
 import { AsaasService } from '../asaas/asaas.service';
+import {
+  OcorrenciasService,
+  RegistrarOcorrenciaInput,
+  ResultadoRegistro,
+} from '../ocorrencias/ocorrencias.service';
 import { EnderecosService } from '../enderecos/enderecos.service';
 import { DevolucoesService } from '../devolucoes/devolucoes.service';
 import { MailService } from '../mail/mail.service';
@@ -111,6 +116,12 @@ const ASAAS_WEBHOOK_TOKEN = 'asaas_token_teste_fake_para_comparacao_local';
 // devolução com estorno pendente (0 confirmado).
 const devolucoesService = {
   confirmarReembolsosDoPedido: jest.fn(() => Promise.resolve(0)),
+};
+
+// Ocorrências de negócio MOCKADAS (o registro em si é testado em
+// ocorrencias.service.spec.ts).
+const ocorrenciasService = {
+  registrar: jest.fn<Promise<ResultadoRegistro>, [RegistrarOcorrenciaInput]>(() => Promise.resolve('CRIADA')),
 };
 
 function assinarEventoStripe(event: Record<string, unknown>): {
@@ -219,6 +230,7 @@ describe('CheckoutService — webhook Stripe (Task 15, modo de rollback)', () =>
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: { get: (key: string) => configValues[key] },
@@ -424,6 +436,7 @@ describe('CheckoutService — webhook Stripe (Task 15, modo de rollback)', () =>
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: {
@@ -590,6 +603,7 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: { get: (key: string) => configValues[key] },
@@ -841,6 +855,7 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: {
@@ -967,6 +982,7 @@ describe('CheckoutService — webhook Asaas: eventos de reembolso (Etapa 5B.5)',
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: { get: (key: string) => configValues[key] },
@@ -1214,6 +1230,141 @@ describe('CheckoutService — webhook Asaas: eventos de reembolso (Etapa 5B.5)',
       expect(pedidoFake.status).toBe(StatusPedido.PAGO);
     });
   });
+
+  // Ocorrências dos webhooks de reembolso. O "banco" de ocorrências imita a
+  // chave de idempotência @unique: reentrega com a mesma chave não grava.
+  describe('ocorrências dos webhooks de reembolso', () => {
+    let gravadas: RegistrarOcorrenciaInput[];
+    const enviar = (evento: string) =>
+      service.handleWebhook(
+        { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+        Buffer.from(construirEventoPayment(evento, 'pay_123')),
+      );
+    const doCodigo = (codigo: string) =>
+      gravadas.filter((ocorrencia) => ocorrencia.codigo === codigo);
+
+    beforeEach(() => {
+      gravadas = [];
+      ocorrenciasService.registrar.mockReset();
+      ocorrenciasService.registrar.mockImplementation((ocorrencia) => {
+        const chave = ocorrencia.chaveIdempotencia;
+        if (chave && gravadas.some((g) => g.chaveIdempotencia === chave)) {
+          return Promise.resolve('DUPLICADA');
+        }
+        gravadas.push(ocorrencia);
+        return Promise.resolve('CRIADA');
+      });
+    });
+
+    it('PAYMENT_REFUND_DENIED registra ASAAS_REFUND_DENIED uma vez; reentrega não duplica e o pedido não muda', async () => {
+      await enviar('PAYMENT_REFUND_DENIED');
+      await enviar('PAYMENT_REFUND_DENIED');
+
+      expect(doCodigo('ASAAS_REFUND_DENIED')).toEqual([
+        expect.objectContaining({
+          tipo: 'REEMBOLSO',
+          resultado: 'FALHA',
+          etapa: 'processarEventoReembolsoAsaas',
+          pedidoId: 1,
+          valor: 100,
+          gateway: 'asaas',
+          referenciaExterna: 'pay_123',
+          chaveIdempotencia: 'REFUND_DENIED:pay_123',
+        }),
+      ]);
+      expect(ocorrenciasService.registrar).toHaveBeenCalledTimes(2);
+      expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSO_SOLICITADO);
+    });
+
+    it.each(['PAYMENT_REFUND_IN_PROGRESS', 'PAYMENT_PARTIALLY_REFUNDED'])(
+      '%s não gera ocorrência',
+      async (evento) => {
+        await enviar(evento);
+
+        expect(ocorrenciasService.registrar).not.toHaveBeenCalled();
+      },
+    );
+
+    it('PAYMENT_REFUNDED com claim ganho registra REEMBOLSO_CONCLUIDO; reentrega não duplica', async () => {
+      await enviar('PAYMENT_REFUNDED');
+      await enviar('PAYMENT_REFUNDED');
+
+      expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSADO);
+      expect(doCodigo('REEMBOLSO_CONCLUIDO')).toEqual([
+        expect.objectContaining({
+          resultado: 'SUCESSO',
+          pedidoId: 1,
+          chaveIdempotencia: 'REEMBOLSO_CONCLUIDO:1',
+        }),
+      ]);
+      // A reentrega não tem claim (count 0): nem tenta registrar de novo.
+      expect(ocorrenciasService.registrar).toHaveBeenCalledTimes(1);
+    });
+
+    it('PAYMENT_REFUNDED com status inesperado registra alerta uma vez; reentrega não duplica', async () => {
+      pedidoFake.status = StatusPedido.PENDENTE;
+
+      await enviar('PAYMENT_REFUNDED');
+      await enviar('PAYMENT_REFUNDED');
+
+      expect(doCodigo('REEMBOLSO_STATUS_INESPERADO')).toEqual([
+        expect.objectContaining({
+          resultado: 'ALERTA',
+          pedidoId: 1,
+          referenciaExterna: 'pay_123',
+          detalhes: expect.objectContaining({
+            statusAtual: 'PENDENTE',
+          }) as unknown,
+          chaveIdempotencia: 'REFUNDED_STATUS_INESPERADO:pay_123',
+        }),
+      ]);
+      expect(pedidoFake.status).toBe(StatusPedido.PENDENTE);
+    });
+
+    it('PAYMENT_REFUNDED com devoluções cobrindo o total registra REEMBOLSO_CONCLUIDO', async () => {
+      pedidoFake.status = StatusPedido.PAGO;
+      devolucoesService.confirmarReembolsosDoPedido.mockResolvedValueOnce(100);
+
+      await enviar('PAYMENT_REFUNDED');
+
+      expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSADO);
+      expect(doCodigo('REEMBOLSO_CONCLUIDO')).toHaveLength(1);
+    });
+
+    it('PAYMENT_REFUNDED com reembolso parcial por devolução não gera ocorrência de conclusão', async () => {
+      pedidoFake.status = StatusPedido.PAGO;
+      devolucoesService.confirmarReembolsosDoPedido.mockResolvedValueOnce(40);
+
+      await enviar('PAYMENT_REFUNDED');
+
+      expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+      expect(ocorrenciasService.registrar).not.toHaveBeenCalled();
+    });
+
+    it('isolamento: falha ao gravar a ocorrência não quebra o webhook', async () => {
+      const real = new OcorrenciasService({
+        ocorrencia: {
+          create: jest.fn(() => Promise.reject(new Error('banco fora'))),
+        },
+      } as unknown as PrismaService);
+      const silencio = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      ocorrenciasService.registrar.mockImplementation((ocorrencia) =>
+        real.registrar(ocorrencia),
+      );
+
+      await expect(enviar('PAYMENT_REFUNDED')).resolves.toEqual({
+        received: true,
+      });
+      await expect(enviar('PAYMENT_REFUND_DENIED')).resolves.toEqual({
+        received: true,
+      });
+      expect(pedidoFake.status).toBe(StatusPedido.REEMBOLSADO);
+      expect(silencio).toHaveBeenCalled();
+      silencio.mockRestore();
+    });
+  });
 });
 
 // Task 16 (aprovado) — createSession agora rejeita produto com `ativo:
@@ -1241,6 +1392,7 @@ describe('CheckoutService — createSession: produto inativo (Task 16)', () => {
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: {
@@ -1308,6 +1460,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: {
@@ -1426,6 +1579,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: {
@@ -1498,6 +1652,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: {
@@ -1554,6 +1709,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: {
@@ -1608,6 +1764,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: {
@@ -1676,6 +1833,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: {
@@ -1891,6 +2049,7 @@ describe('CheckoutService — restauração de estoque após reembolso (Etapa 5B
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: { get: (key: string) => configValues[key] },
@@ -2266,6 +2425,7 @@ describe('CheckoutService — cotarFrete (Etapa 6.5)', () => {
       providers: [
         CheckoutService,
         { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
         {
           provide: ConfigService,
           useValue: {

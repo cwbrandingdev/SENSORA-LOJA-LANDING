@@ -8,6 +8,7 @@ import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.inter
 import { ImagekitService } from '../imagekit/imagekit.service';
 import { MailService } from '../mail/mail.service';
 import { AsaasService } from '../asaas/asaas.service';
+import { OcorrenciasService } from '../ocorrencias/ocorrencias.service';
 import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
@@ -203,6 +204,7 @@ describe('DevolucoesService — evidências (Etapa 5)', () => {
         { provide: MailService, useValue: {} },
         { provide: MelhorEnvioService, useValue: {} },
         { provide: AsaasService, useValue: {} },
+        { provide: OcorrenciasService, useValue: { registrar: jest.fn() } },
       ],
     }).compile();
 
