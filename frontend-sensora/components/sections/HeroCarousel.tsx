@@ -23,7 +23,12 @@ export default function HeroCarousel() {
   useEffect(() => {
     if (!api) return undefined;
 
-    const onSelect = () => setIndex(api.selectedScrollSnap());
+    // Toda troca de slide (setas, teclado, swipe) reinicia o autoplay do
+    // zero; reset() não faz nada se o autoplay estiver parado.
+    const onSelect = () => {
+      setIndex(api.selectedScrollSnap());
+      api.plugins().autoplay?.reset();
+    };
     onSelect();
     api.on("select", onSelect);
 
