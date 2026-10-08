@@ -5,117 +5,19 @@
 // qualquer outro perfil; o aviso abaixo é só a camada visual (mesmo padrão
 // de /workspace-x/devolucoes). O backend guarda só os últimos 30 dias.
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import InlineErrorState from "@/components/ui/InlineErrorState";
 import TableSkeleton from "@/components/ui/TableSkeleton";
 import { useAuth } from "@/context/AuthContext";
 import { getErrorMessage } from "@/lib/errors";
-import { ROUTES } from "@/lib/routes";
 import {
   PerfilUsuario,
   ROTULOS_RESULTADO_OCORRENCIA,
   ROTULOS_TIPO_OCORRENCIA,
-  TOM_RESULTADO_OCORRENCIA,
-  type DetalhesOcorrencia,
-  type Ocorrencia,
   type PaginaOcorrencias,
 } from "@/lib/types/loja";
 import { listarOcorrencias } from "@/services/ocorrencias";
-
-const formatPrice = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-
-const BARRA_TOM = {
-  neutral: "bg-slate-300",
-  success: "bg-emerald-500",
-  warning: "bg-amber-500",
-  danger: "bg-red-500",
-  info: "bg-sky-500",
-};
-
-const ROTULOS_DETALHES: Record<keyof DetalhesOcorrencia, string> = {
-  produtoId: "Produto (id)",
-  produtoNome: "Produto",
-  quantidadePedida: "Quantidade pedida",
-  quantidadeDisponivel: "Quantidade disponível",
-  unidadesDevolvidas: "Unidades devolvidas",
-  evento: "Evento",
-  statusAnterior: "Status anterior",
-  statusAtual: "Status atual",
-  asaasCode: "Código do Asaas",
-  asaasDescription: "Motivo do Asaas",
-};
-
-function formatarData(data: string) {
-  return new Date(data).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
-}
-
-// Etapa, gateway, referência externa e detalhes — só aparecem ao expandir.
-function Detalhes({ ocorrencia }: { ocorrencia: Ocorrencia }) {
-  const linhas: [string, string][] = [["Etapa", ocorrencia.etapa]];
-  if (ocorrencia.gateway) linhas.push(["Gateway", ocorrencia.gateway]);
-  if (ocorrencia.referenciaExterna) linhas.push(["Referência externa", ocorrencia.referenciaExterna]);
-  for (const [chave, valor] of Object.entries(ocorrencia.detalhes ?? {})) {
-    linhas.push([ROTULOS_DETALHES[chave as keyof DetalhesOcorrencia] ?? chave, String(valor)]);
-  }
-  return (
-    <details className="mt-2 text-sm">
-      <summary className="cursor-pointer text-slate-500 hover:text-brand-navy">Detalhes</summary>
-      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-md bg-slate-50 px-3 py-2">
-        {linhas.map(([rotulo, valor]) => (
-          <div key={rotulo} className="contents">
-            <dt className="text-slate-500">{rotulo}</dt>
-            <dd className="break-all text-slate-700">{valor}</dd>
-          </div>
-        ))}
-      </dl>
-    </details>
-  );
-}
-
-function Linha({ ocorrencia }: { ocorrencia: Ocorrencia }) {
-  const tom = TOM_RESULTADO_OCORRENCIA[ocorrencia.resultado] ?? "neutral";
-  return (
-    <li className="flex items-stretch border-b border-slate-100 last:border-0">
-      <span className={`w-1 shrink-0 ${BARRA_TOM[tom]}`} aria-hidden />
-      <div className="flex min-w-0 flex-1 flex-col gap-1 px-5 py-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone={tom}>
-            {ROTULOS_RESULTADO_OCORRENCIA[ocorrencia.resultado] ?? ocorrencia.resultado}
-          </Badge>
-          <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            {ROTULOS_TIPO_OCORRENCIA[ocorrencia.tipo] ?? ocorrencia.tipo}
-          </span>
-          <code className="text-xs text-slate-400">{ocorrencia.codigo}</code>
-          <span className="ml-auto text-sm text-slate-500">{formatarData(ocorrencia.criadoEm)}</span>
-        </div>
-        <p className="text-slate-800">{ocorrencia.mensagem}</p>
-        <p className="flex flex-wrap gap-x-3 text-sm text-slate-500">
-          {ocorrencia.cliente && <span>{ocorrencia.cliente.nome}</span>}
-          {ocorrencia.pedidoId && (
-            <Link
-              href={`${ROUTES.PEDIDOS}/${ocorrencia.pedidoId}`}
-              className="text-brand-navy underline-offset-2 hover:underline"
-            >
-              Pedido {ocorrencia.pedidoNumero ?? `#${ocorrencia.pedidoId}`}
-            </Link>
-          )}
-          {ocorrencia.devolucaoId && (
-            <Link
-              href={`${ROUTES.DEVOLUCOES}/${ocorrencia.devolucaoId}`}
-              className="text-brand-navy underline-offset-2 hover:underline"
-            >
-              Devolução #{ocorrencia.devolucaoId}
-            </Link>
-          )}
-          {ocorrencia.valor !== null && <span>{formatPrice.format(ocorrencia.valor)}</span>}
-        </p>
-        <Detalhes ocorrencia={ocorrencia} />
-      </div>
-    </li>
-  );
-}
+import OcorrenciasQuadro from "@/components/admin/OcorrenciasQuadro";
 
 function Filtro({
   id,
@@ -252,11 +154,7 @@ export default function OcorrenciasAdminPage() {
         />
       ) : (
         <>
-          <ul className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-            {dados.items.map((ocorrencia) => (
-              <Linha key={ocorrencia.id} ocorrencia={ocorrencia} />
-            ))}
-          </ul>
+          <OcorrenciasQuadro ocorrencias={dados.items} />
 
           {dados.totalPages > 1 && (
             <nav
