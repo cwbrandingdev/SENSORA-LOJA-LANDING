@@ -19,4 +19,10 @@ describe('AppController', () => {
       expect(appController.getHello()).toBe('Hello World!');
     });
   });
+
+  describe('health', () => {
+    it('responde ok', () => {
+      expect(appController.health()).toEqual({ status: 'ok' });
+    });
+  });
 });

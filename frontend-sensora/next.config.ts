@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 // Etapa 8.5 (Security Headers) — origem da API do backend (Nest), sempre
 // cross-origin em relação a este frontend (deploy separado). Extraída de
@@ -54,11 +55,24 @@ const GA_CONNECT_ORIGINS = [
 ];
 const gaEnabled = Boolean(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID);
 
+// Sentry (lib/sentry.ts): o navegador envia os erros para o host do DSN.
+// Sem NEXT_PUBLIC_SENTRY_DSN (ou malformado), nada é liberado.
+function obterOrigemSentry(): string | null {
+  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+  if (!dsn) return null;
+  try {
+    return new URL(dsn).origin;
+  } catch {
+    return null;
+  }
+}
+
 const connectSrcParts = [
   "'self'",
   origemApi,
   IMAGEKIT_UPLOAD_ORIGIN,
   VIACEP_ORIGIN,
+  obterOrigemSentry(),
   ...(gaEnabled ? GA_CONNECT_ORIGINS : []),
 ];
 const connectSrc = connectSrcParts
@@ -158,4 +172,6 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Source maps vão para o Sentry só se SENTRY_AUTH_TOKEN/SENTRY_ORG/
+// SENTRY_PROJECT estiverem no build; sem eles, o build segue normal.
+export default withSentryConfig(nextConfig, { silent: !process.env.CI });

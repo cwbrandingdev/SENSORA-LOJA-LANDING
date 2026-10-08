@@ -1,11 +1,12 @@
+import type { ArgumentsHost } from '@nestjs/common';
 import {
-  ArgumentsHost,
   Catch,
   ExceptionFilter,
   HttpException,
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { SentryExceptionCaptured } from '@sentry/nestjs';
 import { Request, Response } from 'express';
 
 interface HttpExceptionResponseObject {
@@ -37,6 +38,10 @@ const GENERIC_SERVER_ERROR_MESSAGE = 'Internal server error';
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
+  // Envia ao Sentry só as exceções inesperadas (não-HttpException); 4xx e
+  // erros já tratados (ex.: Asaas recusou) não viram alerta. Sem SENTRY_DSN,
+  // não faz nada (ver instrument.ts).
+  @SentryExceptionCaptured()
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
