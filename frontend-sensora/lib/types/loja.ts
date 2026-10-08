@@ -791,3 +791,76 @@ export type CreateUsuarioPayload = {
 };
 
 export type UpdateUsuarioPayload = Partial<CreateUsuarioPayload>;
+
+// Ocorrências de negócio (GET /admin/ocorrencias, só ADMIN) — mesmo
+// contrato de backend-sensora/src/ocorrencias/entities/ocorrencia.entity.ts.
+// Retenção de 30 dias no backend.
+export const ROTULOS_TIPO_OCORRENCIA: Record<string, string> = {
+  CHECKOUT: "Checkout",
+  PAGAMENTO: "Pagamento",
+  REEMBOLSO: "Reembolso",
+  DEVOLUCAO: "Devolução",
+};
+
+export const ROTULOS_RESULTADO_OCORRENCIA: Record<string, string> = {
+  SUCESSO: "Sucesso",
+  FALHA: "Falha",
+  ALERTA: "Alerta",
+  INFO: "Info",
+};
+
+export const TOM_RESULTADO_OCORRENCIA: Record<
+  string,
+  "neutral" | "success" | "warning" | "danger" | "info"
+> = {
+  SUCESSO: "success",
+  FALHA: "danger",
+  ALERTA: "warning",
+  INFO: "info",
+};
+
+export type DetalhesOcorrencia = {
+  produtoId?: number;
+  produtoNome?: string;
+  quantidadePedida?: number;
+  quantidadeDisponivel?: number;
+  unidadesDevolvidas?: number;
+  evento?: string;
+  statusAnterior?: string;
+  statusAtual?: string;
+  asaasCode?: string;
+  asaasDescription?: string;
+};
+
+export type Ocorrencia = {
+  id: number;
+  criadoEm: string;
+  tipo: string;
+  resultado: string;
+  codigo: string;
+  etapa: string;
+  mensagem: string;
+  usuarioId: number | null;
+  cliente: { nome: string; email: string } | null;
+  pedidoId: number | null;
+  devolucaoId: number | null;
+  pedidoNumero: string | null;
+  valor: number | null;
+  gateway: string | null;
+  referenciaExterna: string | null;
+  detalhes: DetalhesOcorrencia | null;
+};
+
+export type PaginaOcorrencias = {
+  items: Ocorrencia[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export type FiltrosOcorrencias = {
+  page?: number;
+  tipo?: string;
+  resultado?: string;
+};

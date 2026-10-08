@@ -33,6 +33,8 @@ export const ROUTES = {
   INTEGRACOES: `${ADMIN_ROUTE}/integracoes`,
   // Etapa 7 — fila e análise das devoluções (ADMIN-only).
   DEVOLUCOES: `${ADMIN_ROUTE}/devolucoes`,
+  // Ocorrências de negócio (reembolso, devolução...) — ADMIN-only.
+  OCORRENCIAS: `${ADMIN_ROUTE}/ocorrencias`,
   LOJA: "/loja",
   LOJA_PRODUTOS: "/loja/produtos",
   LOJA_CARRINHO: "/loja/carrinho",

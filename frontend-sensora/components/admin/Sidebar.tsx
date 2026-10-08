@@ -29,6 +29,7 @@ import {
   UserCog,
   Plug,
   Undo2,
+  Activity,
   Home,
   Search,
   type LucideIcon,
@@ -93,6 +94,7 @@ export function useAdminNav() {
             links: [
               { href: ROUTES.USUARIOS, label: "Usuários", icon: UserCog },
               { href: ROUTES.INTEGRACOES, label: "Integrações", icon: Plug },
+              { href: ROUTES.OCORRENCIAS, label: "Ocorrências", icon: Activity },
             ],
           },
         ]
