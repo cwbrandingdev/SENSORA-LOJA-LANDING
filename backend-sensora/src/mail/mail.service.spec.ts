@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
+import nodemailer from 'nodemailer';
 import { MailService } from './mail.service';
 
 // Etapa 8.0 (Finalização do e-mail/Resend) — primeira suíte automatizada de
@@ -188,5 +189,121 @@ describe('MailService', () => {
         expect(String(argumento)).not.toContain(configValues.RESEND_API_KEY);
       }
     });
+  });
+});
+
+describe('MailService — SMTP (MAIL_PROVIDER=smtp)', () => {
+  let sendMailMock: jest.Mock;
+  let createTransportSpy: jest.SpyInstance;
+  let configValues: Record<string, string>;
+
+  async function criarService(): Promise<MailService> {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        MailService,
+        {
+          provide: ConfigService,
+          useValue: { get: (key: string) => configValues[key] },
+        },
+      ],
+    }).compile();
+    return module.get(MailService);
+  }
+
+  beforeEach(() => {
+    sendMailMock = jest.fn().mockResolvedValue({ messageId: 'smtp-1' });
+    createTransportSpy = jest
+      .spyOn(nodemailer, 'createTransport')
+      .mockReturnValue({ sendMail: sendMailMock } as never);
+
+    configValues = {
+      MAIL_PROVIDER: 'smtp',
+      MAIL_FROM: 'AZUZ <contato@cwbranding.com.br>',
+      MAIL_TO: 'sensorahome@cwbranding.com.br',
+      SMTP_HOST: 'smtp.titan.email',
+      SMTP_PORT: '465',
+      SMTP_SECURE: 'true',
+      SMTP_USER: 'sensorahome@cwbranding.com.br',
+      SMTP_PASS: 'senha_smtp_fake',
+    };
+  });
+
+  afterEach(() => {
+    createTransportSpy.mockRestore();
+  });
+
+  it('isConfigured true com host, user, pass e MAIL_FROM', async () => {
+    expect((await criarService()).isConfigured()).toBe(true);
+  });
+
+  it('isConfigured false quando SMTP_PASS está ausente', async () => {
+    delete configValues.SMTP_PASS;
+    expect((await criarService()).isConfigured()).toBe(false);
+    expect(createTransportSpy).not.toHaveBeenCalled();
+  });
+
+  it('sucesso: envia via Titan SMTP com from, to e BCC da loja, sem chamar o Resend', async () => {
+    const fetchMock = jest.fn();
+    (global as unknown as { fetch: jest.Mock }).fetch = fetchMock;
+    const service = await criarService();
+
+    await service.enviarEmail({
+      to: 'cliente@sensora.dev',
+      subject: 'Pedido PED-1 confirmado — AZUZ',
+      html: '<p>Pago</p>',
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(createTransportSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: 'smtp.titan.email',
+        port: 465,
+        secure: true,
+        auth: {
+          user: 'sensorahome@cwbranding.com.br',
+          pass: 'senha_smtp_fake',
+        },
+      }),
+    );
+    expect(sendMailMock).toHaveBeenCalledWith({
+      from: 'AZUZ <contato@cwbranding.com.br>',
+      to: 'cliente@sensora.dev',
+      bcc: 'sensorahome@cwbranding.com.br',
+      subject: 'Pedido PED-1 confirmado — AZUZ',
+      html: '<p>Pago</p>',
+    });
+  });
+
+  it('não duplica BCC quando o destinatário já é MAIL_TO', async () => {
+    const service = await criarService();
+
+    await service.enviarEmail({
+      to: 'sensorahome@cwbranding.com.br',
+      subject: 'Novo pedido',
+      html: '<p>x</p>',
+    });
+
+    expect(sendMailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'sensorahome@cwbranding.com.br',
+        bcc: undefined,
+      }),
+    );
+  });
+
+  it('SMTP falha: registra erro, nunca lança, senha não aparece no log', async () => {
+    sendMailMock.mockRejectedValueOnce(new Error('SMTP fora'));
+    const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const service = await criarService();
+
+    await expect(
+      service.enviarEmail({ to: 'cliente@sensora.dev', subject: 'x', html: '<p>x</p>' }),
+    ).resolves.toBeUndefined();
+
+    expect(errorSpy).toHaveBeenCalled();
+    const todasAsChamadas = errorSpy.mock.calls.flat();
+    for (const argumento of todasAsChamadas) {
+      expect(String(argumento)).not.toContain('senha_smtp_fake');
+    }
   });
 });
