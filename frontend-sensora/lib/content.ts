@@ -146,7 +146,7 @@ export const CATEGORIES: Category[] = [
   },
   {
     slug: "difusores",
-    label: "Difusores de Aroma",
+    label: "Difusores",
     description:
       "Fragrância contínua e discreta para manter a atmosfera perfumada o dia inteiro.",
     imageSrc: "/images/categories/difusores-de-aroma.jpg",
@@ -267,7 +267,7 @@ const SPRAYS_DE_AMBIENTE: Collection = {
   heroImageSrc: "/images/hero/banner-sprays-novos.png",
   heroImageAlt:
     "Coleção de sprays de ambiente Sensora, com os três frascos lado a lado sobre uma bancada",
-  eyebrow: "Kit",
+  eyebrow: "Produtos",
   ctaLabel: "Conhecer sprays",
   items: [
     {
@@ -319,7 +319,7 @@ const DIFUSORES_DE_AROMA: Collection = {
   heroImageSrc: "/images/hero/difusores-de-aroma-banner.jpg",
   heroImageAlt:
     "Coleção de difusores de aroma Sensora, com os três difusores lado a lado sobre uma bancada",
-  eyebrow: "Kit",
+  eyebrow: "Produtos",
   ctaLabel: "Conhecer difusores",
   items: [
     {

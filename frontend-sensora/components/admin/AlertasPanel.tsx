@@ -23,6 +23,7 @@ import type { Alerta, AlertaSeveridade } from "@/lib/types/loja";
 // backend/src/alertas/entities/alerta.entity.ts) — Badge já suporta os
 // demais tons (neutral/success/info), nenhum é necessário aqui.
 const TONE_POR_SEVERIDADE: Record<AlertaSeveridade, BadgeTone> = {
+  info: "info",
   warning: "warning",
   danger: "danger",
 };

@@ -40,6 +40,7 @@ export class AlertasService {
       pedidosAguardandoEnvio,
       melhorEnvioConectado,
       devolucoesAguardandoAnalise,
+      pedidosNovos,
     ] = await Promise.all([
       this.prisma.produto.count({
         where: { ativo: true, quantidade: 0 },
@@ -69,9 +70,28 @@ export class AlertasService {
           },
         },
       }),
+      // Pedidos pagos ainda dentro do prazo de envio — os mais antigos já
+      // entram em PEDIDO_AGUARDANDO_ENVIO; nunca o mesmo pedido nos dois.
+      this.prisma.pedido.count({
+        where: {
+          status: StatusPedido.PAGO,
+          statusEnvio: StatusEnvio.NAO_ENVIADO,
+          data: { gt: this.calcularDataLimiteEnvio() },
+        },
+      }),
     ]);
 
     const alertas: Alerta[] = [];
+
+    if (pedidosNovos > 0) {
+      alertas.push({
+        tipo: 'PEDIDO_NOVO',
+        severidade: 'info',
+        titulo: 'Novos pedidos pagos para enviar',
+        quantidade: pedidosNovos,
+        link: LINK_PEDIDOS,
+      });
+    }
 
     // Estoque baixo/esgotado — um único alerta (mesmo critério já usado no
     // card "Estoque baixo" do Dashboard, ver DashboardService.obterResumo),
