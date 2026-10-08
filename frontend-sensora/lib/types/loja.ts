@@ -713,9 +713,10 @@ export type AlertaTipo =
   | "REEMBOLSO_SOLICITADO"
   | "PEDIDO_AGUARDANDO_ENVIO"
   | "MELHOR_ENVIO_DESCONECTADO"
-  | "DEVOLUCAO_SOLICITADA";
+  | "DEVOLUCAO_SOLICITADA"
+  | "PEDIDO_NOVO";
 
-export type AlertaSeveridade = "warning" | "danger";
+export type AlertaSeveridade = "info" | "warning" | "danger";
 
 export type Alerta = {
   tipo: AlertaTipo;

@@ -96,3 +96,22 @@ body {
     transform: scaleX(1);
   }
 }
+
+/* Barra de rolagem: alça laranja arredondada, sem trilho. Chrome/Edge/
+   Safari usam ::-webkit-scrollbar; o Firefox só aceita cor e espessura. */
+html::-webkit-scrollbar {
+  width: 12px;
+}
+html::-webkit-scrollbar-track {
+  background: transparent;
+}
+html::-webkit-scrollbar-thumb {
+  background: var(--brand-orange);
+  border-radius: 9999px;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  html {
+    scrollbar-color: var(--brand-orange) transparent;
+  }
+}

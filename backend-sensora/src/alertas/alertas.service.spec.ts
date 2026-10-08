@@ -201,6 +201,50 @@ describe('AlertasService — obterAlertas', () => {
     });
   });
 
+  describe('PEDIDO_NOVO', () => {
+    it('pedidos PAGO + NAO_ENVIADO ainda dentro do prazo: severidade info, primeiro da lista', async () => {
+      const pedidoCount = jest
+        .fn<
+          Promise<number>,
+          [{ where: { data?: { lte?: Date; gt?: Date } } }]
+        >()
+        .mockResolvedValueOnce(1) // reembolsosSolicitados
+        .mockResolvedValueOnce(0) // pedidosAguardandoEnvio
+        .mockResolvedValueOnce(2); // pedidosNovos
+      const service = await criarService({
+        produtoCount: jest.fn().mockResolvedValue(0),
+        pedidoCount,
+        estaConectado: jest.fn().mockResolvedValue(true),
+      });
+
+      const alertas = await service.obterAlertas();
+
+      expect(alertas[0]).toEqual({
+        tipo: 'PEDIDO_NOVO',
+        severidade: 'info',
+        titulo: 'Novos pedidos pagos para enviar',
+        quantidade: 2,
+        link: '/workspace-x/pedidos',
+      });
+      expect(alertas[1].tipo).toBe('REEMBOLSO_SOLICITADO');
+
+      // Mesmo corte de PEDIDO_AGUARDANDO_ENVIO, do outro lado (data > limite):
+      // um pedido nunca entra nos dois alertas.
+      const limiteAguardando = pedidoCount.mock.calls[1][0].where.data?.lte;
+      const novos = pedidoCount.mock.calls[2][0];
+      expect(novos).toMatchObject({
+        where: {
+          status: StatusPedido.PAGO,
+          statusEnvio: StatusEnvio.NAO_ENVIADO,
+        },
+      });
+      const diferenca =
+        (novos.where.data?.gt?.getTime() ?? 0) -
+        (limiteAguardando?.getTime() ?? Infinity);
+      expect(Math.abs(diferenca)).toBeLessThan(1000);
+    });
+  });
+
   describe('MELHOR_ENVIO_DESCONECTADO', () => {
     it('Melhor Envio desconectado: alerta com quantidade 1, nunca chama o provedor (só o service real, sem fetch)', async () => {
       const estaConectado = jest.fn().mockResolvedValue(false);
