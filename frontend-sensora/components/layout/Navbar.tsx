@@ -92,7 +92,10 @@ export default function Navbar() {
   const pathname = usePathname();
   // Desktop: degradê navy só sobre o hero (home); fora dele a barra é branca.
   // Já começa branco nas outras páginas para não piscar o degradê.
-  const [foraHero, setForaHero] = useState(pathname !== "/");
+  // "/index": a regeneração ISR da home na Vercel renderiza com esse pathname
+  // (ver SiteMain.tsx). Sem isso o HTML do servidor saía com a barra branca,
+  // a hidratação não corrige a classe e ela só voltava ao normal ao rolar.
+  const [foraHero, setForaHero] = useState(pathname !== "/" && pathname !== "/index");
   const { isAuthenticated, loading, perfil, logout } = useAuth();
 
   let contaLabel = "Entrar";
