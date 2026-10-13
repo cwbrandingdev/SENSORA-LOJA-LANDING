@@ -95,13 +95,13 @@ test.describe("Minha Conta — Suporte", () => {
     const chamadas = await mockSuporte(page);
 
     await page.goto(SUPORTE_URL);
-    await page.getByLabel("Do que se trata?").selectOption("PEDIDO_ENTREGA");
-    await page.getByLabel("Assunto").fill("Pedido atrasado");
+    await page.getByText("Pedido e entrega", { exact: true }).click();
+    await page.getByLabel("Assunto", { exact: true }).fill("Pedido atrasado");
     await page.getByLabel("Mensagem").fill("Meu pedido PED-10 ainda não chegou.\nPodem verificar?");
     await page.getByRole("button", { name: "Enviar solicitação" }).click();
 
     await expect(page.getByText("Recebemos sua solicitação nº 12.")).toBeVisible();
-    await expect(page.getByText("cliente@sensora.dev")).toBeVisible();
+    await expect(page.getByText("Vamos responder por e-mail")).toContainText("cliente@sensora.dev");
     // Só categoria, assunto e mensagem saem daqui — nunca nome, e-mail ou usuário.
     expect(chamadas.corpos).toEqual([
       {
@@ -112,8 +112,8 @@ test.describe("Minha Conta — Suporte", () => {
     ]);
 
     await page.getByRole("button", { name: "Enviar outra solicitação" }).click();
-    await expect(page.getByLabel("Do que se trata?")).toHaveValue("");
-    await expect(page.getByLabel("Assunto")).toHaveValue("");
+    await expect(page.getByRole("radio", { name: "Pedido e entrega" })).not.toBeChecked();
+    await expect(page.getByLabel("Assunto", { exact: true })).toHaveValue("");
   });
 
   test("campos vazios ou só com espaços mostram o erro e não chamam a API", async ({ page }) => {
@@ -126,8 +126,8 @@ test.describe("Minha Conta — Suporte", () => {
     await expect(page.getByText("Informe o assunto")).toBeVisible();
     await expect(page.getByText("Escreva a mensagem")).toBeVisible();
 
-    await page.getByLabel("Do que se trata?").selectOption("PRODUTO");
-    await page.getByLabel("Assunto").fill("   ");
+    await page.getByText("Dúvida sobre produto", { exact: true }).click();
+    await page.getByLabel("Assunto", { exact: true }).fill("   ");
     await page.getByLabel("Mensagem").fill("Texto");
     await page.getByRole("button", { name: "Enviar solicitação" }).click();
     await expect(page.getByText("Informe o assunto")).toBeVisible();
@@ -141,7 +141,7 @@ test.describe("Minha Conta — Suporte", () => {
 
     await page.goto(SUPORTE_URL);
 
-    await expect(page.getByLabel("Assunto")).toHaveAttribute("maxlength", "150");
+    await expect(page.getByLabel("Assunto", { exact: true })).toHaveAttribute("maxlength", "150");
     await expect(page.getByLabel("Mensagem")).toHaveAttribute("maxlength", "5000");
     await page.getByLabel("Mensagem").fill("abc");
     await expect(page.getByText("3/5000")).toBeVisible();
@@ -152,13 +152,13 @@ test.describe("Minha Conta — Suporte", () => {
     await mockSuporte(page, { status: 400, body: { message: "Escreva a mensagem." } });
 
     await page.goto(SUPORTE_URL);
-    await page.getByLabel("Do que se trata?").selectOption("PEDIDO_ENTREGA");
-    await page.getByLabel("Assunto").fill("Dúvida");
+    await page.getByText("Pedido e entrega", { exact: true }).click();
+    await page.getByLabel("Assunto", { exact: true }).fill("Dúvida");
     await page.getByLabel("Mensagem").fill("Texto");
     await page.getByRole("button", { name: "Enviar solicitação" }).click();
 
     await expect(page.getByText("Escreva a mensagem.", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("Assunto")).toHaveValue("Dúvida");
+    await expect(page.getByLabel("Assunto", { exact: true })).toHaveValue("Dúvida");
   });
 
   test("429 (limite de envios) mostra uma mensagem clara", async ({ page }) => {
@@ -169,8 +169,8 @@ test.describe("Minha Conta — Suporte", () => {
     });
 
     await page.goto(SUPORTE_URL);
-    await page.getByLabel("Do que se trata?").selectOption("PEDIDO_ENTREGA");
-    await page.getByLabel("Assunto").fill("Dúvida");
+    await page.getByText("Pedido e entrega", { exact: true }).click();
+    await page.getByLabel("Assunto", { exact: true }).fill("Dúvida");
     await page.getByLabel("Mensagem").fill("Texto");
     await page.getByRole("button", { name: "Enviar solicitação" }).click();
 
@@ -186,8 +186,8 @@ test.describe("Minha Conta — Suporte", () => {
     const chamadas = await mockSuporte(page, { delayMs: 800 });
 
     await page.goto(SUPORTE_URL);
-    await page.getByLabel("Do que se trata?").selectOption("PEDIDO_ENTREGA");
-    await page.getByLabel("Assunto").fill("Dúvida");
+    await page.getByText("Pedido e entrega", { exact: true }).click();
+    await page.getByLabel("Assunto", { exact: true }).fill("Dúvida");
     await page.getByLabel("Mensagem").fill("Texto");
     const botao = page.getByRole("button", { name: "Enviar solicitação" });
     await botao.click();
@@ -216,7 +216,7 @@ test.describe("Minha Conta — Suporte", () => {
     await page.goto(SUPORTE_URL);
 
     await expect(page.getByText("O formulário de suporte é para contas de cliente.")).toBeVisible();
-    await expect(page.getByLabel("Assunto")).toHaveCount(0);
+    await expect(page.getByLabel("Assunto", { exact: true })).toHaveCount(0);
   });
 
   test("Minha Conta tem o atalho para o suporte", async ({ page }) => {
@@ -226,6 +226,6 @@ test.describe("Minha Conta — Suporte", () => {
     await page.getByRole("link", { name: /Suporte/ }).first().click();
 
     await expect(page).toHaveURL(/\/conta\/suporte$/);
-    await expect(page.getByRole("heading", { name: "Suporte" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Como podemos ajudar?" })).toBeVisible();
   });
 });

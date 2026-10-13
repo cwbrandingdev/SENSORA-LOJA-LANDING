@@ -188,7 +188,7 @@ const menu = (page: Page) =>
   page.getByRole("navigation", { name: "Navegação administrativa" });
 
 test.describe("Admin — Suporte", () => {
-  test("ADMIN vê Suporte no menu e a lista com assunto, cliente, e-mail, data e status", async ({
+  test("ADMIN vê Suporte no menu e o quadro: cada solicitação na coluna do seu status", async ({
     page,
   }) => {
     await seedSession(page);
@@ -197,29 +197,38 @@ test.describe("Admin — Suporte", () => {
     await page.goto(LISTA_URL);
 
     await expect(menu(page).getByRole("link", { name: "Suporte" })).toBeVisible();
-    const linha = page.getByRole("row").filter({ hasText: "Pedido atrasado" });
-    await expect(linha).toContainText("Ana Cliente");
-    await expect(linha).toContainText("ana@sensora.dev");
-    await expect(linha).toContainText("13/10/2026, 12:00");
-    await expect(linha).toContainText("Aberta");
-    await expect(page.getByRole("row").filter({ hasText: "Troca de aroma" })).toContainText(
-      "Resolvida",
+    const aberta = page.getByRole("region", { name: "Aberta" });
+    const cartao = aberta.getByRole("link", { name: /Pedido atrasado/ });
+    await expect(cartao).toContainText("Pedido e entrega");
+    await expect(cartao).toContainText("12:00");
+    await expect(cartao).toContainText("Ana Cliente");
+    await expect(
+      page.getByRole("region", { name: "Resolvida" }).getByRole("link", { name: /Troca de aroma/ }),
+    ).toBeVisible();
+    await expect(page.getByRole("region", { name: "Em atendimento" })).toContainText(
+      "Nada por aqui.",
     );
-    await expect(linha).toContainText("Pedido e entrega");
     expect(chamadas.consultas[0]).toEqual({ status: null, categoria: null, page: "1" });
   });
 
-  test("filtro por status pede ao backend e mostra só as do status", async ({ page }) => {
+  test("clicar no título da coluna filtra pelo status; dá para voltar a todas", async ({
+    page,
+  }) => {
     await seedSession(page);
     const chamadas = await mockSuporte(page);
 
     await page.goto(LISTA_URL);
-    await expect(page.getByRole("link", { name: "Pedido atrasado" })).toBeVisible();
-    await page.getByLabel("Status").selectOption("RESOLVIDA");
+    await expect(page.getByRole("link", { name: /Pedido atrasado/ })).toBeVisible();
+    await page.getByRole("button", { name: "Resolvida" }).click();
 
-    await expect(page.getByRole("link", { name: "Troca de aroma" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Pedido atrasado" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Troca de aroma/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Pedido atrasado/ })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Aberta" })).toHaveCount(0);
     expect(chamadas.consultas.at(-1)).toEqual({ status: "RESOLVIDA", categoria: null, page: "1" });
+
+    await page.getByRole("button", { name: "Mostrar todas as colunas" }).click();
+    await expect(page.getByRole("link", { name: /Pedido atrasado/ })).toBeVisible();
+    expect(chamadas.consultas.at(-1)).toEqual({ status: null, categoria: null, page: "1" });
   });
 
   test("filtro por categoria pede ao backend e mostra só as da categoria", async ({ page }) => {
@@ -240,7 +249,7 @@ test.describe("Admin — Suporte", () => {
     await mockSuporte(page);
 
     await page.goto(LISTA_URL);
-    await page.getByLabel("Status").selectOption("EM_ATENDIMENTO");
+    await page.getByLabel("Categoria").selectOption("CONTA");
 
     await expect(page.getByText("Nenhuma solicitação com estes filtros.")).toBeVisible();
   });
@@ -294,14 +303,14 @@ test.describe("Admin — Suporte", () => {
     );
   });
 
-  test("clicar em qualquer parte da linha (ex.: nome do cliente) abre o detalhe", async ({
+  test("clicar em qualquer parte do cartão (ex.: nome do cliente) abre o detalhe", async ({
     page,
   }) => {
     await seedSession(page);
     await mockSuporte(page);
 
     await page.goto(LISTA_URL);
-    await page.getByRole("row").filter({ hasText: "Pedido atrasado" }).getByText("Ana Cliente").click();
+    await page.getByRole("link", { name: /Pedido atrasado/ }).getByText("Ana Cliente").click();
 
     await expect(page).toHaveURL(/\/workspace-x\/suporte\/1$/);
     await expect(page.getByRole("heading", { name: "Solicitação #1" })).toBeVisible();
