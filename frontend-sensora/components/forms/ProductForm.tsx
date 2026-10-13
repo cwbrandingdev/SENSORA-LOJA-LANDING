@@ -111,10 +111,13 @@ export default function ProductForm({
         <label htmlFor="descricao" className={labelClass}>
           Descrição
         </label>
-        <input
+        {/* textarea (não input) para aceitar quebras de linha e parágrafos —
+            a página do produto já exibe com whitespace-pre-line. */}
+        <textarea
           id="descricao"
-          type="text"
-          className={inputClass}
+          rows={6}
+          maxLength={1000}
+          className={`${inputClass} resize-y`}
           {...register("descricao")}
         />
         {errors.descricao && (
