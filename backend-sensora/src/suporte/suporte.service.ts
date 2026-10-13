@@ -36,6 +36,14 @@ import { StatusSolicitacaoSuporte } from './enums/status-solicitacao-suporte.enu
 // admins de novo. Qualquer diferença cria outra solicitação normalmente.
 export const JANELA_REPETICAO_SUPORTE_MS = 60 * 1000;
 
+// Caixas da Sensora que também recebem o aviso de toda nova solicitação,
+// além dos ADMINs ativos (frontend: EMPRESA.email/emailSuporte em
+// lib/empresa.ts).
+export const EMAILS_FIXOS_AVISO_SUPORTE = [
+  'contato@sensorahome.com.br',
+  'suporte@sensorahome.com.br',
+];
+
 // Caminho da solicitação no painel (frontend: ROUTES.SUPORTE em
 // lib/routes.ts). Vai no e-mail de aviso aos admins.
 const CAMINHO_ADMIN_SUPORTE = '/workspace-x/suporte';
@@ -217,11 +225,13 @@ export class SuporteService {
     return this.paraDetalhe(atualizada);
   }
 
-  // E-mail a cada ADMIN ativo (mesmo padrão de avisarAdminsNovaSolicitacao
-  // em devolucoes.service.ts). Um envio por admin, cada um isolado: a falha
-  // de um não impede os outros. Todo texto do cliente é escapado antes de
-  // entrar no HTML. Nunca lança: a solicitação já está gravada e não
-  // depende do e-mail. Nenhum log leva nome, e-mail ou texto do cliente.
+  // E-mail a cada ADMIN ativo e a cada endereço de EMAILS_FIXOS_AVISO_SUPORTE
+  // (mesmo padrão de avisarAdminsNovaSolicitacao em devolucoes.service.ts).
+  // Um envio por endereço — repetidos (sem diferenciar maiúsculas) recebem
+  // uma vez só —, cada um isolado: a falha de um não impede os outros. Todo
+  // texto do cliente é escapado antes de entrar no HTML. Nunca lança: a
+  // solicitação já está gravada e não depende do e-mail. Nenhum log leva
+  // nome, e-mail ou texto do cliente.
   private async avisarAdminsNovaSolicitacao(
     solicitacao: SolicitacaoSuportePrisma,
   ): Promise<void> {
@@ -232,10 +242,30 @@ export class SuporteService {
       });
       if (admins.length === 0) {
         this.logger.warn(
-          `Nenhum administrador ativo — aviso da solicitação de suporte ${solicitacao.id} não enviado.`,
+          `Nenhum administrador ativo — aviso da solicitação de suporte ${solicitacao.id} vai só para os endereços fixos.`,
         );
-        return;
       }
+
+      // Rótulo só para o log (nunca o endereço).
+      const destinatarios = new Map<
+        string,
+        { email: string; rotulo: string }
+      >();
+      for (const admin of admins) {
+        destinatarios.set(admin.email.trim().toLowerCase(), {
+          email: admin.email,
+          rotulo: `o admin ${admin.id}`,
+        });
+      }
+      EMAILS_FIXOS_AVISO_SUPORTE.forEach((email, i) => {
+        const chave = email.trim().toLowerCase();
+        if (!destinatarios.has(chave)) {
+          destinatarios.set(chave, {
+            email,
+            rotulo: `o endereço fixo ${i + 1}`,
+          });
+        }
+      });
 
       const frontendUrl = this.configService.get<string>('FRONTEND_URL');
       const acesso = frontendUrl
@@ -261,23 +291,23 @@ export class SuporteService {
       // O assunto já foi normalizado para uma linha só (normalizarAssunto).
       const subject = `Nova solicitação de suporte (${categoria}) — ${solicitacao.assunto}`;
 
-      for (const admin of admins) {
+      for (const destinatario of destinatarios.values()) {
         try {
           await this.mailService.enviarEmail({
-            to: admin.email,
+            to: destinatario.email,
             subject,
             html,
           });
         } catch (erro) {
           // Sem o endereço no log (mesma política do MailService).
           this.logger.error(
-            `Falha ao avisar o admin ${admin.id} sobre a solicitação de suporte ${solicitacao.id}.`,
+            `Falha ao avisar ${destinatario.rotulo} sobre a solicitação de suporte ${solicitacao.id}.`,
             erro instanceof Error ? erro.stack : String(erro),
           );
         }
       }
       this.logger.log(
-        `Aviso da solicitação de suporte ${solicitacao.id} enviado ao provedor para ${admins.length} administrador(es) ativo(s).`,
+        `Aviso da solicitação de suporte ${solicitacao.id} enviado ao provedor para ${destinatarios.size} destinatário(s) (${admins.length} administrador(es) ativo(s) e os endereços fixos).`,
       );
     } catch (erro) {
       this.logger.error(

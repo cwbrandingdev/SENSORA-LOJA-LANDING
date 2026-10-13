@@ -23,6 +23,10 @@ const CLIENTE: UsuarioAutenticado = {
 const ADMIN_1 = { id: 1, email: 'admin1@sensora.dev' };
 const ADMIN_2 = { id: 2, email: 'admin2@sensora.dev' };
 
+// Caixas da Sensora que recebem todo aviso, além dos ADMINs ativos.
+const CONTATO = 'contato@sensorahome.com.br';
+const SUPORTE = 'suporte@sensorahome.com.br';
+
 const AGORA = new Date('2026-10-13T15:00:00Z');
 
 type SolicitacaoFake = {
@@ -296,7 +300,7 @@ describe('SuporteService', () => {
   // Aviso aos admins
   // -------------------------------------------------------------------
 
-  it('grava ANTES de avisar e envia um e-mail a cada ADMIN ativo com cliente, data, assunto, mensagem e link', async () => {
+  it('grava ANTES de avisar e envia um e-mail a cada ADMIN ativo e às caixas contato/suporte, com cliente, data, assunto, mensagem e link', async () => {
     await criar(
       { assunto: 'Troca de aroma', mensagem: 'Linha 1\nLinha 2' },
       CLIENTE,
@@ -310,7 +314,15 @@ describe('SuporteService', () => {
         where: { perfil: PerfilUsuario.ADMIN, ativo: true },
       }),
     );
-    expect(enviados().map((e) => e.to)).toEqual([ADMIN_1.email, ADMIN_2.email]);
+    expect(enviados().map((e) => e.to)).toEqual([
+      ADMIN_1.email,
+      ADMIN_2.email,
+      CONTATO,
+      SUPORTE,
+    ]);
+    // Todos recebem a mesma mensagem.
+    expect(new Set(enviados().map((e) => e.subject)).size).toBe(1);
+    expect(new Set(enviados().map((e) => e.html)).size).toBe(1);
 
     const { subject, html } = enviados()[0];
     expect(subject).toBe(
@@ -327,7 +339,7 @@ describe('SuporteService', () => {
 
     // Registro de que o aviso foi disparado, sem nenhum dado do cliente.
     expect(infoLog).toHaveBeenCalledWith(
-      'Aviso da solicitação de suporte 1 enviado ao provedor para 2 administrador(es) ativo(s).',
+      'Aviso da solicitação de suporte 1 enviado ao provedor para 4 destinatário(s) (2 administrador(es) ativo(s) e os endereços fixos).',
     );
     const logs = JSON.stringify([
       infoLog.mock.calls,
@@ -363,16 +375,51 @@ describe('SuporteService', () => {
 
     await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
 
-    expect(enviados().map((e) => e.to)).toEqual([ADMIN_1.email, ADMIN_2.email]);
+    expect(enviados().map((e) => e.to)).toEqual([
+      ADMIN_1.email,
+      ADMIN_2.email,
+      CONTATO,
+      SUPORTE,
+    ]);
     expect(erroLog).toHaveBeenCalledWith(
       'Falha ao avisar o admin 1 sobre a solicitação de suporte 1.',
       expect.any(String),
     );
   });
 
+  it('falha no envio a um endereço fixo não impede o envio ao seguinte (log sem o endereço)', async () => {
+    enviarEmail
+      .mockResolvedValueOnce(undefined) // admin 1
+      .mockResolvedValueOnce(undefined) // admin 2
+      .mockRejectedValueOnce(new Error('provedor fora do ar')); // contato
+
+    await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
+
+    expect(enviados().map((e) => e.to)).toContain(SUPORTE);
+    expect(erroLog).toHaveBeenCalledWith(
+      'Falha ao avisar o endereço fixo 1 sobre a solicitação de suporte 1.',
+      expect.any(String),
+    );
+    expect(JSON.stringify(erroLog.mock.calls)).not.toContain('@');
+  });
+
+  it('endereço fixo que também é de um ADMIN ativo (maiúsculas diferentes) recebe uma cópia só', async () => {
+    admins = [ADMIN_1, { id: 3, email: 'Suporte@SensoraHome.com.br' }];
+
+    await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
+
+    expect(enviados().map((e) => e.to)).toEqual([
+      ADMIN_1.email,
+      'Suporte@SensoraHome.com.br',
+      CONTATO,
+    ]);
+  });
+
   it('falha no aviso (e-mail ou leitura dos admins) não desfaz a solicitação nem vira erro para o cliente', async () => {
     enviarEmail.mockRejectedValue(new Error('provedor fora do ar'));
     const primeira = await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
+    // Todas as 4 tentativas falharam e a solicitação continua gravada.
+    expect(enviarEmail).toHaveBeenCalledTimes(4);
 
     buscarAdmins.mockRejectedValueOnce(new Error('banco instável'));
     const segunda = await criar({ assunto: 'C', mensagem: 'D' }, CLIENTE);
@@ -386,14 +433,14 @@ describe('SuporteService', () => {
     );
   });
 
-  it('sem ADMIN ativo: registra aviso no log e não envia nada', async () => {
+  it('sem ADMIN ativo: registra aviso no log e as caixas contato/suporte recebem mesmo assim', async () => {
     admins = [];
 
     await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
 
-    expect(enviarEmail).not.toHaveBeenCalled();
+    expect(enviados().map((e) => e.to)).toEqual([CONTATO, SUPORTE]);
     expect(avisoLog).toHaveBeenCalledWith(
-      'Nenhum administrador ativo — aviso da solicitação de suporte 1 não enviado.',
+      'Nenhum administrador ativo — aviso da solicitação de suporte 1 vai só para os endereços fixos.',
     );
   });
 
@@ -444,7 +491,7 @@ describe('SuporteService', () => {
     );
 
     expect(outra.id).toBe(2);
-    expect(enviarEmail).toHaveBeenCalledTimes(2);
+    expect(enviarEmail).toHaveBeenCalledTimes(4);
   });
 
   it('a mesma solicitação fora da janela é criada normalmente', async () => {
