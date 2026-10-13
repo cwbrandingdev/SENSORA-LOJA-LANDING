@@ -23,6 +23,7 @@ import { PedidosModule } from './pedidos/pedidos.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProdutosModule } from './produtos/produtos.module';
 import { PublicModule } from './public/public.module';
+import { SuporteModule } from './suporte/suporte.module';
 import { UsuariosModule } from './usuarios/usuarios.module';
 
 @Module({
@@ -159,6 +160,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     PublicModule,
     ImagekitModule,
     OcorrenciasModule,
+    SuporteModule,
   ],
   controllers: [AppController],
   providers: [

@@ -582,7 +582,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     id: "contato",
     question: "Como entro em contato com a Sensora?",
     answer:
-      "Por e-mail, em contato@sensorahome.com.br, ou pelo Instagram @sensoramarketingsensorial. Razão social, CNPJ e endereço estão na página Quem somos.",
+      "Se você tem conta, abra uma solicitação em Minha Conta → Suporte: a resposta chega por e-mail. Também atendemos por e-mail, em contato@sensorahome.com.br, e pelo Instagram @sensoramarketingsensorial. Razão social, CNPJ e endereço estão na página Quem somos.",
   },
   {
     id: "arrependimento",

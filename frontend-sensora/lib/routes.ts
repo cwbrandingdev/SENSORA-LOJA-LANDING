@@ -35,6 +35,10 @@ export const ROUTES = {
   DEVOLUCOES: `${ADMIN_ROUTE}/devolucoes`,
   // Ocorrências de negócio (reembolso, devolução...) — ADMIN-only.
   OCORRENCIAS: `${ADMIN_ROUTE}/ocorrencias`,
+  // Solicitações de suporte abertas pelos clientes — ADMIN-only. O detalhe
+  // (/suporte/:id) é o link do e-mail de aviso aos admins (backend:
+  // CAMINHO_ADMIN_SUPORTE em suporte.service.ts).
+  SUPORTE: `${ADMIN_ROUTE}/suporte`,
   LOJA: "/loja",
   LOJA_PRODUTOS: "/loja/produtos",
   LOJA_CARRINHO: "/loja/carrinho",
@@ -55,6 +59,9 @@ export const ROUTES = {
   CONTA_SEGURANCA: "/conta/seguranca",
   // Etapa 4 (Minha Conta / Endereços) — mesma proteção herdada de /conta.
   CONTA_ENDERECOS: "/conta/enderecos",
+  // Formulário de suporte (POST /suporte, só CLIENTE) — mesma proteção
+  // herdada de /conta: visitante vai ao login e volta para cá.
+  CONTA_SUPORTE: "/conta/suporte",
   // Task 12 (+ Task 21 — migração Stripe → Asaas) — destino de retorno do
   // Asaas Checkout após pagamento concluído (callback.successUrl). Só a
   // página de retorno visual; a confirmação real do pagamento é sempre do

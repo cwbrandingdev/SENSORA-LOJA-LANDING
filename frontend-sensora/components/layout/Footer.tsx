@@ -9,6 +9,7 @@ import {
   PRODUCT_CATEGORIES,
 } from "@/lib/content";
 import { ROTAS_LEGAIS } from "@/lib/empresa";
+import { ROUTES } from "@/lib/routes";
 
 export default function Footer() {
   const year = new Date().getFullYear();
@@ -95,6 +96,9 @@ export default function Footer() {
             </li>
             <li>
               <FooterLink href="/faq">Perguntas frequentes</FooterLink>
+            </li>
+            <li>
+              <FooterLink href={ROUTES.CONTA_SUPORTE}>Suporte</FooterLink>
             </li>
             <li>
               <CookiePreferencesTrigger />

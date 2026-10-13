@@ -11,7 +11,7 @@
 // fallback já usado ali.
 import { useMemo } from "react";
 import Link from "next/link";
-import { Package, User, MapPin, ShieldCheck, ArrowRight } from "lucide-react";
+import { Package, User, MapPin, ShieldCheck, LifeBuoy, ArrowRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { decodeToken } from "@/lib/jwt";
 import { getToken } from "@/lib/storage";
@@ -55,6 +55,12 @@ const CARDS: ContaCard[] = [
     descricao: "Altere sua senha da sua conta.",
     icon: ShieldCheck,
     href: ROUTES.CONTA_SEGURANCA,
+  },
+  {
+    titulo: "Suporte",
+    descricao: "Fale com a gente. A resposta chega por e-mail.",
+    icon: LifeBuoy,
+    href: ROUTES.CONTA_SUPORTE,
   },
 ];
 

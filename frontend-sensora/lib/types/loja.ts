@@ -865,3 +865,48 @@ export type FiltrosOcorrencias = {
   tipo?: string;
   resultado?: string;
 };
+
+// Suporte ao cliente (POST /suporte e /admin/suporte). A resposta ao
+// cliente é sempre por e-mail, fora do sistema.
+export type StatusSolicitacaoSuporte = "ABERTA" | "EM_ATENDIMENTO" | "RESOLVIDA";
+
+export const ROTULOS_STATUS_SUPORTE: Record<StatusSolicitacaoSuporte, string> = {
+  ABERTA: "Aberta",
+  EM_ATENDIMENTO: "Em atendimento",
+  RESOLVIDA: "Resolvida",
+};
+
+export type CriarSolicitacaoSuportePayload = {
+  assunto: string;
+  mensagem: string;
+};
+
+export type SolicitacaoSuporteCriada = {
+  id: number;
+  assunto: string;
+  status: StatusSolicitacaoSuporte;
+  criadaEm: string;
+};
+
+export type SolicitacaoSuporteResumo = {
+  id: number;
+  nome: string;
+  email: string;
+  assunto: string;
+  status: StatusSolicitacaoSuporte;
+  criadaEm: string;
+  atualizadaEm: string;
+};
+
+export type SolicitacaoSuporteDetalhe = SolicitacaoSuporteResumo & {
+  usuarioId: number;
+  mensagem: string;
+};
+
+export type PaginaSolicitacoesSuporte = {
+  items: SolicitacaoSuporteResumo[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};

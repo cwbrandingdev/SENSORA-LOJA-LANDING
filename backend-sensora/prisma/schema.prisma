@@ -10,12 +10,12 @@ datasource db {
 }
 
 model Usuario {
-  id                      Int            @id @default(autoincrement())
+  id                      Int                  @id @default(autoincrement())
   nome                    String
-  email                   String         @unique
+  email                   String               @unique
   senha                   String
   perfil                  PerfilUsuario
-  ativo                   Boolean        @default(true)
+  ativo                   Boolean              @default(true)
   // Etapa 8.3 (achado HIGH da auditoria — resetToken em texto puro) — grava
   // o HASH SHA-256 do token de redefinição de senha, nunca o token original
   // (mesmo mecanismo já usado por emailVerificationHash/RefreshToken.
@@ -24,7 +24,7 @@ model Usuario {
   // dev/reviewer a assumir (incorretamente) que o valor era o token em
   // texto puro comparável diretamente. @unique pelo mesmo motivo de
   // emailVerificationHash logo abaixo.
-  resetTokenHash          String?        @unique
+  resetTokenHash          String?              @unique
   resetTokenExpiry        DateTime?
   // Etapa 6.4 (Confirmação de e-mail) — @default(true) é deliberado, não um
   // descuido: cobre de uma vez só duas exigências aprovadas (i) contas já
@@ -35,14 +35,14 @@ model Usuario {
   // opção emailVerificado) também nascem `true`, sem precisar de nenhum
   // código especial para elas. Só o cadastro público (AuthService.register)
   // grava `false` explicitamente ao criar a conta — ver UsuariosService.create.
-  emailVerificado         Boolean        @default(true)
+  emailVerificado         Boolean              @default(true)
   emailVerificadoEm       DateTime?
   // Hash SHA-256 do token de confirmação (nunca o token em texto puro —
   // mesmo raciocínio de RefreshToken.tokenHash). Campo próprio, nunca
   // reaproveita resetTokenHash/resetTokenExpiry: são fluxos diferentes
   // (trocar senha vs. confirmar e-mail), e misturar os dois no mesmo campo
   // abriria a possibilidade de um token de um fluxo ser aceito no outro.
-  emailVerificationHash   String?        @unique
+  emailVerificationHash   String?              @unique
   emailVerificationExpiry DateTime?
   // MÉDIO-3 (e-mail pendente) — troca de e-mail em Minha Conta. `email`
   // continua sendo o endereço oficial até o novo ser confirmado; o novo
@@ -52,7 +52,7 @@ model Usuario {
   // @unique de propósito: o pendente não reserva o endereço; o @unique de
   // `email` decide na confirmação.
   emailPendente           String?
-  emailPendenteTokenHash  String?        @unique
+  emailPendenteTokenHash  String?              @unique
   emailPendenteExpiraEm   DateTime?
   // Etapa — Dados do Cliente / Cadastro. Ambos opcionais (nunca exigidos no
   // cadastro público, só preenchíveis depois em Minha Conta — ver
@@ -65,18 +65,20 @@ model Usuario {
   // contato, comumente compartilhado entre pessoas (família/empresa),
   // um unique aqui geraria fricção sem ganho de segurança real (ver
   // auditoria "Dados do Cliente / Cadastro").
-  cpf                     String?        @unique
+  cpf                     String?              @unique
   telefone                String?
   refreshTokens           RefreshToken[]
   pedidos                 Pedido[]
   enderecos               Endereco[]
   // Devoluções: as solicitadas pelo próprio usuário (cliente) e as que ele
   // analisou (ADMIN). Duas relações com Devolucao, por isso os nomes.
-  devolucoes              Devolucao[]    @relation("DevolucaoUsuario")
-  devolucoesAnalisadas    Devolucao[]    @relation("DevolucaoAnalisadoPor")
-  devolucoesConferidas    Devolucao[]    @relation("DevolucaoConferidoPor")
+  devolucoes              Devolucao[]          @relation("DevolucaoUsuario")
+  devolucoesAnalisadas    Devolucao[]          @relation("DevolucaoAnalisadoPor")
+  devolucoesConferidas    Devolucao[]          @relation("DevolucaoConferidoPor")
   // Ocorrências de negócio ligadas a este usuário (ver Ocorrencia).
   ocorrencias             Ocorrencia[]
+  // Solicitações de suporte abertas pelo próprio usuário (cliente).
+  solicitacoesSuporte     SolicitacaoSuporte[]
 }
 
 // Task 8 (Carrinho/Checkout) — endereços de entrega do próprio usuário
@@ -667,4 +669,40 @@ enum ResultadoOcorrencia {
   FALHA
   ALERTA
   INFO
+}
+
+// Suporte ao cliente: solicitação aberta pelo cliente autenticado em
+// /conta/suporte e acompanhada pelo ADMIN em /workspace-x/suporte. A
+// resposta é sempre por e-mail, fora do sistema. `nome` e `email` são uma
+// cópia da conta no momento da abertura (lidos do banco, nunca do corpo da
+// requisição): é o endereço para onde a resposta vai, mesmo que o cliente
+// troque o e-mail depois. Excluir o usuário exclui as solicitações dele
+// (mesmo tratamento de Endereco/RefreshToken).
+model SolicitacaoSuporte {
+  id           Int                      @id @default(autoincrement())
+  usuarioId    Int
+  nome         String
+  email        String
+  assunto      String
+  mensagem     String
+  status       StatusSolicitacaoSuporte @default(ABERTA)
+  criadaEm     DateTime                 @default(now())
+  atualizadaEm DateTime                 @updatedAt
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  // usuarioId: repetição recente do mesmo cliente. status/criadaEm: fila e
+  // ordenação da listagem do Admin.
+  @@index([usuarioId])
+  @@index([status, criadaEm(sort: Desc)])
+  @@index([criadaEm(sort: Desc)])
+}
+
+// ABERTA -> EM_ATENDIMENTO -> RESOLVIDA. Uma solicitação resolvida pode
+// voltar a EM_ATENDIMENTO (o cliente respondeu o e-mail); nunca volta a
+// ABERTA, que é só o estado inicial.
+enum StatusSolicitacaoSuporte {
+  ABERTA
+  EM_ATENDIMENTO
+  RESOLVIDA
 }
