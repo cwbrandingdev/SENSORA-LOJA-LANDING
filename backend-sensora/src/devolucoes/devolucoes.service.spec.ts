@@ -138,6 +138,7 @@ describe('DevolucoesService — criar (Etapa 3)', () => {
   let melhorEnvio: Record<string, jest.Mock>;
   let imagekit: Record<string, jest.Mock>;
   let avisoLog: jest.SpyInstance;
+  let infoLog: jest.SpyInstance;
   let erroLog: jest.SpyInstance;
 
   beforeEach(async () => {
@@ -171,6 +172,7 @@ describe('DevolucoesService — criar (Etapa 3)', () => {
     melhorEnvio = mockDeTodosOsMetodos(MelhorEnvioService);
     imagekit = mockDeTodosOsMetodos(ImagekitService);
     avisoLog = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    infoLog = jest.spyOn(Logger.prototype, 'log').mockImplementation();
     erroLog = jest.spyOn(Logger.prototype, 'error').mockImplementation();
     // 30 s depois do horário em que o fake grava as devoluções: dentro da
     // janela de repetição.
@@ -704,6 +706,11 @@ describe('DevolucoesService — criar (Etapa 3)', () => {
     expect(html).toContain(
       'href="https://sensorahome.com.br/workspace-x/devolucoes/1"',
     );
+    // Fica registrado que o aviso foi disparado (sem nenhum endereço).
+    expect(infoLog).toHaveBeenCalledWith(
+      'Aviso da nova devolução 1 enviado ao provedor para 2 administrador(es) ativo(s).',
+    );
+    expect(JSON.stringify(infoLog.mock.calls)).not.toContain('@');
   });
 
   it('U: VENDEDOR e ADMIN inativo não recebem; a consulta pede só ADMIN ativo', async () => {
@@ -790,6 +797,9 @@ describe('DevolucoesService — criar (Etapa 3)', () => {
     expect(enviarEmail).not.toHaveBeenCalled();
     expect(avisoLog).toHaveBeenCalledWith(
       'Nenhum administrador ativo — aviso da nova devolução 1 não enviado.',
+    );
+    expect(infoLog).not.toHaveBeenCalledWith(
+      expect.stringContaining('Aviso da nova devolução'),
     );
     expect(devolucoesFake).toHaveLength(1);
   });

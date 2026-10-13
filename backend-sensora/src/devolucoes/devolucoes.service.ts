@@ -387,6 +387,11 @@ export class DevolucoesService {
           );
         }
       }
+      // Registro de que o aviso foi disparado; uma recusa do provedor
+      // aparece logo antes, no log do MailService, com o motivo.
+      this.logger.log(
+        `Aviso da nova devolução ${devolucaoId} enviado ao provedor para ${admins.length} administrador(es) ativo(s).`,
+      );
     } catch (erro) {
       this.logger.error(
         `Falha ao avisar os admins sobre a devolução ${devolucaoId}.`,

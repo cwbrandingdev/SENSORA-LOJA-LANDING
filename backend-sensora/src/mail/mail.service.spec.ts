@@ -160,6 +160,61 @@ describe('MailService', () => {
       expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('503'));
     });
 
+    it('Resend recusa com motivo: o log traz o name/message do Resend, com e-mails mascarados e sem a API key', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: () =>
+          Promise.resolve({
+            name: 'validation_error',
+            message:
+              'You can only send testing emails to your own email address (dono@sensora.dev).',
+          }),
+      });
+      const errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      await expect(
+        service.enviarEmail({
+          to: 'admin@sensora.dev',
+          subject: 'x',
+          html: '<p>x</p>',
+        }),
+      ).resolves.toBeUndefined();
+
+      const mensagem = String(
+        errorSpy.mock.calls[errorSpy.mock.calls.length - 1][0],
+      );
+      expect(mensagem).toBe(
+        'Falha ao enviar e-mail via Resend: HTTP 403 — validation_error: You can only send testing emails to your own email address (<e-mail>).',
+      );
+      expect(mensagem).not.toContain('dono@sensora.dev');
+      expect(mensagem).not.toContain('admin@sensora.dev');
+      expect(mensagem).not.toContain(configValues.RESEND_API_KEY);
+    });
+
+    it('Resend recusa com corpo que não é JSON: o log mantém só o status HTTP', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+      });
+      const errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      await service.enviarEmail({
+        to: 'admin@sensora.dev',
+        subject: 'x',
+        html: '<p>x</p>',
+      });
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Falha ao enviar e-mail via Resend: HTTP 502',
+      );
+    });
+
     it('timeout/falha de rede (fetch rejeita): registra erro, nunca lança para quem chamou — provedor indisponível não derruba o fluxo', async () => {
       fetchMock.mockRejectedValueOnce(new Error('The operation was aborted'));
       const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);

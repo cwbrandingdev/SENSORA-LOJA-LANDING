@@ -107,7 +107,7 @@ export class MailService {
 
       if (!response.ok) {
         this.logger.error(
-          `Falha ao enviar e-mail via Resend: HTTP ${response.status}`,
+          `Falha ao enviar e-mail via Resend: HTTP ${response.status}${await this.motivoDoResend(response)}`,
         );
       }
     } catch (error) {
@@ -115,6 +115,31 @@ export class MailService {
         'Falha ao enviar e-mail via Resend',
         error instanceof Error ? error.stack : String(error),
       );
+    }
+  }
+
+  // Motivo da recusa devolvido pelo Resend ({ name, message }, ex.:
+  // "validation_error: The domain is not verified") — sem ele o log só tem o
+  // status HTTP e não dá para saber o que corrigir. Endereços de e-mail que
+  // vierem na mensagem são mascarados; a API key nunca está no corpo.
+  private async motivoDoResend(response: Response): Promise<string> {
+    try {
+      const corpo = (await response.json()) as {
+        name?: unknown;
+        message?: unknown;
+      };
+      const partes = [corpo.name, corpo.message].filter(
+        (parte): parte is string => typeof parte === 'string' && parte !== '',
+      );
+      if (partes.length === 0) {
+        return '';
+      }
+      return ` — ${partes
+        .join(': ')
+        .replace(/[^\s@<>"'(),;]+@[^\s@<>"'(),;]+/g, '<e-mail>')
+        .slice(0, 300)}`;
+    } catch {
+      return '';
     }
   }
 
