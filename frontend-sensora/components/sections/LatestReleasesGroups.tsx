@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import LatestReleasesCarousel from "./LatestReleasesCarousel";
+import KitSeloCircular from "./KitSeloCircular";
 import type { ReleaseItem } from "./LatestReleaseCard";
 
 export type GrupoLancamentos = {
@@ -50,7 +51,13 @@ export default function LatestReleasesGroups({ grupos }: { grupos: GrupoLancamen
                 </Link>
               </div>
 
-              <LatestReleasesCarousel produtos={grupo.produtos} />
+              {/* Kits com um produto só: selo circular em vez de um card
+                  sozinho no carrossel. */}
+              {grupo.id === "kits" && grupo.produtos.length === 1 ? (
+                <KitSeloCircular item={grupo.produtos[0]} />
+              ) : (
+                <LatestReleasesCarousel produtos={grupo.produtos} />
+              )}
             </div>
           </RevealOnScroll>
         );
