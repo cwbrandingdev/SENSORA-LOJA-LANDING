@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   Prisma,
   type Devolucao as DevolucaoPrisma,
@@ -36,6 +37,7 @@ import {
 } from '../ocorrencias/ocorrencias.service';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { PrismaService } from '../prisma/prisma.service';
+import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
 import { ItemConferidoDto } from './dto/concluir-conferencia.dto';
 import { CreateDevolucaoDto } from './dto/create-devolucao.dto';
 import {
@@ -60,6 +62,26 @@ const STATUS_QUE_NAO_CONTAM = [
   StatusDevolucao.RECUSADA,
   StatusDevolucao.CANCELADA,
 ];
+
+// Proteção contra REPETIÇÃO ACIDENTAL (clique duplo, reenvio do navegador):
+// a mesma solicitação (mesmo cliente, pedido, itens e quantidades, motivo e
+// descrição, ainda SOLICITADA) feita de novo dentro desta janela devolve a
+// que já existe, sem criar outra nem avisar os admins de novo. Não é uma
+// garantia geral de idempotência: fora da janela, ou com qualquer diferença,
+// cria outra devolução (limitada, como sempre, pelo saldo de cada item).
+export const JANELA_REPETICAO_DEVOLUCAO_MS = 60 * 1000;
+
+// Texto para comparar duas solicitações: ignora espaços nas pontas e
+// sequências de espaços/quebras de linha; maiúsculas, letras e pontuação
+// continuam contando. Descrição ausente equivale a vazia. Só para comparar —
+// o que é gravado continua sendo o texto informado (com trim).
+function textoComparavel(texto: string | null): string {
+  return (texto ?? '').trim().replace(/\s+/g, ' ');
+}
+
+// Caminho da devolução no painel (frontend: ROUTES.DEVOLUCOES em
+// lib/routes.ts). Vai no e-mail de aviso aos admins.
+const CAMINHO_ADMIN_DEVOLUCOES = '/workspace-x/devolucoes';
 
 // Evidências (fotos) da devolução.
 export const MAXIMO_EVIDENCIAS = 5;
@@ -131,6 +153,7 @@ export class DevolucoesService {
     private readonly melhorEnvioService: MelhorEnvioService,
     private readonly asaasService: AsaasService,
     private readonly ocorrenciasService: OcorrenciasService,
+    private readonly configService: ConfigService,
   ) {}
 
   // Cliente solicita a devolução de itens de um pedido já enviado. Tudo que
@@ -154,7 +177,7 @@ export class DevolucoesService {
       );
     }
 
-    const devolucao = await this.prisma.$transaction(async (tx) => {
+    const { devolucao, criada } = await this.prisma.$transaction(async (tx) => {
       // Trava a linha do pedido até o fim da transação: duas solicitações
       // simultâneas para o mesmo pedido passam por aqui uma de cada vez, e a
       // segunda só lê o que já foi devolvido depois que a primeira gravou.
@@ -185,6 +208,30 @@ export class DevolucoesService {
         );
       }
 
+      // Repetição acidental (ver JANELA_REPETICAO_DEVOLUCAO_MS): conferida
+      // sob a trava do pedido e antes do saldo, para que o reenvio de quem
+      // já usou todo o saldo devolva a solicitação existente em vez de 400.
+      const recentes = await tx.devolucao.findMany({
+        where: {
+          pedidoId,
+          usuarioId: user.id,
+          status: StatusDevolucao.SOLICITADA,
+          solicitadaEm: {
+            gte: new Date(Date.now() - JANELA_REPETICAO_DEVOLUCAO_MS),
+          },
+        },
+        include: { itens: true },
+      });
+      const repetida = recentes.find(
+        (recente) =>
+          this.mesmosItens(recente.itens, dto.itens) &&
+          textoComparavel(recente.motivo) === textoComparavel(motivo) &&
+          textoComparavel(recente.descricao) === textoComparavel(descricao),
+      );
+      if (repetida) {
+        return { devolucao: repetida, criada: false };
+      }
+
       const itensDoPedido = new Map(
         pedido.itens.map((item) => [item.id, item]),
       );
@@ -210,7 +257,7 @@ export class DevolucoesService {
         }
       }
 
-      return tx.devolucao.create({
+      const nova = await tx.devolucao.create({
         data: {
           pedidoId,
           usuarioId: user.id,
@@ -230,9 +277,122 @@ export class DevolucoesService {
         },
         include: { itens: true },
       });
+      return { devolucao: nova, criada: true };
     });
 
+    // Só depois de a transação terminar, e só para uma devolução nova (a
+    // repetição reaproveitada não avisa de novo). Nunca lança.
+    if (criada) {
+      await this.avisarAdminsNovaSolicitacao(devolucao.id);
+    }
+
     return this.paraDevolucao(devolucao);
+  }
+
+  // Mesmos itens com as mesmas quantidades, em qualquer ordem.
+  private mesmosItens(
+    gravados: { itemPedidoId: number; quantidade: number }[],
+    pedidos: { itemPedidoId: number; quantidade: number }[],
+  ): boolean {
+    if (gravados.length !== pedidos.length) {
+      return false;
+    }
+    const quantidades = new Map(
+      gravados.map((item) => [item.itemPedidoId, item.quantidade]),
+    );
+    return pedidos.every(
+      (item) => quantidades.get(item.itemPedidoId) === item.quantidade,
+    );
+  }
+
+  // E-mail a cada ADMIN ativo sobre uma nova solicitação (VENDEDOR não
+  // analisa devoluções). Um envio por admin, cada um isolado: a falha de um
+  // não impede os outros. Todo texto variável é escapado antes de entrar no
+  // HTML. Nunca lança: a devolução já está gravada e não depende do e-mail.
+  private async avisarAdminsNovaSolicitacao(
+    devolucaoId: number,
+  ): Promise<void> {
+    try {
+      const admins = await this.prisma.usuario.findMany({
+        where: { perfil: PerfilUsuario.ADMIN, ativo: true },
+        select: { id: true, email: true },
+      });
+      if (admins.length === 0) {
+        this.logger.warn(
+          `Nenhum administrador ativo — aviso da nova devolução ${devolucaoId} não enviado.`,
+        );
+        return;
+      }
+
+      const devolucao = await this.prisma.devolucao.findUnique({
+        where: { id: devolucaoId },
+        include: {
+          usuario: { select: { nome: true, email: true } },
+          pedido: {
+            select: { numero: true, clienteNome: true, clienteEmail: true },
+          },
+          itens: {
+            include: {
+              itemPedido: { select: { produto: { select: { nome: true } } } },
+            },
+          },
+        },
+      });
+      if (!devolucao) {
+        return;
+      }
+
+      const cliente =
+        devolucao.usuario?.nome ?? devolucao.pedido.clienteNome ?? 'Cliente';
+      const emailCliente =
+        devolucao.usuario?.email ?? devolucao.pedido.clienteEmail;
+      const itensHtml = devolucao.itens
+        .map(
+          (item) =>
+            `<li>${item.quantidade} × ${escaparHtml(item.itemPedido.produto.nome)}</li>`,
+        )
+        .join('');
+
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+      const acesso = frontendUrl
+        ? `<p><a href="${escaparHtml(`${frontendUrl.replace(/\/$/, '')}${CAMINHO_ADMIN_DEVOLUCOES}/${devolucao.id}`)}">Analisar a devolução no painel</a></p>`
+        : '<p>Acesse o painel administrativo, em Devoluções, para analisar a solicitação.</p>';
+
+      const html =
+        '<p>Uma nova solicitação de devolução foi registrada.</p>' +
+        `<p>Pedido: ${escaparHtml(devolucao.pedido.numero)}</p>` +
+        `<p>Cliente: ${escaparHtml(cliente)}` +
+        (emailCliente ? ` (${escaparHtml(emailCliente)})` : '') +
+        '</p>' +
+        `<p>Itens:</p><ul>${itensHtml}</ul>` +
+        `<p>Motivo: ${escaparHtml(devolucao.motivo)}</p>` +
+        (devolucao.descricao
+          ? `<p>Descrição: ${escaparHtml(devolucao.descricao)}</p>`
+          : '') +
+        acesso;
+      const subject = `Nova solicitação de devolução — pedido ${devolucao.pedido.numero}`;
+
+      for (const admin of admins) {
+        try {
+          await this.mailService.enviarEmail({
+            to: admin.email,
+            subject,
+            html,
+          });
+        } catch (erro) {
+          // Sem o endereço no log (mesma política do MailService).
+          this.logger.error(
+            `Falha ao avisar o admin ${admin.id} sobre a devolução ${devolucaoId}.`,
+            erro instanceof Error ? erro.stack : String(erro),
+          );
+        }
+      }
+    } catch (erro) {
+      this.logger.error(
+        `Falha ao avisar os admins sobre a devolução ${devolucaoId}.`,
+        erro instanceof Error ? erro.stack : String(erro),
+      );
+    }
   }
 
   // Histórico do pedido para a tela do cliente: todas as devoluções dele (as

@@ -3,6 +3,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma } from '../../generated/prisma/client';
 import { AsaasService } from '../asaas/asaas.service';
@@ -387,6 +388,8 @@ describe('DevolucoesService — logística reversa (Etapa 8)', () => {
         { provide: MelhorEnvioService, useValue: me },
         { provide: AsaasService, useValue: {} },
         { provide: OcorrenciasService, useValue: { registrar: jest.fn() } },
+        // Só o aviso de nova devolução (criar) lê FRONTEND_URL.
+        { provide: ConfigService, useValue: { get: () => undefined } },
       ],
     }).compile();
 

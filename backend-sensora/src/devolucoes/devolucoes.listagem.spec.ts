@@ -1,4 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { ImagekitService } from '../imagekit/imagekit.service';
@@ -174,6 +175,8 @@ describe('DevolucoesService — listarDoPedido (Etapa 6)', () => {
         { provide: MelhorEnvioService, useValue: {} },
         { provide: AsaasService, useValue: {} },
         { provide: OcorrenciasService, useValue: { registrar: jest.fn() } },
+        // Só o aviso de nova devolução (criar) lê FRONTEND_URL.
+        { provide: ConfigService, useValue: { get: () => undefined } },
       ],
     }).compile();
 

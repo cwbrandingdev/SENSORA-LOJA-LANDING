@@ -3,6 +3,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AsaasService } from '../asaas/asaas.service';
 import { OcorrenciasService } from '../ocorrencias/ocorrencias.service';
@@ -215,6 +216,8 @@ describe('DevolucoesService — análise pelo ADMIN (Etapa 7)', () => {
         { provide: MelhorEnvioService, useValue: {} },
         { provide: AsaasService, useValue: asaas },
         { provide: OcorrenciasService, useValue: { registrar: jest.fn() } },
+        // Só o aviso de nova devolução (criar) lê FRONTEND_URL.
+        { provide: ConfigService, useValue: { get: () => undefined } },
         { provide: ProdutosService, useValue: produtos },
       ],
     }).compile();

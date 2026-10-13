@@ -39,19 +39,24 @@ export default function TrocasEDevolucoesPage() {
           exigimos lacre intacto como condição desse direito.
         </p>
         <p>
-          Envie o pedido para{" "}
+          Faça a solicitação pelo site, em{" "}
+          <Link href={ROUTES.CONTA_PEDIDOS} className="text-brand-navy underline underline-offset-4">
+            Minha Conta → Meus Pedidos
+          </Link>
+          : abra o pedido e clique em <strong>Solicitar devolução</strong>.
+          Escolha os itens e as quantidades, informe o motivo e, se quiser,
+          envie fotos. A solicitação fica registrada no histórico do pedido, e
+          a orientação de postagem chega por e-mail.
+        </p>
+        <p>
+          Dúvidas, ou não conseguiu usar o formulário? Escreva para{" "}
           <a
             href={mailtoArrependimento}
             className="text-brand-navy underline underline-offset-4"
           >
             {EMPRESA.emailSuporte}
           </a>{" "}
-          com o número do pedido, que está em{" "}
-          <Link href={ROUTES.CONTA_PEDIDOS} className="text-brand-navy underline underline-offset-4">
-            Minha Conta → Meus Pedidos
-          </Link>
-          . A resposta de recebimento sai por esse mesmo e-mail, com a
-          orientação de postagem.
+          com o número do pedido.
         </p>
       </Secao>
 
@@ -63,8 +68,9 @@ export default function TrocasEDevolucoesPage() {
           escreva para{" "}
           <a href={mailtoDefeito} className="text-brand-navy underline underline-offset-4">
             {EMPRESA.emailSuporte}
-          </a>
-          .
+          </a>{" "}
+          descrevendo o problema. Se quiser devolver o produto, use também o
+          botão <strong>Solicitar devolução</strong> no pedido, em Meus Pedidos.
         </p>
         <p>
           Se o problema não for resolvido em 30 dias, você escolhe entre troca,

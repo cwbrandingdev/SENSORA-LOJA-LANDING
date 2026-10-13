@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   AsaasErroHttpError,
@@ -389,6 +390,8 @@ describe('DevolucoesService — conferência e reembolso (Etapa 9.1)', () => {
         { provide: MelhorEnvioService, useValue: {} },
         { provide: AsaasService, useValue: asaas },
         { provide: OcorrenciasService, useValue: ocorrencias },
+        // Só o aviso de nova devolução (criar) lê FRONTEND_URL.
+        { provide: ConfigService, useValue: { get: () => undefined } },
       ],
     }).compile();
 
