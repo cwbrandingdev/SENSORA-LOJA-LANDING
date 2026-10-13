@@ -153,7 +153,7 @@ describe('AlertasService — obterAlertas', () => {
           severidade: 'danger',
           titulo: 'Reembolsos solicitados aguardando confirmação',
           quantidade: 2,
-          link: '/workspace-x/pedidos',
+          link: '/workspace-x/pedidos?status=REEMBOLSO_SOLICITADO',
         },
       ]);
       expect(pedidoCount).toHaveBeenNthCalledWith(1, {
@@ -163,42 +163,52 @@ describe('AlertasService — obterAlertas', () => {
   });
 
   describe('PEDIDO_AGUARDANDO_ENVIO', () => {
-    it('pedidos PAGO + NAO_ENVIADO há mais de LIMIAR_DIAS_PEDIDO_SEM_ENVIO dias: severidade warning', async () => {
-      const pedidoCount = jest
-        .fn()
-        .mockResolvedValueOnce(0) // reembolsosSolicitados
-        .mockResolvedValueOnce(5); // pedidosAguardandoEnvio
-      const service = await criarService({
-        produtoCount: jest.fn().mockResolvedValue(0),
-        pedidoCount,
-        estaConectado: jest.fn().mockResolvedValue(true),
-      });
-
-      const alertas = await service.obterAlertas();
-
-      expect(alertas).toEqual([
-        {
-          tipo: 'PEDIDO_AGUARDANDO_ENVIO',
-          severidade: 'warning',
-          titulo: `Pedidos pagos há mais de ${LIMIAR_DIAS_PEDIDO_SEM_ENVIO} dias aguardando envio`,
-          quantidade: 5,
-          link: '/workspace-x/pedidos',
-        },
-      ]);
-
-      // A query usa status PAGO + statusEnvio NAO_ENVIADO + data <= agora -
-      // LIMIAR_DIAS_PEDIDO_SEM_ENVIO dias — nunca um número solto.
-      const chamada = pedidoCount.mock.calls[1][0] as {
-        where: { status: StatusPedido; statusEnvio: StatusEnvio; data: { lte: Date } };
-      };
-      expect(chamada.where.status).toBe(StatusPedido.PAGO);
-      expect(chamada.where.statusEnvio).toBe(StatusEnvio.NAO_ENVIADO);
-
-      const diferencaDias =
-        (Date.now() - chamada.where.data.lte.getTime()) / (1000 * 60 * 60 * 24);
-      expect(diferencaDias).toBeGreaterThanOrEqual(LIMIAR_DIAS_PEDIDO_SEM_ENVIO - 0.01);
-      expect(diferencaDias).toBeLessThan(LIMIAR_DIAS_PEDIDO_SEM_ENVIO + 0.01);
+    afterEach(() => {
+      jest.useRealTimers();
     });
+
+    // Corte por dia de calendário em São Paulo: atrasado = pedido de
+    // hoje(SP) - LIMIAR dias ou antes. O link leva esse mesmo dia em
+    // `dataAte`, e a query corta no primeiro instante do dia seguinte (SP).
+    it.each([
+      // 12/10 23h em SP — em UTC já é dia 13, mas o "hoje" é o de SP.
+      ['2026-10-13T02:00:00.000Z', '2026-10-09', '2026-10-10T03:00:00.000Z'],
+      // 13/10 00h em SP — virou o dia, o corte anda um dia.
+      ['2026-10-13T03:00:00.000Z', '2026-10-10', '2026-10-11T03:00:00.000Z'],
+    ])(
+      'agora %s: dataAte %s e query data < %s (PAGO + NAO_ENVIADO), severidade warning',
+      async (agora, dataAte, limite) => {
+        jest.useFakeTimers({ now: new Date(agora), advanceTimers: true });
+        const pedidoCount = jest
+          .fn()
+          .mockResolvedValueOnce(0) // reembolsosSolicitados
+          .mockResolvedValueOnce(5); // pedidosAguardandoEnvio
+        const service = await criarService({
+          produtoCount: jest.fn().mockResolvedValue(0),
+          pedidoCount,
+          estaConectado: jest.fn().mockResolvedValue(true),
+        });
+
+        const alertas = await service.obterAlertas();
+
+        expect(alertas).toEqual([
+          {
+            tipo: 'PEDIDO_AGUARDANDO_ENVIO',
+            severidade: 'warning',
+            titulo: `Pedidos pagos há mais de ${LIMIAR_DIAS_PEDIDO_SEM_ENVIO} dias aguardando envio`,
+            quantidade: 5,
+            link: `/workspace-x/pedidos?status=PAGO&dataAte=${dataAte}`,
+          },
+        ]);
+        expect(pedidoCount).toHaveBeenNthCalledWith(2, {
+          where: {
+            status: StatusPedido.PAGO,
+            statusEnvio: StatusEnvio.NAO_ENVIADO,
+            data: { lt: new Date(limite) },
+          },
+        });
+      },
+    );
   });
 
   describe('PEDIDO_NOVO', () => {
@@ -206,7 +216,7 @@ describe('AlertasService — obterAlertas', () => {
       const pedidoCount = jest
         .fn<
           Promise<number>,
-          [{ where: { data?: { lte?: Date; gt?: Date } } }]
+          [{ where: { data?: { lt?: Date; gte?: Date } } }]
         >()
         .mockResolvedValueOnce(1) // reembolsosSolicitados
         .mockResolvedValueOnce(0) // pedidosAguardandoEnvio
@@ -224,24 +234,22 @@ describe('AlertasService — obterAlertas', () => {
         severidade: 'info',
         titulo: 'Novos pedidos pagos para enviar',
         quantidade: 2,
-        link: '/workspace-x/pedidos',
+        link: '/workspace-x/pedidos?status=PAGO',
       });
       expect(alertas[1].tipo).toBe('REEMBOLSO_SOLICITADO');
 
-      // Mesmo corte de PEDIDO_AGUARDANDO_ENVIO, do outro lado (data > limite):
+      // Mesmo corte de PEDIDO_AGUARDANDO_ENVIO, do outro lado (data >= limite):
       // um pedido nunca entra nos dois alertas.
-      const limiteAguardando = pedidoCount.mock.calls[1][0].where.data?.lte;
+      const limiteAguardando = pedidoCount.mock.calls[1][0].where.data?.lt;
       const novos = pedidoCount.mock.calls[2][0];
-      expect(novos).toMatchObject({
+      expect(limiteAguardando).toBeInstanceOf(Date);
+      expect(novos).toEqual({
         where: {
           status: StatusPedido.PAGO,
           statusEnvio: StatusEnvio.NAO_ENVIADO,
+          data: { gte: limiteAguardando },
         },
       });
-      const diferenca =
-        (novos.where.data?.gt?.getTime() ?? 0) -
-        (limiteAguardando?.getTime() ?? Infinity);
-      expect(Math.abs(diferenca)).toBeLessThan(1000);
     });
   });
 
@@ -309,7 +317,7 @@ describe('AlertasService — obterAlertas', () => {
 
   // Etapa 7 — devoluções aguardando a decisão do Admin.
   describe('DEVOLUCAO_SOLICITADA', () => {
-    it('conta SOLICITADA + EM_ANALISE: severidade warning, link para a fila de devoluções', async () => {
+    it('conta só SOLICITADA: severidade warning, link para a fila já filtrada por SOLICITADA', async () => {
       const devolucaoCount = jest.fn().mockResolvedValue(3);
       const service = await criarService({
         produtoCount: jest.fn().mockResolvedValue(0),
@@ -324,11 +332,11 @@ describe('AlertasService — obterAlertas', () => {
           severidade: 'warning',
           titulo: 'Devoluções aguardando análise',
           quantidade: 3,
-          link: '/workspace-x/devolucoes',
+          link: '/workspace-x/devolucoes?status=SOLICITADA',
         },
       ]);
       expect(devolucaoCount).toHaveBeenCalledWith({
-        where: { status: { in: ['SOLICITADA', 'EM_ANALISE'] } },
+        where: { status: 'SOLICITADA' },
       });
     });
 

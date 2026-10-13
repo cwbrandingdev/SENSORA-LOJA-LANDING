@@ -3,7 +3,8 @@
 // Etapa 7 — fila das devoluções para análise (GET /admin/devolucoes).
 // ADMIN-only: o backend responde 403 a qualquer outro perfil; o aviso
 // abaixo é só a camada visual (mesmo padrão de /workspace-x/usuarios).
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import EmptyState from "@/components/ui/EmptyState";
 import InlineErrorState from "@/components/ui/InlineErrorState";
 import TableSkeleton from "@/components/ui/TableSkeleton";
@@ -17,9 +18,26 @@ import {
 import { listarDevolucoesAdmin } from "@/services/devolucoes";
 import DevolucoesFila from "@/components/admin/DevolucoesFila";
 
+// useSearchParams exige um limite de Suspense no App Router (mesmo padrão
+// de app/confirmar-email/page.tsx).
 export default function DevolucoesAdminPage() {
+  return (
+    <Suspense fallback={null}>
+      <DevolucoesConteudo />
+    </Suspense>
+  );
+}
+
+function DevolucoesConteudo() {
   const { perfil } = useAuth();
-  const [status, setStatus] = useState("");
+  const searchParams = useSearchParams();
+  // Status inicial vindo da URL (ex.: alerta do Dashboard abre
+  // ?status=SOLICITADA); valor desconhecido vira "Todos". Object.hasOwn (e
+  // não `in`) para que chaves herdadas como "constructor" nunca cheguem à API.
+  const [status, setStatus] = useState(() => {
+    const daUrl = searchParams.get("status") ?? "";
+    return Object.hasOwn(ROTULOS_STATUS_DEVOLUCAO, daUrl) ? daUrl : "";
+  });
   const [devolucoes, setDevolucoes] = useState<DevolucaoResumoAdmin[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   // Incrementado para tentar carregar de novo depois de um erro.

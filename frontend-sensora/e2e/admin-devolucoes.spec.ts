@@ -219,6 +219,31 @@ test.describe("Admin — Devoluções (Etapa 7)", () => {
     expect(chamadas.statusPedidos).toContain("APROVADA");
   });
 
+  test("?status= na URL (alerta do Dashboard) já abre a fila filtrada", async ({ page }) => {
+    await seedSession(page);
+    const chamadas = await mockFila(page);
+
+    await page.goto(`${FILA_URL}?status=SOLICITADA`);
+
+    await expect(page.getByLabel("Status")).toHaveValue("SOLICITADA");
+    await expect(linhaDaFila(page, "PED-10")).toBeVisible();
+    expect(chamadas.statusPedidos[0]).toBe("SOLICITADA");
+  });
+
+  for (const herdado of ["constructor", "toString"]) {
+    test(`?status=${herdado} é ignorado e nunca enviado à API`, async ({ page }) => {
+      await seedSession(page);
+      const chamadas = await mockFila(page);
+
+      await page.goto(`${FILA_URL}?status=${herdado}`);
+
+      await expect(page.getByLabel("Status")).toHaveValue("");
+      await expect(linhaDaFila(page, "PED-10")).toBeVisible();
+      expect(chamadas.statusPedidos).toContain(null);
+      expect(chamadas.statusPedidos).not.toContain(herdado);
+    });
+  }
+
   test("detalhe mostra pedido, cliente, solicitação, itens e fotos", async ({ page }) => {
     await seedSession(page);
     await mockFila(page);
@@ -359,7 +384,7 @@ test.describe("Admin — Devoluções (Etapa 7)", () => {
 
   test("alerta de devoluções no dashboard abre a fila", async ({ page }) => {
     await seedSession(page);
-    await mockFila(page);
+    const chamadas = await mockFila(page);
     await page.route("**/dashboard/resumo", (route) =>
       route.fulfill({
         json: {
@@ -389,7 +414,7 @@ test.describe("Admin — Devoluções (Etapa 7)", () => {
             severidade: "warning",
             titulo: "Devoluções aguardando análise",
             quantidade: 1,
-            link: "/workspace-x/devolucoes",
+            link: "/workspace-x/devolucoes?status=SOLICITADA",
           },
         ],
       }),
@@ -398,9 +423,11 @@ test.describe("Admin — Devoluções (Etapa 7)", () => {
     await page.goto("/workspace-x");
     await page.getByRole("link", { name: /Devoluções aguardando análise/ }).click();
 
-    await expect(page).toHaveURL(/\/workspace-x\/devolucoes$/);
+    await expect(page).toHaveURL(/\/workspace-x\/devolucoes\?status=SOLICITADA$/);
     await expect(page.getByRole("heading", { name: "Devoluções" })).toBeVisible();
+    await expect(page.getByLabel("Status")).toHaveValue("SOLICITADA");
     await expect(linhaDaFila(page, "PED-10")).toBeVisible();
+    expect(chamadas.statusPedidos[0]).toBe("SOLICITADA");
   });
 });
 

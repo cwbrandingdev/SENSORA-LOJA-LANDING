@@ -11,10 +11,10 @@ export const LIMIAR_DIAS_PEDIDO_SEM_ENVIO = 3;
 
 // Rotas do Admin (frontend) para onde cada alerta direciona o clique —
 // espelham frontend-sensora/lib/routes.ts (ROUTES.PRODUTOS/PEDIDOS/
-// INTEGRACOES). Sempre a rota BASE, nunca com query string: nenhuma dessas
-// páginas lê searchParams hoje (confirmado na vistoria) — um link com
-// `?status=...` só produziria um parâmetro ignorado silenciosamente.
-// Mantenha sincronizado com lib/routes.ts caso uma dessas rotas mude.
+// INTEGRACOES/DEVOLUCOES). Pedidos e Devoluções leem os filtros da URL
+// (`?status=`, e em pedidos também `?dataAte=YYYY-MM-DD`), então os alertas
+// desses itens já abrem a lista filtrada; Produtos e Integrações recebem a
+// rota base. Mantenha sincronizado com lib/routes.ts caso uma rota mude.
 export const LINK_PRODUTOS = '/workspace-x/produtos';
 export const LINK_PEDIDOS = '/workspace-x/pedidos';
 export const LINK_INTEGRACOES = '/workspace-x/integracoes';

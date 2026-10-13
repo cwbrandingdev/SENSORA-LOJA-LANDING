@@ -561,3 +561,80 @@ test.describe("Admin / Pedidos — Status de Envio", () => {
     await expect(linhaDoPedido.getByText("Aguardando envio")).toBeVisible();
   });
 });
+
+// Alertas do Dashboard abrem a lista já filtrada pela URL
+// (?status= e ?dataAte=AAAA-MM-DD, ver AlertasService no backend).
+test.describe("Admin / Pedidos — filtros vindos da URL", () => {
+  const PEDIDO_PAGO_RECENTE = {
+    id: 7,
+    numero: "PED-7",
+    data: "2026-09-02T00:00:00.000Z",
+    status: "PAGO",
+    statusEnvio: "NAO_ENVIADO",
+    total: 120,
+  };
+
+  test("?status=REEMBOLSO_SOLICITADO mostra só os reembolsos solicitados", async ({ page }) => {
+    await seedSession(page);
+    mockPedidos(page, [PEDIDO_PENDENTE, PEDIDO_PAGO, PEDIDO_REEMBOLSO_SOLICITADO]);
+
+    await page.goto(`${PEDIDOS_URL}?status=REEMBOLSO_SOLICITADO`);
+
+    await expect(page.locator("#filtro-status")).toHaveValue("REEMBOLSO_SOLICITADO");
+    await expect(page.getByRole("cell", { name: "PED-4" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "PED-1" })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: "PED-2" })).toHaveCount(0);
+  });
+
+  test("?status=PAGO&dataAte= mostra só os pagos até a data", async ({ page }) => {
+    await seedSession(page);
+    mockPedidos(page, [PEDIDO_PENDENTE, PEDIDO_PAGO, PEDIDO_PAGO_RECENTE]);
+
+    await page.goto(`${PEDIDOS_URL}?status=PAGO&dataAte=2026-08-20`);
+
+    await expect(page.locator("#filtro-status")).toHaveValue("PAGO");
+    await expect(page.locator("#filtro-data-ate")).toHaveValue("2026-08-20");
+    // PED-2 (pago, não enviado) aparece no quadro "Para enviar" e na tabela.
+    await expect(page.getByRole("cell", { name: "PED-2" })).toHaveCount(2);
+    await expect(page.getByRole("cell", { name: "PED-7" })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: "PED-1" })).toHaveCount(0);
+  });
+
+  test("dataAte compara o dia em America/Sao_Paulo (mesmo corte do alerta)", async ({
+    page,
+  }) => {
+    // 21/08 01h UTC = 20/08 22h em SP: entra em dataAte=2026-08-20.
+    const PEDIDO_PAGO_NOITE = {
+      ...PEDIDO_PAGO_RECENTE,
+      id: 8,
+      numero: "PED-8",
+      data: "2026-08-21T01:00:00.000Z",
+    };
+    // 21/08 03h UTC = 21/08 00h em SP: fica de fora.
+    const PEDIDO_PAGO_MADRUGADA = {
+      ...PEDIDO_PAGO_RECENTE,
+      id: 9,
+      numero: "PED-9",
+      data: "2026-08-21T03:00:00.000Z",
+    };
+    await seedSession(page);
+    mockPedidos(page, [PEDIDO_PAGO_NOITE, PEDIDO_PAGO_MADRUGADA]);
+
+    await page.goto(`${PEDIDOS_URL}?status=PAGO&dataAte=2026-08-20`);
+
+    await expect(page.getByRole("cell", { name: "PED-8" })).toHaveCount(2);
+    await expect(page.getByRole("cell", { name: "PED-9" })).toHaveCount(0);
+  });
+
+  test("valores desconhecidos na URL são ignorados", async ({ page }) => {
+    await seedSession(page);
+    mockPedidos(page, [PEDIDO_PENDENTE, PEDIDO_PAGO]);
+
+    await page.goto(`${PEDIDOS_URL}?status=QUALQUER&dataAte=ontem`);
+
+    await expect(page.locator("#filtro-status")).toHaveValue("TODOS");
+    await expect(page.locator("#filtro-data-ate")).toHaveValue("");
+    await expect(page.getByRole("cell", { name: "PED-1" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "PED-2" }).first()).toBeVisible();
+  });
+});

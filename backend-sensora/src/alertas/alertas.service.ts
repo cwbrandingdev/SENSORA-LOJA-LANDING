@@ -33,6 +33,7 @@ export class AlertasService {
   // (quantidade >= 1) — lista vazia é o estado normal e esperado ("sem
   // alertas no momento"), nunca um erro.
   async obterAlertas(): Promise<Alerta[]> {
+    const { dataAte, limiteEnvio } = this.calcularLimiteEnvio();
     const [
       produtosSemEstoque,
       produtosEstoqueBaixo,
@@ -58,17 +59,15 @@ export class AlertasService {
         where: {
           status: StatusPedido.PAGO,
           statusEnvio: StatusEnvio.NAO_ENVIADO,
-          data: { lte: this.calcularDataLimiteEnvio() },
+          data: { lt: limiteEnvio },
         },
       }),
       this.melhorEnvioService.estaConectado(),
-      // Etapa 7 — devoluções esperando a decisão do Admin.
+      // Etapa 7 — devoluções esperando a decisão do Admin. Só SOLICITADA:
+      // é o mesmo filtro que o link abre na fila (GET /admin/devolucoes
+      // aceita um único status), então a contagem bate com a lista.
       this.prisma.devolucao.count({
-        where: {
-          status: {
-            in: [StatusDevolucao.SOLICITADA, StatusDevolucao.EM_ANALISE],
-          },
-        },
+        where: { status: StatusDevolucao.SOLICITADA },
       }),
       // Pedidos pagos ainda dentro do prazo de envio — os mais antigos já
       // entram em PEDIDO_AGUARDANDO_ENVIO; nunca o mesmo pedido nos dois.
@@ -76,7 +75,7 @@ export class AlertasService {
         where: {
           status: StatusPedido.PAGO,
           statusEnvio: StatusEnvio.NAO_ENVIADO,
-          data: { gt: this.calcularDataLimiteEnvio() },
+          data: { gte: limiteEnvio },
         },
       }),
     ]);
@@ -89,7 +88,7 @@ export class AlertasService {
         severidade: 'info',
         titulo: 'Novos pedidos pagos para enviar',
         quantidade: pedidosNovos,
-        link: LINK_PEDIDOS,
+        link: `${LINK_PEDIDOS}?status=${StatusPedido.PAGO}`,
       });
     }
 
@@ -115,7 +114,7 @@ export class AlertasService {
         severidade: 'danger',
         titulo: 'Reembolsos solicitados aguardando confirmação',
         quantidade: reembolsosSolicitados,
-        link: LINK_PEDIDOS,
+        link: `${LINK_PEDIDOS}?status=${StatusPedido.REEMBOLSO_SOLICITADO}`,
       });
     }
 
@@ -125,7 +124,10 @@ export class AlertasService {
         severidade: 'warning',
         titulo: `Pedidos pagos há mais de ${LIMIAR_DIAS_PEDIDO_SEM_ENVIO} dias aguardando envio`,
         quantidade: pedidosAguardandoEnvio,
-        link: LINK_PEDIDOS,
+        // Pedidos pagos até `dataAte` (dia em São Paulo, mesmo critério do
+        // filtro da tela de pedidos): o quadro "Para enviar" mostra
+        // exatamente os pedidos desta contagem.
+        link: `${LINK_PEDIDOS}?status=${StatusPedido.PAGO}&dataAte=${dataAte}`,
       });
     }
 
@@ -135,7 +137,7 @@ export class AlertasService {
         severidade: 'warning',
         titulo: 'Devoluções aguardando análise',
         quantidade: devolucoesAguardandoAnalise,
-        link: LINK_DEVOLUCOES,
+        link: `${LINK_DEVOLUCOES}?status=${StatusDevolucao.SOLICITADA}`,
       });
     }
 
@@ -155,9 +157,22 @@ export class AlertasService {
     return alertas;
   }
 
-  private calcularDataLimiteEnvio(): Date {
-    const limite = new Date();
-    limite.setDate(limite.getDate() - LIMIAR_DIAS_PEDIDO_SEM_ENVIO);
-    return limite;
+  // Corte por dia de calendário em São Paulo (o filtro de data da tela de
+  // pedidos só trabalha com dias): atrasado = pedido de `dataAte` ou antes,
+  // com dataAte = hoje(SP) - LIMIAR_DIAS_PEDIDO_SEM_ENVIO. `limiteEnvio` é o
+  // primeiro instante do dia seguinte a dataAte em SP (UTC-3 fixo — o Brasil
+  // não tem horário de verão desde 2019).
+  private calcularLimiteEnvio(): { dataAte: string; limiteEnvio: Date } {
+    const hojeSp = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+    }).format(new Date());
+    const dia = new Date(`${hojeSp}T00:00:00Z`);
+    dia.setUTCDate(dia.getUTCDate() - LIMIAR_DIAS_PEDIDO_SEM_ENVIO);
+    const dataAte = dia.toISOString().slice(0, 10);
+    dia.setUTCDate(dia.getUTCDate() + 1);
+    const limiteEnvio = new Date(
+      `${dia.toISOString().slice(0, 10)}T00:00:00-03:00`,
+    );
+    return { dataAte, limiteEnvio };
   }
 }

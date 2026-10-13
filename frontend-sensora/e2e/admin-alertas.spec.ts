@@ -109,14 +109,14 @@ test.describe("Admin — Painel de Alertas (Dashboard)", () => {
         severidade: "danger",
         titulo: "Reembolsos solicitados aguardando confirmação",
         quantidade: 2,
-        link: "/workspace-x/pedidos",
+        link: "/workspace-x/pedidos?status=REEMBOLSO_SOLICITADO",
       },
       {
         tipo: "PEDIDO_AGUARDANDO_ENVIO",
         severidade: "warning",
         titulo: "Pedidos pagos há mais de 3 dias aguardando envio",
         quantidade: 5,
-        link: "/workspace-x/pedidos",
+        link: "/workspace-x/pedidos?status=PAGO&dataAte=2026-10-10",
       },
       {
         tipo: "MELHOR_ENVIO_DESCONECTADO",
@@ -136,14 +136,17 @@ test.describe("Admin — Painel de Alertas (Dashboard)", () => {
       page.getByText("Melhor Envio desconectado — cotação de frete indisponível"),
     ).toBeVisible();
 
-    // Cada item é um link para a rota BASE certa (nunca query string — a
-    // página de destino não interpreta parâmetro nenhum, ver vistoria).
+    // Cada item é um link para a tela certa; pedidos e devoluções já vêm
+    // com o filtro na URL (a página aplica ao abrir).
     await expect(
       page.getByRole("link", { name: /Produtos com estoque baixo ou esgotado/ }),
     ).toHaveAttribute("href", "/workspace-x/produtos");
     await expect(
       page.getByRole("link", { name: /Reembolsos solicitados/ }),
-    ).toHaveAttribute("href", "/workspace-x/pedidos");
+    ).toHaveAttribute("href", "/workspace-x/pedidos?status=REEMBOLSO_SOLICITADO");
+    await expect(
+      page.getByRole("link", { name: /Pedidos pagos há mais de 3 dias/ }),
+    ).toHaveAttribute("href", "/workspace-x/pedidos?status=PAGO&dataAte=2026-10-10");
     await expect(
       page.getByRole("link", { name: /Melhor Envio desconectado/ }),
     ).toHaveAttribute("href", "/workspace-x/integracoes");

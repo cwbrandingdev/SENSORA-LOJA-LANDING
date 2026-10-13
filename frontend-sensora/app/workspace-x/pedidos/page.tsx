@@ -6,7 +6,8 @@
 // nasceram do fluxo real (Carrinho -> Checkout -> Asaas). O que resta aqui é
 // só edição de numero/data/total, remoção, marcar como enviado e listagem —
 // nunca criação de venda.
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import PedidoTable from "@/components/tables/PedidoTable";
 import PedidoForm, { type PedidoFormValues } from "@/components/forms/PedidoForm";
 import PedidosParaEnviarCard from "@/components/admin/PedidosParaEnviarCard";
@@ -28,8 +29,34 @@ import {
 } from "@/services/pedidos";
 import { StatusEnvio, StatusPedido, type Pedido } from "@/lib/types/loja";
 
+// Filtros iniciais vindos da URL (ex.: alertas do Dashboard abrem
+// ?status=REEMBOLSO_SOLICITADO ou ?status=PAGO&dataAte=AAAA-MM-DD). Valores
+// desconhecidos são ignorados.
+function filtrosDaUrl(params: URLSearchParams): PedidosFiltrosValue {
+  const status = params.get("status");
+  const dataAte = params.get("dataAte");
+  return {
+    ...PEDIDOS_FILTROS_VAZIO,
+    ...(status && (Object.values(StatusPedido) as string[]).includes(status)
+      ? { status: status as StatusPedido }
+      : {}),
+    ...(dataAte && /^\d{4}-\d{2}-\d{2}$/.test(dataAte) ? { dataAte } : {}),
+  };
+}
+
+// useSearchParams exige um limite de Suspense no App Router (mesmo padrão
+// de app/confirmar-email/page.tsx).
 export default function PedidosPage() {
+  return (
+    <Suspense fallback={null}>
+      <PedidosConteudo />
+    </Suspense>
+  );
+}
+
+function PedidosConteudo() {
   const toast = useToast();
+  const searchParams = useSearchParams();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   // Refinamento visual (Admin) — eco persistente do erro (o toast some só;
@@ -48,7 +75,9 @@ export default function PedidosPage() {
 
   // Destaque "Pedidos para enviar" + filtros — inteiramente client-side
   // sobre a lista já carregada (nenhum parâmetro novo em GET /pedidos).
-  const [filtros, setFiltros] = useState<PedidosFiltrosValue>(PEDIDOS_FILTROS_VAZIO);
+  const [filtros, setFiltros] = useState<PedidosFiltrosValue>(() =>
+    filtrosDaUrl(new URLSearchParams(searchParams.toString())),
+  );
 
   const pedidosFiltrados = useMemo(() => {
     return pedidos.filter((pedido) => {
@@ -65,12 +94,14 @@ export default function PedidosPage() {
         }
       }
 
-      // `pedido.data` é meia-noite UTC representando um DIA de calendário
-      // (mesmo raciocínio de PedidoTable.tsx) — comparar a substring
-      // "YYYY-MM-DD" diretamente contra o valor de <input type="date">
-      // evita qualquer conversão de fuso (um Date local aqui reintroduziria
-      // o mesmo bug de "dia anterior" já corrigido nas colunas de data).
-      const diaPedido = pedido.data.slice(0, 10);
+      // Dia do pedido em America/Sao_Paulo ("YYYY-MM-DD", en-CA), comparado
+      // com o valor de <input type="date">. O checkout grava o instante
+      // exato da compra, então o dia é o de SP — mesmo critério do alerta
+      // "pedidos pagos aguardando envio" (AlertasService), para que o link
+      // ?dataAte= mostre exatamente os pedidos contados.
+      const diaPedido = new Date(pedido.data).toLocaleDateString("en-CA", {
+        timeZone: "America/Sao_Paulo",
+      });
       if (filtros.dataDe !== "" && diaPedido < filtros.dataDe) return false;
       if (filtros.dataAte !== "" && diaPedido > filtros.dataAte) return false;
 
