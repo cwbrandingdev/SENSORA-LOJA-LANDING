@@ -20,6 +20,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { ROUTES } from "@/lib/routes";
 import {
   PerfilUsuario,
+  ROTULOS_CATEGORIA_SUPORTE,
   ROTULOS_STATUS_SUPORTE,
   type SolicitacaoSuporteDetalhe,
 } from "@/lib/types/loja";
@@ -170,7 +171,10 @@ export default function SuporteDetalhePage() {
       </section>
 
       <section className={cardClass} aria-label="Solicitação">
-        <h3 className="text-sm font-semibold text-brand-navy">{solicitacao.assunto}</h3>
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+          {ROTULOS_CATEGORIA_SUPORTE[solicitacao.categoria] ?? solicitacao.categoria}
+        </p>
+        <h3 className="mt-1 text-sm font-semibold text-brand-navy">{solicitacao.assunto}</h3>
         <p className="mt-3 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700">
           {solicitacao.mensagem}
         </p>

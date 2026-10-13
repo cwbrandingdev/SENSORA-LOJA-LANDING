@@ -20,11 +20,13 @@ export async function criarSolicitacaoSuporte(
 export async function listarSolicitacoesSuporte(filtros: {
   page?: number;
   status?: string;
+  categoria?: string;
 }): Promise<PaginaSolicitacoesSuporte> {
   const response = await api.get<PaginaSolicitacoesSuporte>("/admin/suporte", {
     params: {
       page: filtros.page ?? 1,
       ...(filtros.status ? { status: filtros.status } : {}),
+      ...(filtros.categoria ? { categoria: filtros.categoria } : {}),
     },
   });
   return response.data;

@@ -6,6 +6,7 @@
 // resposta ao cliente é por e-mail, fora do painel.
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import EmptyState from "@/components/ui/EmptyState";
 import InlineErrorState from "@/components/ui/InlineErrorState";
 import TableSkeleton from "@/components/ui/TableSkeleton";
@@ -15,14 +16,17 @@ import { getErrorMessage } from "@/lib/errors";
 import { ROUTES } from "@/lib/routes";
 import {
   PerfilUsuario,
+  ROTULOS_CATEGORIA_SUPORTE,
   ROTULOS_STATUS_SUPORTE,
   type PaginaSolicitacoesSuporte,
 } from "@/lib/types/loja";
 import { listarSolicitacoesSuporte } from "@/services/suporte";
 
 export default function SuporteAdminPage() {
+  const router = useRouter();
   const { perfil } = useAuth();
   const [status, setStatus] = useState("");
+  const [categoria, setCategoria] = useState("");
   const [pagina, setPagina] = useState(1);
   const [dados, setDados] = useState<PaginaSolicitacoesSuporte | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -32,7 +36,7 @@ export default function SuporteAdminPage() {
   useEffect(() => {
     if (perfil !== PerfilUsuario.ADMIN) return;
     let ativo = true;
-    listarSolicitacoesSuporte({ page: pagina, status })
+    listarSolicitacoesSuporte({ page: pagina, status, categoria })
       .then((resposta) => {
         if (!ativo) return;
         setDados(resposta);
@@ -44,7 +48,7 @@ export default function SuporteAdminPage() {
     return () => {
       ativo = false;
     };
-  }, [perfil, status, pagina, tentativa]);
+  }, [perfil, status, categoria, pagina, tentativa]);
 
   // Trocar filtro ou página volta ao carregamento.
   function carregar(mudar: () => void) {
@@ -99,18 +103,41 @@ export default function SuporteAdminPage() {
             ))}
           </select>
         </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="filtro-categoria-suporte" className="text-xs font-medium text-slate-500">
+            Categoria
+          </label>
+          <select
+            id="filtro-categoria-suporte"
+            value={categoria}
+            onChange={(event) =>
+              carregar(() => {
+                setCategoria(event.target.value);
+                setPagina(1);
+              })
+            }
+            className="w-52 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy"
+          >
+            <option value="">Todas</option>
+            {Object.entries(ROTULOS_CATEGORIA_SUPORTE).map(([valor, rotulo]) => (
+              <option key={valor} value={valor}>
+                {rotulo}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {erro ? (
         <InlineErrorState message={erro} onRetry={handleTentarDeNovo} />
       ) : dados === null ? (
-        <TableSkeleton rows={5} columns={5} />
+        <TableSkeleton rows={5} columns={6} />
       ) : dados.items.length === 0 ? (
         <EmptyState
           title="Nenhuma solicitação"
           message={
-            status
-              ? "Nenhuma solicitação com este status."
+            status || categoria
+              ? "Nenhuma solicitação com estes filtros."
               : "Ainda não há solicitações de suporte."
           }
         />
@@ -121,6 +148,7 @@ export default function SuporteAdminPage() {
               <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3 font-medium">Assunto</th>
+                  <th className="px-4 py-3 font-medium">Categoria</th>
                   <th className="px-4 py-3 font-medium">Cliente</th>
                   <th className="px-4 py-3 font-medium">E-mail</th>
                   <th className="px-4 py-3 font-medium">Data</th>
@@ -129,7 +157,17 @@ export default function SuporteAdminPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {dados.items.map((solicitacao) => (
-                  <tr key={solicitacao.id} className="hover:bg-slate-50">
+                  // A linha inteira abre o detalhe. O link do assunto continua
+                  // sendo o alvo de teclado e de Ctrl+clique (nova aba); um
+                  // clique nele não navega duas vezes.
+                  <tr
+                    key={solicitacao.id}
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest("a")) return;
+                      router.push(`${ROUTES.SUPORTE}/${solicitacao.id}`);
+                    }}
+                    className="cursor-pointer hover:bg-slate-50"
+                  >
                     <td className="max-w-xs px-4 py-3">
                       <Link
                         href={`${ROUTES.SUPORTE}/${solicitacao.id}`}
@@ -138,6 +176,9 @@ export default function SuporteAdminPage() {
                       >
                         {solicitacao.assunto}
                       </Link>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                      {ROTULOS_CATEGORIA_SUPORTE[solicitacao.categoria] ?? solicitacao.categoria}
                     </td>
                     <td className="px-4 py-3 text-slate-700">{solicitacao.nome}</td>
                     <td className="px-4 py-3 text-slate-500">{solicitacao.email}</td>

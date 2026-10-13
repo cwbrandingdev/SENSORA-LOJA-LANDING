@@ -5,6 +5,8 @@ import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.inter
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
+import { CreateSolicitacaoSuporteDto } from './dto/create-solicitacao-suporte.dto';
+import { CategoriaSuporte } from './enums/categoria-suporte.enum';
 import { StatusSolicitacaoSuporte } from './enums/status-solicitacao-suporte.enum';
 import { JANELA_REPETICAO_SUPORTE_MS, SuporteService } from './suporte.service';
 
@@ -26,6 +28,7 @@ const AGORA = new Date('2026-10-13T15:00:00Z');
 type SolicitacaoFake = {
   id: number;
   usuarioId: number;
+  categoria: CategoriaSuporte;
   nome: string;
   email: string;
   assunto: string;
@@ -34,6 +37,22 @@ type SolicitacaoFake = {
   criadaEm: Date;
   atualizadaEm: Date;
 };
+
+type FiltroFake = {
+  usuarioId?: number;
+  status?: StatusSolicitacaoSuporte;
+  categoria?: CategoriaSuporte;
+  criadaEm?: { gte: Date };
+};
+
+function atende(s: SolicitacaoFake, where: FiltroFake): boolean {
+  return (
+    (where.usuarioId === undefined || s.usuarioId === where.usuarioId) &&
+    (where.status === undefined || s.status === where.status) &&
+    (where.categoria === undefined || s.categoria === where.categoria) &&
+    (where.criadaEm === undefined || s.criadaEm >= where.criadaEm.gte)
+  );
+}
 
 describe('SuporteService', () => {
   let service: SuporteService;
@@ -104,22 +123,11 @@ describe('SuporteService', () => {
           skip,
           take,
         }: {
-          where: {
-            usuarioId?: number;
-            status?: StatusSolicitacaoSuporte;
-            criadaEm?: { gte: Date };
-          };
+          where: FiltroFake;
           skip?: number;
           take?: number;
         }) => {
-          const filtrados = banco.filter(
-            (s) =>
-              (where.usuarioId === undefined ||
-                s.usuarioId === where.usuarioId) &&
-              (where.status === undefined || s.status === where.status) &&
-              (where.criadaEm === undefined ||
-                s.criadaEm >= where.criadaEm.gte),
-          );
+          const filtrados = banco.filter((s) => atende(s, where));
           return filtrados.slice(
             skip ?? 0,
             (skip ?? 0) + (take ?? filtrados.length),
@@ -127,10 +135,8 @@ describe('SuporteService', () => {
         },
       ),
       count: jest.fn(
-        ({ where }: { where: { status?: StatusSolicitacaoSuporte } }) =>
-          banco.filter(
-            (s) => where.status === undefined || s.status === where.status,
-          ).length,
+        ({ where }: { where: FiltroFake }) =>
+          banco.filter((s) => atende(s, where)).length,
       ),
       findUnique: jest.fn(({ where }: { where: { id: number } }) => {
         const registro = banco.find((s) => s.id === where.id);
@@ -177,6 +183,19 @@ describe('SuporteService', () => {
     jest.restoreAllMocks();
   });
 
+  // Categoria padrão dos testes que não tratam dela.
+  function criar(
+    corpo: Omit<CreateSolicitacaoSuporteDto, 'categoria'> & {
+      categoria?: CategoriaSuporte;
+    },
+    user: UsuarioAutenticado,
+  ) {
+    return service.criar(
+      { categoria: CategoriaSuporte.PEDIDO_ENTREGA, ...corpo },
+      user,
+    );
+  }
+
   function enviados(): { to: string; subject: string; html: string }[] {
     return (
       enviarEmail.mock.calls as [
@@ -189,9 +208,13 @@ describe('SuporteService', () => {
   // Criação
   // -------------------------------------------------------------------
 
-  it('grava com usuário, nome e e-mail da conta (nunca do corpo) e devolve o resumo', async () => {
-    const resultado = await service.criar(
-      { assunto: 'Dúvida sobre a vela', mensagem: 'Qual o tempo de queima?' },
+  it('grava com usuário, nome e e-mail da conta (nunca do corpo), a categoria escolhida, e devolve o resumo', async () => {
+    const resultado = await criar(
+      {
+        categoria: CategoriaSuporte.PRODUTO,
+        assunto: 'Dúvida sobre a vela',
+        mensagem: 'Qual o tempo de queima?',
+      },
       CLIENTE,
     );
 
@@ -200,12 +223,14 @@ describe('SuporteService', () => {
         usuarioId: CLIENTE.id,
         nome: 'Ana Souza',
         email: 'ana@sensora.dev',
+        categoria: CategoriaSuporte.PRODUTO,
         assunto: 'Dúvida sobre a vela',
         mensagem: 'Qual o tempo de queima?',
       },
     });
     expect(resultado).toEqual({
       id: 1,
+      categoria: CategoriaSuporte.PRODUTO,
       assunto: 'Dúvida sobre a vela',
       status: StatusSolicitacaoSuporte.ABERTA,
       criadaEm: AGORA,
@@ -214,7 +239,7 @@ describe('SuporteService', () => {
   });
 
   it('trava a linha do usuário (SELECT ... FOR UPDATE) antes de conferir a repetição', async () => {
-    await service.criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
+    await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
 
     const [partes, ...valores] = queryRaw.mock.calls[0] as [
       string[],
@@ -225,7 +250,7 @@ describe('SuporteService', () => {
   });
 
   it('normaliza: assunto numa linha só, mensagem com CRLF -> LF e sem espaços nas pontas', async () => {
-    await service.criar(
+    await criar(
       {
         assunto: '  Pedido\r\nBcc: x@y.com\t atrasado  ',
         mensagem: '  Olá,\r\n\r\nmeu pedido não chegou.  ',
@@ -237,7 +262,7 @@ describe('SuporteService', () => {
     expect(banco[0].mensagem).toBe('Olá,\n\nmeu pedido não chegou.');
     const [{ subject }] = enviados();
     expect(subject).toBe(
-      'Nova solicitação de suporte — Pedido Bcc: x@y.com atrasado',
+      'Nova solicitação de suporte (Pedido e entrega) — Pedido Bcc: x@y.com atrasado',
     );
     expect(subject).not.toMatch(/[\r\n]/);
   });
@@ -249,7 +274,7 @@ describe('SuporteService', () => {
   ])(
     'texto só com espaços é recusado (%j) sem gravar nem avisar',
     async (dto, mensagemErro) => {
-      await expect(service.criar(dto, CLIENTE)).rejects.toThrow(
+      await expect(criar(dto, CLIENTE)).rejects.toThrow(
         new BadRequestException(mensagemErro),
       );
       expect(criarRegistro).not.toHaveBeenCalled();
@@ -261,7 +286,7 @@ describe('SuporteService', () => {
     usuarioFake = null;
 
     await expect(
-      service.criar({ assunto: 'A', mensagem: 'B' }, CLIENTE),
+      criar({ assunto: 'A', mensagem: 'B' }, CLIENTE),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(criarRegistro).not.toHaveBeenCalled();
     expect(enviarEmail).not.toHaveBeenCalled();
@@ -272,7 +297,7 @@ describe('SuporteService', () => {
   // -------------------------------------------------------------------
 
   it('grava ANTES de avisar e envia um e-mail a cada ADMIN ativo com cliente, data, assunto, mensagem e link', async () => {
-    await service.criar(
+    await criar(
       { assunto: 'Troca de aroma', mensagem: 'Linha 1\nLinha 2' },
       CLIENTE,
     );
@@ -288,9 +313,12 @@ describe('SuporteService', () => {
     expect(enviados().map((e) => e.to)).toEqual([ADMIN_1.email, ADMIN_2.email]);
 
     const { subject, html } = enviados()[0];
-    expect(subject).toBe('Nova solicitação de suporte — Troca de aroma');
+    expect(subject).toBe(
+      'Nova solicitação de suporte (Pedido e entrega) — Troca de aroma',
+    );
     expect(html).toContain('Cliente: Ana Souza (ana@sensora.dev)');
     expect(html).toContain('Data: 13/10/2026, 12:00');
+    expect(html).toContain('Categoria: Pedido e entrega');
     expect(html).toContain('Assunto: Troca de aroma');
     expect(html).toContain('Mensagem:<br>Linha 1<br>Linha 2');
     expect(html).toContain(
@@ -313,7 +341,7 @@ describe('SuporteService', () => {
   it('texto do cliente (nome, assunto e mensagem) é escapado no HTML', async () => {
     usuarioFake = { nome: '<b>Ana</b>', email: 'ana@sensora.dev' };
 
-    await service.criar(
+    await criar(
       {
         assunto: '<script>alert("x")</script>',
         mensagem: '<img src=x onerror=alert(1)>',
@@ -333,7 +361,7 @@ describe('SuporteService', () => {
   it('falha no envio a um admin não impede o envio aos outros', async () => {
     enviarEmail.mockRejectedValueOnce(new Error('provedor fora do ar'));
 
-    await service.criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
+    await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
 
     expect(enviados().map((e) => e.to)).toEqual([ADMIN_1.email, ADMIN_2.email]);
     expect(erroLog).toHaveBeenCalledWith(
@@ -344,16 +372,10 @@ describe('SuporteService', () => {
 
   it('falha no aviso (e-mail ou leitura dos admins) não desfaz a solicitação nem vira erro para o cliente', async () => {
     enviarEmail.mockRejectedValue(new Error('provedor fora do ar'));
-    const primeira = await service.criar(
-      { assunto: 'A', mensagem: 'B' },
-      CLIENTE,
-    );
+    const primeira = await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
 
     buscarAdmins.mockRejectedValueOnce(new Error('banco instável'));
-    const segunda = await service.criar(
-      { assunto: 'C', mensagem: 'D' },
-      CLIENTE,
-    );
+    const segunda = await criar({ assunto: 'C', mensagem: 'D' }, CLIENTE);
 
     expect(primeira.id).toBe(1);
     expect(segunda.id).toBe(2);
@@ -367,7 +389,7 @@ describe('SuporteService', () => {
   it('sem ADMIN ativo: registra aviso no log e não envia nada', async () => {
     admins = [];
 
-    await service.criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
+    await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
 
     expect(enviarEmail).not.toHaveBeenCalled();
     expect(avisoLog).toHaveBeenCalledWith(
@@ -378,7 +400,7 @@ describe('SuporteService', () => {
   it('sem FRONTEND_URL, o e-mail orienta a abrir o painel e não inventa link', async () => {
     frontendUrl = undefined;
 
-    await service.criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
+    await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
 
     const { html } = enviados()[0];
     expect(html).not.toContain('href=');
@@ -390,13 +412,13 @@ describe('SuporteService', () => {
   // -------------------------------------------------------------------
 
   it('repetição idêntica (só espaços diferentes) dentro da janela devolve a mesma, sem gravar nem avisar de novo', async () => {
-    const primeira = await service.criar(
+    const primeira = await criar(
       { assunto: 'Pedido atrasado', mensagem: 'Não chegou.' },
       CLIENTE,
     );
     enviarEmail.mockClear();
 
-    const repetida = await service.criar(
+    const repetida = await criar(
       { assunto: ' Pedido  atrasado ', mensagem: 'Não chegou. ' },
       CLIENTE,
     );
@@ -407,13 +429,13 @@ describe('SuporteService', () => {
   });
 
   it('solicitação diferente dentro da janela é criada e avisa de novo', async () => {
-    await service.criar(
+    await criar(
       { assunto: 'Pedido atrasado', mensagem: 'Não chegou.' },
       CLIENTE,
     );
     enviarEmail.mockClear();
 
-    const outra = await service.criar(
+    const outra = await criar(
       {
         assunto: 'Pedido atrasado',
         mensagem: 'E também quero trocar o aroma.',
@@ -426,21 +448,43 @@ describe('SuporteService', () => {
   });
 
   it('a mesma solicitação fora da janela é criada normalmente', async () => {
-    await service.criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
+    await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
     jest
       .spyOn(Date, 'now')
       .mockReturnValue(AGORA.getTime() + JANELA_REPETICAO_SUPORTE_MS + 1);
 
-    const nova = await service.criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
+    const nova = await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
 
     expect(nova.id).toBe(2);
   });
 
+  it('mesmo assunto e mensagem com outra categoria é outra solicitação', async () => {
+    await criar(
+      { categoria: CategoriaSuporte.PAGAMENTO, assunto: 'A', mensagem: 'B' },
+      CLIENTE,
+    );
+
+    const nova = await criar(
+      {
+        categoria: CategoriaSuporte.PEDIDO_ENTREGA,
+        assunto: 'A',
+        mensagem: 'B',
+      },
+      CLIENTE,
+    );
+
+    expect(nova.id).toBe(2);
+    expect(banco.map((s) => s.categoria)).toEqual([
+      CategoriaSuporte.PAGAMENTO,
+      CategoriaSuporte.PEDIDO_ENTREGA,
+    ]);
+  });
+
   it('a mesma solicitação já em atendimento não é reaproveitada', async () => {
-    await service.criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
+    await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
     banco[0].status = StatusSolicitacaoSuporte.EM_ATENDIMENTO;
 
-    const nova = await service.criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
+    const nova = await criar({ assunto: 'A', mensagem: 'B' }, CLIENTE);
 
     expect(nova.id).toBe(2);
   });
@@ -452,6 +496,7 @@ describe('SuporteService', () => {
   function semear(
     quantidade: number,
     status = StatusSolicitacaoSuporte.ABERTA,
+    categoria = CategoriaSuporte.OUTRO,
   ) {
     for (let i = 0; i < quantidade; i++) {
       const id = banco.length + 1;
@@ -460,6 +505,7 @@ describe('SuporteService', () => {
         usuarioId: CLIENTE.id,
         nome: 'Ana Souza',
         email: 'ana@sensora.dev',
+        categoria,
         assunto: `Assunto ${id}`,
         mensagem: `Mensagem ${id}`,
         status,
@@ -486,6 +532,7 @@ describe('SuporteService', () => {
       id: 3,
       nome: 'Ana Souza',
       email: 'ana@sensora.dev',
+      categoria: CategoriaSuporte.OUTRO,
       assunto: 'Assunto 3',
       status: StatusSolicitacaoSuporte.ABERTA,
       criadaEm: AGORA,
@@ -516,6 +563,42 @@ describe('SuporteService', () => {
       skip: 0,
       take: 20,
     });
+  });
+
+  it('filtra por categoria (combinável com status) e o resumo traz a categoria', async () => {
+    semear(1, StatusSolicitacaoSuporte.ABERTA, CategoriaSuporte.PAGAMENTO);
+    semear(1, StatusSolicitacaoSuporte.RESOLVIDA, CategoriaSuporte.PAGAMENTO);
+    semear(1, StatusSolicitacaoSuporte.ABERTA, CategoriaSuporte.PRODUTO);
+    const findMany = (
+      service as unknown as {
+        prisma: { solicitacaoSuporte: { findMany: jest.Mock } };
+      }
+    ).prisma.solicitacaoSuporte.findMany;
+
+    const pagina = await service.listarParaAdmin({
+      page: 1,
+      pageSize: 20,
+      categoria: CategoriaSuporte.PAGAMENTO,
+    });
+    expect(pagina.items.map((s) => s.categoria)).toEqual([
+      CategoriaSuporte.PAGAMENTO,
+      CategoriaSuporte.PAGAMENTO,
+    ]);
+
+    await service.listarParaAdmin({
+      page: 1,
+      pageSize: 20,
+      status: StatusSolicitacaoSuporte.ABERTA,
+      categoria: CategoriaSuporte.PAGAMENTO,
+    });
+    expect(findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: {
+          status: StatusSolicitacaoSuporte.ABERTA,
+          categoria: CategoriaSuporte.PAGAMENTO,
+        },
+      }),
+    );
   });
 
   it('detalhe traz a mensagem; id inexistente é 404', async () => {

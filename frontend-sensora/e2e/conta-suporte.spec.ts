@@ -95,21 +95,24 @@ test.describe("Minha Conta — Suporte", () => {
     const chamadas = await mockSuporte(page);
 
     await page.goto(SUPORTE_URL);
+    await page.getByLabel("Do que se trata?").selectOption("PEDIDO_ENTREGA");
     await page.getByLabel("Assunto").fill("Pedido atrasado");
     await page.getByLabel("Mensagem").fill("Meu pedido PED-10 ainda não chegou.\nPodem verificar?");
     await page.getByRole("button", { name: "Enviar solicitação" }).click();
 
     await expect(page.getByText("Recebemos sua solicitação nº 12.")).toBeVisible();
     await expect(page.getByText("cliente@sensora.dev")).toBeVisible();
-    // Só assunto e mensagem saem daqui — nunca nome, e-mail ou usuário.
+    // Só categoria, assunto e mensagem saem daqui — nunca nome, e-mail ou usuário.
     expect(chamadas.corpos).toEqual([
       {
+        categoria: "PEDIDO_ENTREGA",
         assunto: "Pedido atrasado",
         mensagem: "Meu pedido PED-10 ainda não chegou.\nPodem verificar?",
       },
     ]);
 
     await page.getByRole("button", { name: "Enviar outra solicitação" }).click();
+    await expect(page.getByLabel("Do que se trata?")).toHaveValue("");
     await expect(page.getByLabel("Assunto")).toHaveValue("");
   });
 
@@ -119,9 +122,11 @@ test.describe("Minha Conta — Suporte", () => {
 
     await page.goto(SUPORTE_URL);
     await page.getByRole("button", { name: "Enviar solicitação" }).click();
+    await expect(page.getByText("Escolha do que se trata")).toBeVisible();
     await expect(page.getByText("Informe o assunto")).toBeVisible();
     await expect(page.getByText("Escreva a mensagem")).toBeVisible();
 
+    await page.getByLabel("Do que se trata?").selectOption("PRODUTO");
     await page.getByLabel("Assunto").fill("   ");
     await page.getByLabel("Mensagem").fill("Texto");
     await page.getByRole("button", { name: "Enviar solicitação" }).click();
@@ -147,6 +152,7 @@ test.describe("Minha Conta — Suporte", () => {
     await mockSuporte(page, { status: 400, body: { message: "Escreva a mensagem." } });
 
     await page.goto(SUPORTE_URL);
+    await page.getByLabel("Do que se trata?").selectOption("PEDIDO_ENTREGA");
     await page.getByLabel("Assunto").fill("Dúvida");
     await page.getByLabel("Mensagem").fill("Texto");
     await page.getByRole("button", { name: "Enviar solicitação" }).click();
@@ -163,6 +169,7 @@ test.describe("Minha Conta — Suporte", () => {
     });
 
     await page.goto(SUPORTE_URL);
+    await page.getByLabel("Do que se trata?").selectOption("PEDIDO_ENTREGA");
     await page.getByLabel("Assunto").fill("Dúvida");
     await page.getByLabel("Mensagem").fill("Texto");
     await page.getByRole("button", { name: "Enviar solicitação" }).click();
@@ -179,6 +186,7 @@ test.describe("Minha Conta — Suporte", () => {
     const chamadas = await mockSuporte(page, { delayMs: 800 });
 
     await page.goto(SUPORTE_URL);
+    await page.getByLabel("Do que se trata?").selectOption("PEDIDO_ENTREGA");
     await page.getByLabel("Assunto").fill("Dúvida");
     await page.getByLabel("Mensagem").fill("Texto");
     const botao = page.getByRole("button", { name: "Enviar solicitação" });

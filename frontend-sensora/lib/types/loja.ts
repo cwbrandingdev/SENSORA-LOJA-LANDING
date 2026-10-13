@@ -876,13 +876,34 @@ export const ROTULOS_STATUS_SUPORTE: Record<StatusSolicitacaoSuporte, string> = 
   RESOLVIDA: "Resolvida",
 };
 
+// Do que trata a solicitação (backend: CategoriaSuporte, com os mesmos
+// rótulos em ROTULOS_CATEGORIA_SUPORTE — mantenha os dois iguais).
+export type CategoriaSuporte =
+  | "PRODUTO"
+  | "PEDIDO_ENTREGA"
+  | "TROCA_DEVOLUCAO"
+  | "PAGAMENTO"
+  | "CONTA"
+  | "OUTRO";
+
+export const ROTULOS_CATEGORIA_SUPORTE: Record<CategoriaSuporte, string> = {
+  PRODUTO: "Dúvida sobre produto",
+  PEDIDO_ENTREGA: "Pedido e entrega",
+  TROCA_DEVOLUCAO: "Troca ou devolução",
+  PAGAMENTO: "Pagamento",
+  CONTA: "Minha conta",
+  OUTRO: "Outro assunto",
+};
+
 export type CriarSolicitacaoSuportePayload = {
+  categoria: CategoriaSuporte;
   assunto: string;
   mensagem: string;
 };
 
 export type SolicitacaoSuporteCriada = {
   id: number;
+  categoria: CategoriaSuporte;
   assunto: string;
   status: StatusSolicitacaoSuporte;
   criadaEm: string;
@@ -892,6 +913,7 @@ export type SolicitacaoSuporteResumo = {
   id: number;
   nome: string;
   email: string;
+  categoria: CategoriaSuporte;
   assunto: string;
   status: StatusSolicitacaoSuporte;
   criadaEm: string;

@@ -19,14 +19,24 @@ import { getErrorMessage } from "@/lib/errors";
 import { decodeToken } from "@/lib/jwt";
 import { getToken } from "@/lib/storage";
 import { ROUTES } from "@/lib/routes";
-import { PerfilUsuario } from "@/lib/types/loja";
+import {
+  PerfilUsuario,
+  ROTULOS_CATEGORIA_SUPORTE,
+  type CategoriaSuporte,
+} from "@/lib/types/loja";
 import { criarSolicitacaoSuporte } from "@/services/suporte";
 
 // Mesmos limites do backend (CreateSolicitacaoSuporteDto).
 const MAXIMO_ASSUNTO = 150;
 const MAXIMO_MENSAGEM = 5000;
 
+const CATEGORIAS = Object.keys(ROTULOS_CATEGORIA_SUPORTE) as CategoriaSuporte[];
+
 const suporteSchema = z.object({
+  // "" é o "Selecione..." inicial: obriga o cliente a escolher.
+  categoria: z
+    .string()
+    .refine((valor) => CATEGORIAS.includes(valor as CategoriaSuporte), "Escolha do que se trata"),
   assunto: z
     .string()
     .trim()
@@ -62,7 +72,7 @@ export default function SuportePage() {
     formState: { errors, isSubmitting },
   } = useForm<SuporteFormValues>({
     resolver: zodResolver(suporteSchema),
-    defaultValues: { assunto: "", mensagem: "" },
+    defaultValues: { categoria: "", assunto: "", mensagem: "" },
   });
 
   const tamanhoMensagem = watch("mensagem").length;
@@ -70,7 +80,10 @@ export default function SuportePage() {
   async function onSubmit(data: SuporteFormValues) {
     setServerError("");
     try {
-      const solicitacao = await criarSolicitacaoSuporte(data);
+      const solicitacao = await criarSolicitacaoSuporte({
+        ...data,
+        categoria: data.categoria as CategoriaSuporte,
+      });
       reset();
       setEnviada(solicitacao.id);
       toast.success("Solicitação enviada.");
@@ -121,6 +134,33 @@ export default function SuportePage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="categoria" className={labelClass}>
+                  Do que se trata?
+                </label>
+                <select
+                  id="categoria"
+                  aria-invalid={errors.categoria ? true : undefined}
+                  aria-describedby={errors.categoria ? "categoria-erro" : undefined}
+                  className={inputClass}
+                  {...register("categoria")}
+                >
+                  <option value="" disabled>
+                    Selecione...
+                  </option>
+                  {CATEGORIAS.map((categoria) => (
+                    <option key={categoria} value={categoria}>
+                      {ROTULOS_CATEGORIA_SUPORTE[categoria]}
+                    </option>
+                  ))}
+                </select>
+                {errors.categoria && (
+                  <p id="categoria-erro" className={errorClass}>
+                    {errors.categoria.message}
+                  </p>
+                )}
+              </div>
+
               <div className="flex flex-col gap-1">
                 <label htmlFor="assunto" className={labelClass}>
                   Assunto

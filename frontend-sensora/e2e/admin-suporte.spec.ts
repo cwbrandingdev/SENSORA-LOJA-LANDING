@@ -57,6 +57,7 @@ type Solicitacao = {
   usuarioId: number;
   nome: string;
   email: string;
+  categoria: string;
   assunto: string;
   mensagem: string;
   status: "ABERTA" | "EM_ATENDIMENTO" | "RESOLVIDA";
@@ -69,6 +70,7 @@ function solicitacao(extras: Partial<Solicitacao> & { id: number }): Solicitacao
     usuarioId: 7,
     nome: "Ana Cliente",
     email: "ana@sensora.dev",
+    categoria: "PEDIDO_ENTREGA",
     assunto: `Assunto ${extras.id}`,
     mensagem: "Meu pedido não chegou.\nPodem verificar?",
     status: "ABERTA",
@@ -85,6 +87,7 @@ const BASE = [
     assunto: "Troca de aroma",
     nome: "Bruno",
     email: "bruno@sensora.dev",
+    categoria: "PAGAMENTO",
     status: "RESOLVIDA",
   }),
 ];
@@ -95,6 +98,7 @@ function resumo(s: Solicitacao) {
     id: s.id,
     nome: s.nome,
     email: s.email,
+    categoria: s.categoria,
     assunto: s.assunto,
     status: s.status,
     criadaEm: s.criadaEm,
@@ -118,14 +122,14 @@ async function mockSuporte(
     erroLista?: boolean;
   } = {},
 ): Promise<{
-  consultas: { status: string | null; page: string | null }[];
+  consultas: { status: string | null; categoria: string | null; page: string | null }[];
   mudancas: unknown[];
   erroLista: boolean;
 }> {
   const banco = (options.solicitacoes ?? BASE).map((s) => ({ ...s }));
   const porPagina = options.porPagina ?? 20;
   const chamadas = {
-    consultas: [] as { status: string | null; page: string | null }[],
+    consultas: [] as { status: string | null; categoria: string | null; page: string | null }[],
     mudancas: [] as unknown[],
     erroLista: options.erroLista ?? false,
   };
@@ -142,13 +146,16 @@ async function mockSuporte(
 
       if (url.pathname === "/admin/suporte" && request.method() === "GET") {
         const status = url.searchParams.get("status");
+        const categoria = url.searchParams.get("categoria");
         const pagina = Number(url.searchParams.get("page") ?? 1);
-        chamadas.consultas.push({ status, page: url.searchParams.get("page") });
+        chamadas.consultas.push({ status, categoria, page: url.searchParams.get("page") });
         if (chamadas.erroLista) {
           await responder(route, 500, { message: "Internal server error" });
           return;
         }
-        const filtradas = banco.filter((s) => !status || s.status === status);
+        const filtradas = banco.filter(
+          (s) => (!status || s.status === status) && (!categoria || s.categoria === categoria),
+        );
         await responder(route, 200, {
           items: filtradas.slice((pagina - 1) * porPagina, pagina * porPagina).map(resumo),
           page: pagina,
@@ -198,7 +205,8 @@ test.describe("Admin — Suporte", () => {
     await expect(page.getByRole("row").filter({ hasText: "Troca de aroma" })).toContainText(
       "Resolvida",
     );
-    expect(chamadas.consultas[0]).toEqual({ status: null, page: "1" });
+    await expect(linha).toContainText("Pedido e entrega");
+    expect(chamadas.consultas[0]).toEqual({ status: null, categoria: null, page: "1" });
   });
 
   test("filtro por status pede ao backend e mostra só as do status", async ({ page }) => {
@@ -211,7 +219,20 @@ test.describe("Admin — Suporte", () => {
 
     await expect(page.getByRole("link", { name: "Troca de aroma" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Pedido atrasado" })).toHaveCount(0);
-    expect(chamadas.consultas.at(-1)).toEqual({ status: "RESOLVIDA", page: "1" });
+    expect(chamadas.consultas.at(-1)).toEqual({ status: "RESOLVIDA", categoria: null, page: "1" });
+  });
+
+  test("filtro por categoria pede ao backend e mostra só as da categoria", async ({ page }) => {
+    await seedSession(page);
+    const chamadas = await mockSuporte(page);
+
+    await page.goto(LISTA_URL);
+    await expect(page.getByRole("link", { name: "Pedido atrasado" })).toBeVisible();
+    await page.getByLabel("Categoria").selectOption("PAGAMENTO");
+
+    await expect(page.getByRole("link", { name: "Troca de aroma" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Pedido atrasado" })).toHaveCount(0);
+    expect(chamadas.consultas.at(-1)).toEqual({ status: null, categoria: "PAGAMENTO", page: "1" });
   });
 
   test("filtro sem resultado mostra o estado vazio", async ({ page }) => {
@@ -221,7 +242,7 @@ test.describe("Admin — Suporte", () => {
     await page.goto(LISTA_URL);
     await page.getByLabel("Status").selectOption("EM_ATENDIMENTO");
 
-    await expect(page.getByText("Nenhuma solicitação com este status.")).toBeVisible();
+    await expect(page.getByText("Nenhuma solicitação com estes filtros.")).toBeVisible();
   });
 
   test("paginação pede a próxima página ao backend", async ({ page }) => {
@@ -241,7 +262,7 @@ test.describe("Admin — Suporte", () => {
 
     await expect(page.getByRole("link", { name: "Terceira" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Primeira" })).toHaveCount(0);
-    expect(chamadas.consultas.at(-1)).toEqual({ status: null, page: "2" });
+    expect(chamadas.consultas.at(-1)).toEqual({ status: null, categoria: null, page: "2" });
   });
 
   test("erro ao carregar mostra a mensagem e Tentar novamente recarrega", async ({ page }) => {
@@ -266,10 +287,24 @@ test.describe("Admin — Suporte", () => {
     await expect(page).toHaveURL(/\/workspace-x\/suporte\/1$/);
     await expect(page.getByRole("heading", { name: "Solicitação #1" })).toBeVisible();
     await expect(page.getByText("Meu pedido não chegou.")).toBeVisible();
+    await expect(page.getByText("Pedido e entrega")).toBeVisible();
     await expect(page.getByRole("link", { name: "Responder por e-mail" })).toHaveAttribute(
       "href",
       "mailto:ana@sensora.dev?subject=Re%3A%20Pedido%20atrasado",
     );
+  });
+
+  test("clicar em qualquer parte da linha (ex.: nome do cliente) abre o detalhe", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await mockSuporte(page);
+
+    await page.goto(LISTA_URL);
+    await page.getByRole("row").filter({ hasText: "Pedido atrasado" }).getByText("Ana Cliente").click();
+
+    await expect(page).toHaveURL(/\/workspace-x\/suporte\/1$/);
+    await expect(page.getByRole("heading", { name: "Solicitação #1" })).toBeVisible();
   });
 
   test("muda o status: confirma, envia ao backend e atualiza a tela", async ({ page }) => {

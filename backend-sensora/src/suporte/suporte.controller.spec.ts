@@ -101,7 +101,12 @@ describe('Suporte — controllers (HTTP)', () => {
   const http = () => request(app.getHttpServer());
 
   describe('POST /suporte (cliente)', () => {
-    const corpo = { assunto: 'Dúvida', mensagem: 'Qual o prazo?' };
+    const corpo = {
+      categoria: 'PEDIDO_ENTREGA',
+      assunto: 'Dúvida',
+      mensagem: 'Qual o prazo?',
+    };
+    const cat = { categoria: 'PEDIDO_ENTREGA' };
 
     it('exige JwtAuthGuard + RolesGuard e só o perfil CLIENTE', () => {
       const guards = Reflect.getMetadata(
@@ -145,19 +150,22 @@ describe('Suporte — controllers (HTTP)', () => {
     });
 
     it.each([
-      ['sem assunto', { mensagem: 'Texto' }],
-      ['sem mensagem', { assunto: 'Assunto' }],
-      ['assunto vazio', { assunto: '', mensagem: 'Texto' }],
-      ['mensagem vazia', { assunto: 'Assunto', mensagem: '' }],
+      ['sem categoria', { assunto: 'Assunto', mensagem: 'Texto' }],
+      ['categoria inexistente', { ...corpo, categoria: 'QUALQUER' }],
+      ['categoria vazia', { ...corpo, categoria: '' }],
+      ['sem assunto', { ...cat, mensagem: 'Texto' }],
+      ['sem mensagem', { ...cat, assunto: 'Assunto' }],
+      ['assunto vazio', { ...cat, assunto: '', mensagem: 'Texto' }],
+      ['mensagem vazia', { ...cat, assunto: 'Assunto', mensagem: '' }],
       [
         'assunto com 151 caracteres',
-        { assunto: 'a'.repeat(151), mensagem: 'Texto' },
+        { ...cat, assunto: 'a'.repeat(151), mensagem: 'Texto' },
       ],
       [
         'mensagem com 5001 caracteres',
-        { assunto: 'Assunto', mensagem: 'a'.repeat(5001) },
+        { ...cat, assunto: 'Assunto', mensagem: 'a'.repeat(5001) },
       ],
-      ['assunto não-texto', { assunto: 123, mensagem: 'Texto' }],
+      ['assunto não-texto', { ...cat, assunto: 123, mensagem: 'Texto' }],
       ['e-mail no corpo', { ...corpo, email: 'outro@sensora.dev' }],
       ['usuarioId no corpo', { ...corpo, usuarioId: 99 }],
       ['nome no corpo', { ...corpo, nome: 'Outra Pessoa' }],
@@ -175,7 +183,7 @@ describe('Suporte — controllers (HTTP)', () => {
       await http()
         .post('/suporte')
         .set('x-perfil', 'CLIENTE')
-        .send({ assunto: 'a'.repeat(150), mensagem: 'b'.repeat(5000) })
+        .send({ ...cat, assunto: 'a'.repeat(150), mensagem: 'b'.repeat(5000) })
         .expect(201);
     });
 
@@ -225,7 +233,9 @@ describe('Suporte — controllers (HTTP)', () => {
 
     it('filtro e paginação chegam ao service já convertidos', async () => {
       await http()
-        .get('/admin/suporte?page=2&pageSize=50&status=EM_ATENDIMENTO')
+        .get(
+          '/admin/suporte?page=2&pageSize=50&status=EM_ATENDIMENTO&categoria=PAGAMENTO',
+        )
         .set('x-perfil', 'ADMIN')
         .expect(200);
       expect(service.listarParaAdmin).toHaveBeenCalledWith(
@@ -233,20 +243,24 @@ describe('Suporte — controllers (HTTP)', () => {
           page: 2,
           pageSize: 50,
           status: 'EM_ATENDIMENTO',
+          categoria: 'PAGAMENTO',
         }),
       );
     });
 
-    it.each(['page=0', 'pageSize=101', 'status=QUALQUER', 'ordenarPor=email'])(
-      'parâmetro inválido (%s) é 400',
-      async (query) => {
-        await http()
-          .get(`/admin/suporte?${query}`)
-          .set('x-perfil', 'ADMIN')
-          .expect(400);
-        expect(service.listarParaAdmin).not.toHaveBeenCalled();
-      },
-    );
+    it.each([
+      'page=0',
+      'pageSize=101',
+      'status=QUALQUER',
+      'categoria=QUALQUER',
+      'ordenarPor=email',
+    ])('parâmetro inválido (%s) é 400', async (query) => {
+      await http()
+        .get(`/admin/suporte?${query}`)
+        .set('x-perfil', 'ADMIN')
+        .expect(400);
+      expect(service.listarParaAdmin).not.toHaveBeenCalled();
+    });
 
     it('ADMIN abre o detalhe e muda o status', async () => {
       await http().get('/admin/suporte/5').set('x-perfil', 'ADMIN').expect(200);

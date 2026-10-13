@@ -23,11 +23,15 @@ import {
   SolicitacaoSuporteDetalhe,
   SolicitacaoSuporteResumo,
 } from './entities/solicitacao-suporte.entity';
+import {
+  CategoriaSuporte,
+  ROTULOS_CATEGORIA_SUPORTE,
+} from './enums/categoria-suporte.enum';
 import { StatusSolicitacaoSuporte } from './enums/status-solicitacao-suporte.enum';
 
 // Proteção contra REPETIÇÃO ACIDENTAL (clique duplo, reenvio do navegador),
 // mesmo raciocínio de JANELA_REPETICAO_DEVOLUCAO_MS: a mesma solicitação
-// (mesmo cliente, assunto e mensagem, ainda ABERTA) feita de novo dentro
+// (mesmo cliente, categoria, assunto e mensagem, ainda ABERTA) feita de novo dentro
 // desta janela devolve a que já existe, sem criar outra nem avisar os
 // admins de novo. Qualquer diferença cria outra solicitação normalmente.
 export const JANELA_REPETICAO_SUPORTE_MS = 60 * 1000;
@@ -111,6 +115,7 @@ export class SuporteService {
         });
         const repetida = recentes.find(
           (recente) =>
+            (recente.categoria as CategoriaSuporte) === dto.categoria &&
             textoComparavel(recente.assunto) === textoComparavel(assunto) &&
             textoComparavel(recente.mensagem) === textoComparavel(mensagem),
         );
@@ -123,6 +128,7 @@ export class SuporteService {
             usuarioId: user.id,
             nome: usuario.nome,
             email: usuario.email,
+            categoria: dto.categoria,
             assunto,
             mensagem,
           },
@@ -139,6 +145,7 @@ export class SuporteService {
 
     return {
       id: solicitacao.id,
+      categoria: solicitacao.categoria as CategoriaSuporte,
       assunto: solicitacao.assunto,
       status: solicitacao.status as StatusSolicitacaoSuporte,
       criadaEm: solicitacao.criadaEm,
@@ -149,9 +156,10 @@ export class SuporteService {
     filtros: ListarSolicitacoesSuporteQueryDto,
   ): Promise<PaginaSolicitacoesSuporte> {
     const { page, pageSize } = filtros;
-    const where: Prisma.SolicitacaoSuporteWhereInput = filtros.status
-      ? { status: filtros.status }
-      : {};
+    const where: Prisma.SolicitacaoSuporteWhereInput = {
+      ...(filtros.status ? { status: filtros.status } : {}),
+      ...(filtros.categoria ? { categoria: filtros.categoria } : {}),
+    };
 
     const [registros, total] = await Promise.all([
       this.prisma.solicitacaoSuporte.findMany({
@@ -233,6 +241,8 @@ export class SuporteService {
       const acesso = frontendUrl
         ? `<p><a href="${escaparHtml(`${frontendUrl.replace(/\/$/, '')}${CAMINHO_ADMIN_SUPORTE}/${solicitacao.id}`)}">Ver a solicitação no painel</a></p>`
         : '<p>Acesse o painel administrativo, em Suporte, para ver a solicitação.</p>';
+      const categoria =
+        ROTULOS_CATEGORIA_SUPORTE[solicitacao.categoria as CategoriaSuporte];
       const quando = solicitacao.criadaEm.toLocaleString('pt-BR', {
         timeZone: 'America/Sao_Paulo',
         dateStyle: 'short',
@@ -243,12 +253,13 @@ export class SuporteService {
         '<p>Uma nova solicitação de suporte foi registrada.</p>' +
         `<p>Cliente: ${escaparHtml(solicitacao.nome)} (${escaparHtml(solicitacao.email)})</p>` +
         `<p>Data: ${escaparHtml(quando)}</p>` +
+        `<p>Categoria: ${escaparHtml(categoria)}</p>` +
         `<p>Assunto: ${escaparHtml(solicitacao.assunto)}</p>` +
         `<p>Mensagem:<br>${escaparHtml(solicitacao.mensagem).replace(/\n/g, '<br>')}</p>` +
         acesso +
         '<p>Responda ao cliente por e-mail, no endereço acima.</p>';
       // O assunto já foi normalizado para uma linha só (normalizarAssunto).
-      const subject = `Nova solicitação de suporte — ${solicitacao.assunto}`;
+      const subject = `Nova solicitação de suporte (${categoria}) — ${solicitacao.assunto}`;
 
       for (const admin of admins) {
         try {
@@ -284,6 +295,7 @@ export class SuporteService {
       id: registro.id,
       nome: registro.nome,
       email: registro.email,
+      categoria: registro.categoria as CategoriaSuporte,
       assunto: registro.assunto,
       status: registro.status as StatusSolicitacaoSuporte,
       criadaEm: registro.criadaEm,

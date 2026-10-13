@@ -683,6 +683,9 @@ model SolicitacaoSuporte {
   usuarioId    Int
   nome         String
   email        String
+  // Escolhida pelo cliente no formulário (obrigatória na API). O default só
+  // existe para as solicitações gravadas antes desta coluna.
+  categoria    CategoriaSuporte         @default(OUTRO)
   assunto      String
   mensagem     String
   status       StatusSolicitacaoSuporte @default(ABERTA)
@@ -705,4 +708,14 @@ enum StatusSolicitacaoSuporte {
   ABERTA
   EM_ATENDIMENTO
   RESOLVIDA
+}
+
+// Do que trata a solicitação de suporte.
+enum CategoriaSuporte {
+  PRODUTO
+  PEDIDO_ENTREGA
+  TROCA_DEVOLUCAO
+  PAGAMENTO
+  CONTA
+  OUTRO
 }

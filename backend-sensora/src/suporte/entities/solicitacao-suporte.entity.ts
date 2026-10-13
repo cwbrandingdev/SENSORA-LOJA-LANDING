@@ -1,8 +1,10 @@
+import { CategoriaSuporte } from '../enums/categoria-suporte.enum';
 import { StatusSolicitacaoSuporte } from '../enums/status-solicitacao-suporte.enum';
 
 // Resposta ao cliente que acabou de abrir a solicitação.
 export interface SolicitacaoSuporteCriada {
   id: number;
+  categoria: CategoriaSuporte;
   assunto: string;
   status: StatusSolicitacaoSuporte;
   criadaEm: Date;
@@ -13,6 +15,7 @@ export interface SolicitacaoSuporteResumo {
   id: number;
   nome: string;
   email: string;
+  categoria: CategoriaSuporte;
   assunto: string;
   status: StatusSolicitacaoSuporte;
   criadaEm: Date;
