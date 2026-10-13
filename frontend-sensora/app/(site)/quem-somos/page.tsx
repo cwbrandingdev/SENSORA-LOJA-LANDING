@@ -7,10 +7,11 @@ import { EMPRESA, ENDERECO_LINHA, ROTAS_LEGAIS } from "@/lib/empresa";
 export const metadata: Metadata = {
   title: "Quem somos",
   description:
-    "A Sensora é a marca de marketing sensorial da Cazarim & Souza Ltda. Razão social, CNPJ e endereço da loja.",
+    "A Sensora é a marca de Cazarim & Souza Ltda. Razão social, CNPJ e endereço da loja.",
 };
 
-const CITACAO = "Uma casa bem perfumada não é apenas percebida — ela é sentida.";
+const CITACAO =
+  "Uma casa bem perfumada não é apenas percebida — ela é sentida.";
 
 const DOCUMENTOS = [
   { label: "Termos de Uso", href: ROTAS_LEGAIS.termos },
@@ -50,8 +51,14 @@ export default function QuemSomosPage() {
   return (
     <div className="relative overflow-hidden">
       {/* Manchas de cor desfocadas ao fundo. */}
-      <div aria-hidden className="absolute top-40 -right-20 h-96 w-96 rounded-full bg-brand-orange/15 blur-3xl" />
-      <div aria-hidden className="absolute top-[60%] left-1/4 h-80 w-80 rounded-full bg-[#dbe4f0]/60 blur-3xl" />
+      <div
+        aria-hidden
+        className="absolute top-40 -right-20 h-96 w-96 rounded-full bg-brand-orange/15 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="absolute top-[60%] left-1/4 h-80 w-80 rounded-full bg-[#dbe4f0]/60 blur-3xl"
+      />
 
       <div className="relative mx-auto max-w-6xl px-6 pt-6 pb-24 lg:px-10 lg:pb-32">
         <p
@@ -76,7 +83,9 @@ export default function QuemSomosPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
               {ABOUT_CONTENT.eyebrow}
             </p>
-            <h1 className="mt-3 font-serif text-5xl text-brand-navy sm:text-6xl">Quem somos</h1>
+            <h1 className="mt-3 font-serif text-5xl text-brand-navy sm:text-6xl">
+              Quem somos
+            </h1>
             <p className="mt-6 leading-relaxed text-slate-600 first-letter:float-left first-letter:mr-3 first-letter:font-serif first-letter:text-6xl first-letter:leading-none first-letter:text-brand-orange">
               {ABOUT_CONTENT.paragraphs[0]}
             </p>
@@ -90,26 +99,38 @@ export default function QuemSomosPage() {
         <div className="mx-auto mt-10 max-w-2xl space-y-4 text-center leading-relaxed text-slate-600">
           <p>{ABOUT_CONTENT.paragraphs[1]}</p>
           <p className="text-sm text-slate-500">
-            A marca Sensora é operada por {EMPRESA.razaoSocial}. Os produtos perfumam o ambiente. Não
-            prometem efeito terapêutico, medicinal ou de desinfecção.
+            A marca Sensora é operada por {EMPRESA.razaoSocial}. Os produtos
+            perfumam o ambiente. Não prometem efeito terapêutico, medicinal ou
+            de desinfecção.
           </p>
         </div>
 
         <div className="mt-20 grid gap-5 md:grid-cols-2">
           <div className="min-w-0 rounded-[2.5rem] bg-[#e8eef6] p-6 sm:p-8">
-            <h2 className="font-serif text-2xl text-brand-navy">Ficha técnica</h2>
+            <h2 className="font-serif text-2xl text-brand-navy">
+              Ficha técnica
+            </h2>
             <dl className="mt-4 divide-y divide-white text-sm">
               {FICHA.map((item) => (
-                <div key={item.termo} className="grid grid-cols-[6rem_1fr] gap-3 py-3 sm:grid-cols-[7rem_1fr] sm:gap-4">
-                  <dt className="text-xs uppercase tracking-[0.15em] text-slate-500">{item.termo}</dt>
-                  <dd className="min-w-0 wrap-anywhere text-brand-navy">{item.valor}</dd>
+                <div
+                  key={item.termo}
+                  className="grid grid-cols-[6rem_1fr] gap-3 py-3 sm:grid-cols-[7rem_1fr] sm:gap-4"
+                >
+                  <dt className="text-xs uppercase tracking-[0.15em] text-slate-500">
+                    {item.termo}
+                  </dt>
+                  <dd className="min-w-0 wrap-anywhere text-brand-navy">
+                    {item.valor}
+                  </dd>
                 </div>
               ))}
             </dl>
           </div>
 
           <div className="min-w-0 rounded-[2.5rem] bg-[#f5f2ed] p-6 sm:p-8">
-            <h2 className="font-serif text-2xl text-brand-navy">Documentos da loja</h2>
+            <h2 className="font-serif text-2xl text-brand-navy">
+              Documentos da loja
+            </h2>
             <ol className="mt-4 space-y-2">
               {DOCUMENTOS.map((doc, i) => (
                 <li key={doc.href}>
@@ -117,7 +138,9 @@ export default function QuemSomosPage() {
                     href={doc.href}
                     className="flex items-baseline gap-4 rounded-full bg-white px-5 py-3 text-brand-navy transition-colors hover:bg-brand-orange hover:text-white"
                   >
-                    <span className="font-serif text-brand-orange">{String(i + 1).padStart(2, "0")}</span>
+                    <span className="font-serif text-brand-orange">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
                     {doc.label}
                   </Link>
                 </li>

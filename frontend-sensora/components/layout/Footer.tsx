@@ -134,7 +134,7 @@ export default function Footer() {
           <IdentificacaoFornecedor className="space-y-1 text-white/70" />
           <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
             <p>© {year} Sensora. Todos os direitos reservados.</p>
-            <p className="uppercase tracking-[0.2em]">Marketing Sensorial</p>
+            <p className="uppercase tracking-[0.2em]">SensoraHome</p>
           </div>
         </div>
         <div className="mx-auto max-w-7xl px-6 pb-6 text-center text-[11px] text-white/40 lg:px-10 ">

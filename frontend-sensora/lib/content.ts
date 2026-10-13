@@ -487,11 +487,11 @@ export const HERO_SLIDES: HeroSlide[] = [
 ];
 
 export const ABOUT_CONTENT: AboutContent = {
-  eyebrow: "Marketing Sensorial",
+  eyebrow: "SensoraHome",
   title: "Sobre a Sensora",
   paragraphs: [
     "Na Sensora Home, acreditamos que os aromas têm o poder de transformar a forma como vivemos nossos espaços. Uma fragrância pode despertar uma lembrança, marcar um momento ou simplesmente mudar a atmosfera de um ambiente. É por isso que criamos aromas que convidam você a sentir a casa de uma maneira diferente.",
-    "Cada produto nasce da nossa experiência com o marketing sensorial, unindo perfumaria, estética e cuidado para transformar o cotidiano em experiências que despertam os sentidos. Porque uma casa bem perfumada não é apenas percebida — ela é sentida.",
+    "Cada produto nasce da nossa experiência com o SensoraHome, unindo perfumaria, estética e cuidado para transformar o cotidiano em experiências que despertam os sentidos. Porque uma casa bem perfumada não é apenas percebida — ela é sentida.",
   ],
   imageAlt: "Spray de ambiente Sensora Baunilha em um quarto aconchegante",
   imageSrc: "/images/about/sobre-sensora.png",
@@ -522,7 +522,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     id: "produtos",
     question: "Quais tipos de produtos a Sensora oferece?",
     answer:
-      "Trabalhamos com velas aromáticas, sprays de ambiente e difusores de aroma — produtos de marketing sensorial pensados para perfumar e transformar a atmosfera de qualquer espaço.",
+      "Trabalhamos com velas aromáticas, sprays de ambiente e difusores de aroma — produtos de SensoraHome pensados para perfumar e transformar a atmosfera de qualquer espaço.",
   },
   {
     id: "colecoes",

@@ -35,9 +35,11 @@ const nunito = Nunito({
 // Sem canonical aqui de propósito: todas as páginas herdariam o da home.
 // Os canonicals ficam só nas páginas que precisam (home, catálogo, produto).
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://sensorahome.com.br"),
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://sensorahome.com.br",
+  ),
   title: {
-    default: "Sensora | Marketing Sensorial",
+    default: "Sensora | Home",
     template: "%s | Sensora",
   },
   description:

@@ -39,7 +39,7 @@ export default function Logo({
       />
       {showTagline && (
         <span className="mt-4.5 mr-[-0.5em] text-[10px] font-medium tracking-[0.5em] text-brand-orange">
-          MARKETING SENSORIAL
+          SENSORAHOME
         </span>
       )}
     </span>
@@ -80,7 +80,7 @@ export function LogoSwap({
       </span>
       {showTagline && (
         <span className="mt-4.5 mr-[-0.5em] text-[10px] font-medium tracking-[0.5em] text-brand-orange">
-          MARKETING SENSORIAL
+          SENSORA|HOME
         </span>
       )}
     </span>

@@ -145,10 +145,18 @@ test.describe("Criar conta — /register", () => {
       cpf: "529.982.247-25",
     });
     await expect(page).toHaveURL(/\/register$/);
-    await expect(page.locator(".authswitch-container")).not.toHaveClass(/sign-up-mode/, {
-      timeout: 3000,
-    });
-    await expect(page.getByText("Conta criada!")).toBeVisible();
+
+    // Aviso grande do e-mail de confirmação: fica na tela (não some sozinho)
+    // até o usuário fechar no X; só então volta ao modo Entrar.
+    const aviso = page.getByRole("dialog", { name: "Conta criada!" });
+    await expect(aviso).toContainText("cliente@sensora.dev");
+    await page.waitForTimeout(3000);
+    await expect(aviso).toBeVisible();
+    await expect(page.locator(".authswitch-container")).toHaveClass(/sign-up-mode/);
+
+    await aviso.getByRole("button", { name: "Fechar" }).click();
+    await expect(aviso).toBeHidden();
+    await expect(page.locator(".authswitch-container")).not.toHaveClass(/sign-up-mode/);
   });
 
   test("domínio com erro comum (gmail.co): sugere gmail.com, e clicar na sugestão corrige o campo", async ({

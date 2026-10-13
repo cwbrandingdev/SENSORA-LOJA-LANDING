@@ -40,7 +40,7 @@ export default function CollectionShowcase({
 
       <RevealOnScroll className="mx-auto mt-12 max-w-3xl text-center sm:mt-16">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
-          {collection.eyebrow ?? "Kit"}
+          {collection.eyebrow ?? "Produtos"}
         </p>
         <h2
           id={headingId}

@@ -46,13 +46,14 @@
 // AuthContext, redirecionamento por perfil e tratamento de erro são
 // idênticos à Etapa 6.2 original — só a casca visual mudou.
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { isAxiosError } from "axios";
-import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff, X } from "lucide-react";
 import { login, register as registerUser } from "@/services/auth";
 import { setToken } from "@/lib/storage";
 import { isDestinoInternoValido } from "@/lib/auth-redirect";
@@ -102,7 +103,7 @@ export default function AuthSwitch({ initialMode }: { initialMode: AuthMode }) {
                 <h3>Novo por aqui?</h3>
                 <p>
                   Junte-se à Sensora e descubra uma nova forma de viver o
-                  marketing sensorial.
+                  SensoraHome.
                 </p>
                 <button
                   type="button"
@@ -147,7 +148,11 @@ export default function AuthSwitch({ initialMode }: { initialMode: AuthMode }) {
 // ---------------------------------------------------------------------------
 
 const loginSchema = z.object({
-  email: z.string().trim().min(1, "Email é obrigatório").email("Email inválido"),
+  email: z
+    .string()
+    .trim()
+    .min(1, "Email é obrigatório")
+    .email("Email inválido"),
   senha: z
     .string()
     .min(1, "Senha é obrigatória")
@@ -205,7 +210,11 @@ function SignInForm({ active }: { active: boolean }) {
       const codigoErro = isAxiosError(error)
         ? (error.response?.data as { code?: string } | undefined)?.code
         : undefined;
-      if (isAxiosError(error) && error.response?.status === 403 && codigoErro === "EMAIL_NAO_VERIFICADO") {
+      if (
+        isAxiosError(error) &&
+        error.response?.status === 403 &&
+        codigoErro === "EMAIL_NAO_VERIFICADO"
+      ) {
         router.push(
           `${ROUTES.CONFIRM_EMAIL}?email=${encodeURIComponent(data.email)}`,
         );
@@ -398,7 +407,11 @@ const registerSchema = z
     nome: z.string().min(1, "Nome é obrigatório"),
     // .trim(): espaço sobrando nas pontas não reprova mais um e-mail válido
     // (o backend também normaliza: trim + minúsculas).
-    email: z.string().trim().min(1, "Email é obrigatório").email("Email inválido"),
+    email: z
+      .string()
+      .trim()
+      .min(1, "Email é obrigatório")
+      .email("Email inválido"),
     // Etapa (Repetir senha) — mínimo elevado de 6 para 8 caracteres, para
     // ficar igual ao backend (RegisterDto.senha, ver
     // backend-sensora/src/auth/dto/register.dto.ts — @MinLength(8)).
@@ -433,13 +446,12 @@ function SignUpForm({
   onSuccess: () => void;
 }) {
   const [serverError, setServerError] = useState("");
-  // `success` continua existindo só para travar o botão de submit durante a
-  // janela de 2,2s antes da troca para o modo Login (disabled={isSubmitting
-  // || success} abaixo) — a mensagem inline que ele renderizava foi
-  // substituída pelo Toast (toast.success, ver onSubmit).
+  // `success` só trava o botão de submit depois do cadastro (disabled=
+  // {isSubmitting || success} abaixo), para não criar a conta duas vezes.
   const [success, setSuccess] = useState(false);
   const [senhaVisivel, setSenhaVisivel] = useState(false);
-  const toast = useToast();
+  // E-mail para o qual a confirmação foi enviada — abre o aviso grande.
+  const [emailEnviado, setEmailEnviado] = useState<string | null>(null);
 
   const {
     register,
@@ -449,7 +461,12 @@ function SignUpForm({
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { aceiteTermos: false, cpf: "", senha: "", confirmarSenha: "" },
+    defaultValues: {
+      aceiteTermos: false,
+      cpf: "",
+      senha: "",
+      confirmarSenha: "",
+    },
   });
 
   const aceiteTermos = watch("aceiteTermos");
@@ -477,21 +494,10 @@ function SignUpForm({
         cpf: data.cpf,
       });
       setSuccess(true);
-      // Etapa (Toast de cadastro) — substitui a antiga mensagem inline
-      // ("Conta criada!... voltando para o login...") por um Toast de
-      // sucesso (canto inferior direito, via ToastProvider montado acima).
-      // Confirmação obrigatória no login (AuthService.login) — o texto
-      // já orienta a confirmar o e-mail, já que a conta só consegue entrar
-      // depois disso. "Conta criada!" continua como prefixo de propósito:
-      // e2e/register.spec.ts casa por substring.
-      toast.success("Conta criada! Confirme seu e-mail para poder entrar.");
-      // O cadastro original redirecionava para /login após 1s. Aqui já
-      // estamos na mesma experiência (Auth Switch), então só volta ao modo
-      // Entrar via estado do React, sem navegar de rota (uma rota nova
-      // recarregaria a página — root layouts distintos, ver topo do arquivo).
-      // onSuccess continua responsável só pela troca de modo — o Toast já
-      // foi disparado acima, não depende deste timeout.
-      setTimeout(onSuccess, 2200);
+      // Aviso grande no centro da tela (não um Toast): a conta só entra
+      // depois de confirmar o e-mail (AuthService.login), então o usuário
+      // precisa ver isso. Só ao fechar no X volta ao modo Entrar (onSuccess).
+      setEmailEnviado(data.email.trim());
     } catch (err) {
       setServerError(getErrorMessage(err, "Não foi possível criar a conta."));
     }
@@ -587,7 +593,9 @@ function SignUpForm({
         <label htmlFor="register-cpf" className="sr-only">
           CPF
         </label>
-        <div className={cn("authswitch-input-field", errors.cpf && "has-error")}>
+        <div
+          className={cn("authswitch-input-field", errors.cpf && "has-error")}
+        >
           <span className="authswitch-input-icon">
             <User className="h-[18px] w-[18px]" />
           </span>
@@ -772,7 +780,69 @@ function SignUpForm({
           "Criar conta"
         )}
       </button>
+
+      {emailEnviado && (
+        <AvisoEmailEnviado
+          email={emailEnviado}
+          onClose={() => {
+            setEmailEnviado(null);
+            onSuccess();
+          }}
+        />
+      )}
     </form>
+  );
+}
+
+// Aviso de "confirme seu e-mail" depois do cadastro: grande, no centro da
+// tela, só fecha no X. Vai direto para o <body> (portal) para cobrir a tela
+// inteira mesmo dentro dos painéis animados do Auth Switch.
+function AvisoEmailEnviado({
+  email,
+  onClose,
+}: {
+  email: string;
+  onClose: () => void;
+}) {
+  return createPortal(
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-brand-navy/60 p-4 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="aviso-email-titulo"
+        className="relative w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-2xl"
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          autoFocus
+          aria-label="Fechar"
+          className="absolute right-4 top-4 rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-brand-navy"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-orange/10 text-brand-orange">
+          <Mail className="h-8 w-8" />
+        </span>
+        <h2
+          id="aviso-email-titulo"
+          className="mt-5 text-2xl font-semibold text-brand-navy"
+        >
+          Conta criada!
+        </h2>
+        <p className="mt-3 text-slate-600">
+          Enviamos um e-mail de confirmação para
+          <strong className="mt-1 block break-all text-brand-navy">
+            {email}
+          </strong>
+        </p>
+        <p className="mt-3 text-sm text-slate-500">
+          Abra o e-mail e clique no link para ativar sua conta. Só depois disso
+          você consegue entrar. Não chegou? Confira a caixa de spam.
+        </p>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
