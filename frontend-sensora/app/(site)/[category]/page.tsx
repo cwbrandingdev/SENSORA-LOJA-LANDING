@@ -62,7 +62,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
 
       {collections.length > 0 ? (
         collections.map((collection) => (
-          <CollectionShowcase key={collection.slug} collection={collection} semImagem />
+          <CollectionShowcase key={collection.slug} collection={collection} />
         ))
       ) : category.products && category.products.length > 0 ? (
         <CategoryProducts products={category.products} />
