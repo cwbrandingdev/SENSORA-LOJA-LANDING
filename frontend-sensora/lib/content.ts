@@ -146,7 +146,7 @@ export const CATEGORIES: Category[] = [
     lojaCategoriaSlug: "sprays-de-ambientes",
     label: "Sprays de Ambiente",
     description: "Uma borrifada para renovar a atmosfera do seu ambiente.",
-    imageSrc: "/images/products/sprays/flor-de-laranjeira.jpg",
+    imageSrc: "/images/categories/sprays-especiarias-ia.jpg",
   },
   {
     slug: "difusores",
@@ -154,7 +154,7 @@ export const CATEGORIES: Category[] = [
     label: "Difusores",
     description:
       "Uma presença perfumada que transforma o ambiente em uma extensão do seu estilo.",
-    imageSrc: "/images/categories/difusores-de-aroma.jpg",
+    imageSrc: "/images/categories/difusores-baunilha-zoom.jpg",
   },
 ];
 
@@ -268,9 +268,9 @@ const SPRAYS_DE_AMBIENTE: Collection = {
   tagline: "Baunilha, Especiarias e Flor de Laranjeira em uma coleção.",
   description:
     "Fragrâncias em spray para perfumar o ambiente na hora, com a assinatura Sensora.",
-  heroImageSrc: "/images/hero/banner-sprays-novos.png",
+  heroImageSrc: "/images/collections/sprays-baunilha.jpg",
   heroImageAlt:
-    "Coleção de sprays de ambiente Sensora, com os três frascos lado a lado sobre uma bancada",
+    "Spray de ambiente Sensora Baunilha numa janela, com flores brancas e luz do sol na parede azul",
   eyebrow: "Produtos",
   ctaLabel: "Conhecer sprays",
   items: [
@@ -320,9 +320,9 @@ const DIFUSORES_DE_AROMA: Collection = {
   tagline: "Baunilha, Especiarias e Flor de Laranjeira em uma coleção.",
   description:
     "Fragrância contínua e discreta para manter a atmosfera perfumada o dia inteiro.",
-  heroImageSrc: "/images/hero/difusores-de-aroma-banner.jpg",
+  heroImageSrc: "/images/collections/difusores-flor-de-laranjeira.jpg",
   heroImageAlt:
-    "Coleção de difusores de aroma Sensora, com os três difusores lado a lado sobre uma bancada",
+    "Difusor de aroma Sensora Flor de Laranjeira sobre uma pedra clara, com ramos de flor de laranjeira e fundo verde",
   eyebrow: "Produtos",
   ctaLabel: "Conhecer difusores",
   items: [
