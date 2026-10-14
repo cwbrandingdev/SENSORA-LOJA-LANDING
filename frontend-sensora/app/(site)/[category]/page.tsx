@@ -12,6 +12,8 @@ import {
   getCollectionsByCategory,
 } from "@/lib/content";
 import JsonLd from "@/components/seo/JsonLd";
+import { listarProdutosPublicos } from "@/lib/api-publica";
+import { colecaoComProdutosDaLoja } from "@/lib/colecao-com-loja";
 import { OPEN_GRAPH_PADRAO, breadcrumbJsonLd } from "@/lib/seo";
 
 export function generateStaticParams() {
@@ -46,7 +48,10 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     notFound();
   }
 
-  const collections = getCollectionsByCategory(category.slug);
+  const produtos = await listarProdutosPublicos();
+  const collections = getCollectionsByCategory(category.slug).map((collection) =>
+    colecaoComProdutosDaLoja(collection, produtos),
+  );
 
   return (
     <>

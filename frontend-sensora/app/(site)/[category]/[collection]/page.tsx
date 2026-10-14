@@ -11,6 +11,8 @@ import {
   getCollectionHref,
 } from "@/lib/content";
 import JsonLd from "@/components/seo/JsonLd";
+import { listarProdutosPublicos } from "@/lib/api-publica";
+import { colecaoComProdutosDaLoja } from "@/lib/colecao-com-loja";
 import { OPEN_GRAPH_PADRAO, breadcrumbJsonLd } from "@/lib/seo";
 
 export function generateStaticParams() {
@@ -60,7 +62,10 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
           { nome: collection.name, caminho: getCollectionHref(collection) },
         ])}
       />
-      <CollectionShowcase collection={collection} principal />
+      <CollectionShowcase
+        collection={colecaoComProdutosDaLoja(collection, await listarProdutosPublicos())}
+        principal
+      />
 
       {/* Kit 4 Estações — mesmo card/dados de [category]/page.tsx, só
           reaproveitado aqui. Restrito a esta coleção específica (não a

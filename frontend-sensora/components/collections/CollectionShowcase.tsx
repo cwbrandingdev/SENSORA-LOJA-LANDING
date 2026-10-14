@@ -74,6 +74,9 @@ export default function CollectionShowcase({
                     src={item.imageSrc}
                     alt={item.imageAlt}
                     label={item.name}
+                    // Foto de produto do Admin já vem redimensionada pelo
+                    // ImageKit (ver colecaoComProdutosDaLoja).
+                    unoptimized={item.imageSrc?.startsWith("https://ik.imagekit.io")}
                     // Grid de 1/2/4 colunas dentro de um container max-w-6xl (1152px)
                     // com gap-x-6; acima de 1231px de viewport o grid já está no teto.
                     sizes="(max-width: 639px) calc(100vw - 48px), (max-width: 1023px) calc(50vw - 36px), (max-width: 1231px) calc(25vw - 38px), 270px"

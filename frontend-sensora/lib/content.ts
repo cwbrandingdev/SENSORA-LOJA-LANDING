@@ -116,6 +116,9 @@ export type CategoryProduct = {
 
 export type Category = {
   slug: CategorySlug;
+  /** Slug da categoria correspondente no Admin (/public/produtos): os
+   *  produtos cadastrados nela entram na vitrine desta página. */
+  lojaCategoriaSlug: string;
   label: string;
   description: string;
   imageSrc?: string;
@@ -132,6 +135,7 @@ export type Category = {
 export const CATEGORIES: Category[] = [
   {
     slug: "velas",
+    lojaCategoriaSlug: "velas-aromaticas",
     label: "Velas Aromáticas",
     description:
       "Uma combinação de aromas e luz para acompanhar momentos especiais.",
@@ -139,12 +143,14 @@ export const CATEGORIES: Category[] = [
   },
   {
     slug: "sprays",
+    lojaCategoriaSlug: "sprays-de-ambientes",
     label: "Sprays de Ambiente",
     description: "Uma borrifada para renovar a atmosfera do seu ambiente.",
     imageSrc: "/images/products/sprays/flor-de-laranjeira.jpg",
   },
   {
     slug: "difusores",
+    lojaCategoriaSlug: "difusores-de-aroma",
     label: "Difusores",
     description:
       "Uma presença perfumada que transforma o ambiente em uma extensão do seu estilo.",
