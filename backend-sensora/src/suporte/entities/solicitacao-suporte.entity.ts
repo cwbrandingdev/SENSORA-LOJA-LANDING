@@ -10,6 +10,12 @@ export interface SolicitacaoSuporteCriada {
   criadaEm: Date;
 }
 
+// Item de GET /suporte: os chamados do próprio cliente, para ele acompanhar
+// a situação (sem mensagem, nome nem e-mail).
+export interface SolicitacaoSuporteDoCliente extends SolicitacaoSuporteCriada {
+  atualizadaEm: Date;
+}
+
 // Item de GET /admin/suporte (sem a mensagem, que fica no detalhe).
 export interface SolicitacaoSuporteResumo {
   id: number;

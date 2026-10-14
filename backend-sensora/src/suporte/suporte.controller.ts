@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -14,7 +15,10 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
 import { CreateSolicitacaoSuporteDto } from './dto/create-solicitacao-suporte.dto';
-import { SolicitacaoSuporteCriada } from './entities/solicitacao-suporte.entity';
+import {
+  SolicitacaoSuporteCriada,
+  SolicitacaoSuporteDoCliente,
+} from './entities/solicitacao-suporte.entity';
 import { SuporteService } from './suporte.service';
 
 // Limite próprio da abertura de solicitações (cada uma dispara e-mails aos
@@ -42,5 +46,13 @@ export class SuporteController {
     @CurrentUser() user: UsuarioAutenticado,
   ): Promise<SolicitacaoSuporteCriada> {
     return this.suporteService.criar(dto, user);
+  }
+
+  // Os chamados do próprio cliente (usuário do token) e a situação de cada um.
+  @Get()
+  listar(
+    @CurrentUser() user: UsuarioAutenticado,
+  ): Promise<SolicitacaoSuporteDoCliente[]> {
+    return this.suporteService.listarDoCliente(user.id);
   }
 }

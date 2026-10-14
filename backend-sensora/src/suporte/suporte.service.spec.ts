@@ -8,7 +8,11 @@ import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
 import { CreateSolicitacaoSuporteDto } from './dto/create-solicitacao-suporte.dto';
 import { CategoriaSuporte } from './enums/categoria-suporte.enum';
 import { StatusSolicitacaoSuporte } from './enums/status-solicitacao-suporte.enum';
-import { JANELA_REPETICAO_SUPORTE_MS, SuporteService } from './suporte.service';
+import {
+  JANELA_REPETICAO_SUPORTE_MS,
+  LIMITE_SOLICITACOES_CLIENTE,
+  SuporteService,
+} from './suporte.service';
 
 // Prisma MOCKADO com um "banco" em memória (mesmo padrão de
 // devolucoes.service.spec.ts): nenhum banco real, nenhum dado persistente,
@@ -561,6 +565,34 @@ describe('SuporteService', () => {
       });
     }
   }
+
+  it('cliente lista só as próprias solicitações (mais recentes primeiro, com limite), sem mensagem, nome nem e-mail', async () => {
+    semear(1);
+    semear(1, StatusSolicitacaoSuporte.RESOLVIDA);
+    banco.push({ ...banco[0], id: 3, usuarioId: CLIENTE.id + 1 });
+    const findMany = (
+      service as unknown as {
+        prisma: { solicitacaoSuporte: { findMany: jest.Mock } };
+      }
+    ).prisma.solicitacaoSuporte.findMany;
+
+    const lista = await service.listarDoCliente(CLIENTE.id);
+
+    expect(findMany).toHaveBeenLastCalledWith({
+      where: { usuarioId: CLIENTE.id },
+      orderBy: [{ criadaEm: 'desc' }, { id: 'desc' }],
+      take: LIMITE_SOLICITACOES_CLIENTE,
+    });
+    expect(lista.map((s) => s.id)).toEqual([1, 2]);
+    expect(lista[1]).toEqual({
+      id: 2,
+      categoria: CategoriaSuporte.OUTRO,
+      assunto: 'Assunto 2',
+      status: StatusSolicitacaoSuporte.RESOLVIDA,
+      criadaEm: AGORA,
+      atualizadaEm: AGORA,
+    });
+  });
 
   it('lista paginada (total/totalPages), sem a mensagem no resumo', async () => {
     semear(3);

@@ -909,6 +909,11 @@ export type SolicitacaoSuporteCriada = {
   criadaEm: string;
 };
 
+// GET /suporte: os chamados do próprio cliente ("Seus chamados").
+export type SolicitacaoSuporteDoCliente = SolicitacaoSuporteCriada & {
+  atualizadaEm: string;
+};
+
 export type SolicitacaoSuporteResumo = {
   id: number;
   nome: string;

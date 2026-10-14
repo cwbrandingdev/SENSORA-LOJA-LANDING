@@ -31,6 +31,7 @@ describe('Suporte — controllers (HTTP)', () => {
   let app: INestApplication<App>;
   let service: {
     criar: jest.Mock;
+    listarDoCliente: jest.Mock;
     listarParaAdmin: jest.Mock;
     buscarParaAdmin: jest.Mock;
     atualizarStatus: jest.Mock;
@@ -44,6 +45,11 @@ describe('Suporte — controllers (HTTP)', () => {
         status: 'ABERTA',
         criadaEm: new Date('2026-10-13T15:00:00Z'),
       }),
+      listarDoCliente: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 1, assunto: 'Dúvida', status: 'EM_ATENDIMENTO' },
+        ]),
       listarParaAdmin: jest.fn().mockResolvedValue({
         items: [],
         page: 1,
@@ -208,6 +214,26 @@ describe('Suporte — controllers (HTTP)', () => {
       for (let i = 0; i < SUPORTE_RATE_LIMIT_MAX + 2; i++) {
         await http().get('/admin/suporte').set('x-perfil', 'ADMIN').expect(200);
       }
+    });
+  });
+
+  describe('GET /suporte (cliente)', () => {
+    it('CLIENTE lista os próprios chamados (usuário do token)', async () => {
+      const resposta = await http()
+        .get('/suporte')
+        .set('x-perfil', 'CLIENTE')
+        .expect(200);
+
+      expect(resposta.body).toEqual([
+        { id: 1, assunto: 'Dúvida', status: 'EM_ATENDIMENTO' },
+      ]);
+      expect(service.listarDoCliente).toHaveBeenCalledWith(7);
+    });
+
+    it('sem usuário ou com perfil ADMIN é recusado e nada é listado', async () => {
+      await http().get('/suporte').expect(403);
+      await http().get('/suporte').set('x-perfil', 'ADMIN').expect(403);
+      expect(service.listarDoCliente).not.toHaveBeenCalled();
     });
   });
 

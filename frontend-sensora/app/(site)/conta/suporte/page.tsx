@@ -5,7 +5,7 @@
 // identifica o cliente só pelo token e pelo cadastro: daqui saem apenas
 // categoria, assunto e mensagem, nunca nome, e-mail ou usuário. A resposta
 // chega por e-mail, no endereço da conta.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,6 +23,7 @@ import {
   UserRound,
   type LucideIcon,
 } from "lucide-react";
+import StatusSuporteBadge, { formatarDataSuporte } from "@/components/admin/StatusSuporteBadge";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import FormButton from "@/components/ui/FormButton";
 import { useAuth } from "@/context/AuthContext";
@@ -36,9 +37,10 @@ import {
   PerfilUsuario,
   ROTULOS_CATEGORIA_SUPORTE,
   type CategoriaSuporte,
+  type SolicitacaoSuporteDoCliente,
 } from "@/lib/types/loja";
 import { cn } from "@/lib/utils";
-import { criarSolicitacaoSuporte } from "@/services/suporte";
+import { criarSolicitacaoSuporte, listarMeusChamadosSuporte } from "@/services/suporte";
 
 // Mesmos limites do backend (CreateSolicitacaoSuporteDto).
 const MAXIMO_ASSUNTO = 150;
@@ -127,6 +129,52 @@ function PainelAjuda() {
   );
 }
 
+// Situação de cada solicitação do cliente (GET /suporte). `versao` muda a
+// cada envio, para a lista recarregar já com a nova. Sem solicitações (ou
+// se a lista falhar), o bloco não aparece.
+function SuasSolicitacoes({ versao }: { versao: number | null }) {
+  const [solicitacoes, setSolicitacoes] = useState<SolicitacaoSuporteDoCliente[]>([]);
+
+  useEffect(() => {
+    let ativo = true;
+    listarMeusChamadosSuporte()
+      .then((lista) => ativo && setSolicitacoes(lista))
+      .catch(() => ativo && setSolicitacoes([]));
+    return () => {
+      ativo = false;
+    };
+  }, [versao]);
+
+  if (solicitacoes.length === 0) return null;
+  const emAberto = solicitacoes.filter((s) => s.status !== "RESOLVIDA").length;
+
+  return (
+    <section aria-labelledby="suas-solicitacoes" className={cn("rounded-sm bg-white", sombraCartao)}>
+      <div className="flex items-baseline justify-between gap-4 border-b border-slate-200 px-6 py-4 sm:px-8">
+        <h2 id="suas-solicitacoes" className="font-serif text-xl text-brand-navy">
+          Suas solicitações
+        </h2>
+        <p className="text-sm text-slate-500">{emAberto === 0 ? "Nenhuma em aberto" : `${emAberto} em aberto`}</p>
+      </div>
+      <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
+        {solicitacoes.map((s) => (
+          <li key={s.id} className="flex items-center gap-4 px-6 py-3 sm:px-8">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-brand-navy">
+                Nº {s.id} · {s.assunto}
+              </p>
+              <p className="text-xs text-slate-500">
+                {ROTULOS_CATEGORIA_SUPORTE[s.categoria]} · aberta em {formatarDataSuporte(s.criadaEm)}
+              </p>
+            </div>
+            <StatusSuporteBadge status={s.status} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export default function SuportePage() {
   const toast = useToast();
   const { perfil } = useAuth();
@@ -200,6 +248,11 @@ export default function SuportePage() {
 
       <div className="-mt-28 px-6 lg:px-10">
         <RevealOnScroll delayMs={90}>
+          {perfil === PerfilUsuario.CLIENTE && (
+            <div className="mx-auto mb-6 max-w-6xl">
+              <SuasSolicitacoes versao={enviada} />
+            </div>
+          )}
           <div className="mx-auto grid max-w-6xl items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
             <div className={cn("overflow-hidden rounded-sm bg-white", sombraCartao)}>
               {perfil !== PerfilUsuario.CLIENTE ? (

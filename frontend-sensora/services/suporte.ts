@@ -7,6 +7,7 @@ import type {
   PaginaSolicitacoesSuporte,
   SolicitacaoSuporteCriada,
   SolicitacaoSuporteDetalhe,
+  SolicitacaoSuporteDoCliente,
   StatusSolicitacaoSuporte,
 } from "@/lib/types/loja";
 
@@ -14,6 +15,12 @@ export async function criarSolicitacaoSuporte(
   data: CriarSolicitacaoSuportePayload,
 ): Promise<SolicitacaoSuporteCriada> {
   const response = await api.post<SolicitacaoSuporteCriada>("/suporte", data);
+  return response.data;
+}
+
+// Só os chamados do cliente logado (o backend usa o usuário do token).
+export async function listarMeusChamadosSuporte(): Promise<SolicitacaoSuporteDoCliente[]> {
+  const response = await api.get<SolicitacaoSuporteDoCliente[]>("/suporte");
   return response.data;
 }
 

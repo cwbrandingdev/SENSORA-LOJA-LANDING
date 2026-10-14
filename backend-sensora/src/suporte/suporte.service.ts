@@ -21,6 +21,7 @@ import {
   PaginaSolicitacoesSuporte,
   SolicitacaoSuporteCriada,
   SolicitacaoSuporteDetalhe,
+  SolicitacaoSuporteDoCliente,
   SolicitacaoSuporteResumo,
 } from './entities/solicitacao-suporte.entity';
 import {
@@ -35,6 +36,9 @@ import { StatusSolicitacaoSuporte } from './enums/status-solicitacao-suporte.enu
 // desta janela devolve a que já existe, sem criar outra nem avisar os
 // admins de novo. Qualquer diferença cria outra solicitação normalmente.
 export const JANELA_REPETICAO_SUPORTE_MS = 60 * 1000;
+
+// Quantas solicitações o cliente vê em "Seus chamados" (GET /suporte).
+export const LIMITE_SOLICITACOES_CLIENTE = 20;
 
 // Caixas da Sensora que também recebem o aviso de toda nova solicitação,
 // além dos ADMINs ativos (frontend: EMPRESA.email/emailSuporte em
@@ -158,6 +162,26 @@ export class SuporteService {
       status: solicitacao.status as StatusSolicitacaoSuporte,
       criadaEm: solicitacao.criadaEm,
     };
+  }
+
+  // GET /suporte: só as solicitações do usuário do token, mais recentes
+  // primeiro. As últimas LIMITE_SOLICITACOES_CLIENTE bastam para acompanhar.
+  async listarDoCliente(
+    usuarioId: number,
+  ): Promise<SolicitacaoSuporteDoCliente[]> {
+    const registros = await this.prisma.solicitacaoSuporte.findMany({
+      where: { usuarioId },
+      orderBy: [{ criadaEm: 'desc' }, { id: 'desc' }],
+      take: LIMITE_SOLICITACOES_CLIENTE,
+    });
+    return registros.map((registro) => ({
+      id: registro.id,
+      categoria: registro.categoria as CategoriaSuporte,
+      assunto: registro.assunto,
+      status: registro.status as StatusSolicitacaoSuporte,
+      criadaEm: registro.criadaEm,
+      atualizadaEm: registro.atualizadaEm,
+    }));
   }
 
   async listarParaAdmin(
