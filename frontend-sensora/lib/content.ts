@@ -134,21 +134,20 @@ export const CATEGORIES: Category[] = [
     slug: "velas",
     label: "Velas Aromáticas",
     description:
-      "Velas perfumadas que transformam qualquer ambiente em uma experiência sensorial completa.",
+      "Uma combinação de aromas e luz para acompanhar momentos especiais.",
     imageSrc: "/images/categories/velas-aromaticas.jpg",
   },
   {
     slug: "sprays",
     label: "Sprays de Ambiente",
-    description:
-      "Fragrâncias em spray para perfumar o ambiente na hora, com a assinatura Sensora.",
+    description: "Uma borrifada para renovar a atmosfera do seu ambiente.",
     imageSrc: "/images/products/sprays/flor-de-laranjeira.jpg",
   },
   {
     slug: "difusores",
     label: "Difusores",
     description:
-      "Fragrância contínua e discreta para manter a atmosfera perfumada o dia inteiro.",
+      "Uma presença perfumada que transforma o ambiente em uma extensão do seu estilo.",
     imageSrc: "/images/categories/difusores-de-aroma.jpg",
   },
 ];
@@ -172,8 +171,7 @@ const VELAS_4_ESTACOES: Collection = {
   categorySlug: "velas",
   name: "Velas 4 Estações",
   tagline: "Primavera, Verão, Outono e Inverno em um kit.",
-  description:
-    "Quatro atmosferas, infinitas memórias. Um kit criado para transformar cada momento do ano em uma experiência de aconchego, beleza e sensações que permanecem.",
+  description: "Seus aromas favoritos, reunidos em combinações especiais",
   heroImageSrc: "/images/hero/velas.png",
   heroImageAlt:
     "Kit de velas aromáticas 4 Estações da Sensora, com as quatro velas lado a lado sobre uma bancada",
@@ -457,7 +455,7 @@ export const HERO_SLIDES: HeroSlide[] = [
   {
     id: "sprays-de-ambiente",
     title: "Sprays de Ambiente",
-    subtitle: "Perfume o seu espaço com a assinatura Sensora.",
+    subtitle: "Uma borrifada para renovar a atmosfera do seu ambiente.",
     ctaLabel: "Conhecer",
     ctaHref: getCategoryHref("sprays"),
     imageAlt: "Sprays de ambiente Sensora",
@@ -467,7 +465,8 @@ export const HERO_SLIDES: HeroSlide[] = [
   {
     id: "difusores-de-aroma",
     title: "Difusores de Aroma",
-    subtitle: "Fragrância contínua para todos os ambientes.",
+    subtitle:
+      "Uma presença perfumada que transforma o ambiente em uma extensão do seu estilo.",
     ctaLabel: "Conhecer",
     ctaHref: getCategoryHref("difusores"),
     imageAlt: "Difusores de aroma Sensora",
@@ -477,7 +476,8 @@ export const HERO_SLIDES: HeroSlide[] = [
   {
     id: "velas-aromaticas",
     title: "Velas Aromáticas",
-    subtitle: "Velas perfumadas que transformam qualquer ambiente.",
+    subtitle:
+      "Uma combinação de aromas e luz para acompanhar momentos especiais.",
     ctaLabel: "Conhecer",
     ctaHref: getCategoryHref("velas"),
     imageAlt: "Velas aromáticas Sensora",

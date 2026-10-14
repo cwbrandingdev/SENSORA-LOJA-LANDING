@@ -40,8 +40,7 @@ export default function ColecoesPage() {
             Kits
           </h1>
           <p className="mt-6 text-base leading-relaxed text-slate-600">
-            Conjuntos de produtos criados para contar uma história sensorial
-            completa.
+            Seus aromas favoritos, reunidos em combinações especiais.
           </p>
         </RevealOnScroll>
       </section>
@@ -77,7 +76,9 @@ export default function ColecoesPage() {
                     {collection.name}
                   </h2>
                   {collection.tagline && (
-                    <p className="mt-2 text-sm text-white/75">{collection.tagline}</p>
+                    <p className="mt-2 text-sm text-white/75">
+                      {collection.tagline}
+                    </p>
                   )}
                   <ul
                     aria-label={rotuloAromas(collection)}
