@@ -10,6 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import FormButton from "@/components/ui/FormButton";
 import ImageUploader from "@/components/forms/ImageUploader";
+import RevisorTexto from "@/components/forms/RevisorTexto";
 import type { Categoria, Produto } from "@/lib/types/loja";
 
 const productSchema = z.object({
@@ -93,6 +94,10 @@ export default function ProductForm({
 
   const imagemUrl = watch("imagemUrl");
   const nome = watch("nome");
+  const descricao = watch("descricao") ?? "";
+  // Correção vinda do "Revisar texto" entra no campo como se fosse digitada.
+  const corrigir = (campo: "nome" | "descricao") => (texto: string) =>
+    setValue(campo, texto, { shouldValidate: true, shouldDirty: true });
 
   return (
     <form
@@ -103,8 +108,10 @@ export default function ProductForm({
         <label htmlFor="nome" className={labelClass}>
           Nome
         </label>
-        <input id="nome" type="text" className={inputClass} {...register("nome")} />
+        {/* spellCheck + lang: corretor do próprio navegador em português. */}
+        <input id="nome" type="text" spellCheck lang="pt-BR" className={inputClass} {...register("nome")} />
         {errors.nome && <p className={errorClass}>{errors.nome.message}</p>}
+        <RevisorTexto texto={nome} onCorrigir={corrigir("nome")} />
       </div>
 
       <div className="flex flex-col gap-1">
@@ -117,12 +124,15 @@ export default function ProductForm({
           id="descricao"
           rows={6}
           maxLength={1000}
+          spellCheck
+          lang="pt-BR"
           className={`${inputClass} resize-y`}
           {...register("descricao")}
         />
         {errors.descricao && (
           <p className={errorClass}>{errors.descricao.message}</p>
         )}
+        <RevisorTexto texto={descricao} onCorrigir={corrigir("descricao")} />
       </div>
 
       <div className="flex flex-col gap-1">

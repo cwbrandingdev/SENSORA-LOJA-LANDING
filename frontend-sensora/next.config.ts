@@ -42,6 +42,11 @@ const IMAGEKIT_DELIVERY_ORIGIN = "https://ik.imagekit.io";
 // a rede/CORS do ViaCEP funcionando normalmente.
 const VIACEP_ORIGIN = "https://viacep.com.br";
 
+// Botão "Revisar texto" do formulário de produto do Admin (ver
+// services/revisor-texto.ts): API pública do LanguageTool, chamada direto do
+// navegador com o nome/descrição do produto — texto que já vai ser público.
+const LANGUAGETOOL_ORIGIN = "https://api.languagetool.org";
+
 // Google Analytics 4 — só carrega no cliente após consentimento; a CSP precisa
 // permitir os hosts caso NEXT_PUBLIC_GA_MEASUREMENT_ID esteja definido no build.
 const GA_SCRIPT_ORIGINS = "https://www.googletagmanager.com";
@@ -72,6 +77,7 @@ const connectSrcParts = [
   origemApi,
   IMAGEKIT_UPLOAD_ORIGIN,
   VIACEP_ORIGIN,
+  LANGUAGETOOL_ORIGIN,
   obterOrigemSentry(),
   ...(gaEnabled ? GA_CONNECT_ORIGINS : []),
 ];
