@@ -11,6 +11,7 @@ import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import AddToCartControls from "@/components/loja/AddToCartControls";
 import AvisosProduto from "@/components/loja/AvisosProduto";
 import GaleriaProduto from "@/components/loja/GaleriaProduto";
+import ProdutosRelacionados from "@/components/loja/ProdutosRelacionados";
 import { imagemKitRedimensionada } from "@/lib/loja-imagens";
 import JsonLd from "@/components/seo/JsonLd";
 import { OPEN_GRAPH_PADRAO, breadcrumbJsonLd, resumir, urlAbsoluta } from "@/lib/seo";
@@ -206,6 +207,8 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
           </div>
         </RevealOnScroll>
       </div>
+
+      <ProdutosRelacionados atual={produto} />
     </div>
   );
 }
