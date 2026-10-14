@@ -58,6 +58,10 @@ export default function HeroCarousel() {
       data-full-bleed
       className="relative w-full overflow-hidden bg-brand-navy"
     >
+      {/* Título principal da home para buscadores, agentes e leitores de
+          tela. Fica aqui dentro (e não antes do carrossel na página) porque
+          o SiteMain só tira o respiro do topo quando o hero é o 1º filho. */}
+      <h1 className="sr-only">Sensora: velas aromáticas, sprays e difusores de ambiente</h1>
       <Carousel
         setApi={setApi}
         opts={{ loop: true }}
