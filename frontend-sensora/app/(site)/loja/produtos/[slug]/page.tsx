@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ShieldCheck, Truck, Undo2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import {
   buscarProdutoPublicoPorSlug,
@@ -20,6 +21,13 @@ const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
+
+// Linha de confiança logo abaixo do carrinho.
+const CONFIANCA = [
+  { icone: Truck, texto: "Frete calculado no checkout" },
+  { icone: ShieldCheck, texto: "Pagamento seguro" },
+  { icone: Undo2, texto: "7 dias para desistir" },
+];
 
 type ProdutoPageProps = {
   params: Promise<{ slug: string }>;
@@ -143,9 +151,13 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
       </Link>
 
       <div className="mt-8 grid grid-cols-1 gap-12 lg:grid-cols-[1.2fr_1fr] lg:gap-20">
-        <GaleriaProduto imagens={imagens} nome={produto.nome} destaque={produto.destaque} />
+        <div>
+          <div className="lg:sticky lg:top-28">
+            <GaleriaProduto imagens={imagens} nome={produto.nome} destaque={produto.destaque} />
+          </div>
+        </div>
 
-        <RevealOnScroll delayMs={80} className="flex flex-col justify-center">
+        <RevealOnScroll delayMs={80} className="flex flex-col">
           {produto.categoria?.nome && (
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
               {produto.categoria.nome}
@@ -162,17 +174,11 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
             </p>
           )}
 
-          <p className="mt-8 text-3xl font-semibold tracking-tight tabular-nums text-brand-navy">
+          <p className="mt-6 text-3xl font-semibold tracking-tight tabular-nums text-brand-navy">
             {formatPrice.format(produto.preco)}
           </p>
 
-          {produto.descricao && (
-            <p className="mt-8 max-w-xl whitespace-pre-line text-[15px] leading-relaxed text-slate-600">
-              {produto.descricao}
-            </p>
-          )}
-
-          <div className="mt-10">
+          <div className="mt-8">
             <AddToCartControls
               produto={{
                 produtoId: produto.id,
@@ -184,6 +190,26 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
               }}
             />
           </div>
+
+          <ul className="mt-8 grid grid-cols-3 gap-3 border-y border-slate-200 py-5">
+            {CONFIANCA.map(({ icone: Icone, texto }) => (
+              <li key={texto} className="flex flex-col items-center gap-2 text-center text-xs leading-snug text-slate-600">
+                <Icone className="h-5 w-5 text-brand-orange" strokeWidth={1.5} aria-hidden />
+                {texto}
+              </li>
+            ))}
+          </ul>
+
+          {produto.descricao && (
+            <div className="mt-10">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-navy">
+                Sobre o produto
+              </p>
+              <p className="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-slate-600">
+                {produto.descricao}
+              </p>
+            </div>
+          )}
 
           <AvisosProduto
             categoriaSlug={produto.categoria?.slug}
