@@ -13,6 +13,9 @@ export const metadata: Metadata = {
 export default function Home() {
   return (
     <>
+      {/* Título principal da página para buscadores, agentes e leitores de
+          tela — o carrossel logo abaixo é o título visual. */}
+      <h1 className="sr-only">Sensora: velas aromáticas, sprays e difusores de ambiente</h1>
       <HeroCarousel />
       <ProductCategories />
       <FeaturedProducts />

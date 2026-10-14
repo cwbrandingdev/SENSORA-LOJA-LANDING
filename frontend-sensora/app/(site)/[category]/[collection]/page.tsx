@@ -60,7 +60,7 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
           { nome: collection.name, caminho: getCollectionHref(collection) },
         ])}
       />
-      <CollectionShowcase collection={collection} />
+      <CollectionShowcase collection={collection} principal />
 
       {/* Kit 4 Estações — mesmo card/dados de [category]/page.tsx, só
           reaproveitado aqui. Restrito a esta coleção específica (não a

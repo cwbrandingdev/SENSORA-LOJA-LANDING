@@ -88,6 +88,7 @@ export default async function CatalogoPage({ searchParams }: CatalogoPageProps) 
       </div>
 
       <div className="mt-12">
+        <h2 className="sr-only">Produtos</h2>
         {busca && produtosFiltrados.length === 0 ? (
           <div className="mx-auto max-w-xl py-16 text-center">
             <p className="font-serif text-3xl font-normal text-brand-navy">

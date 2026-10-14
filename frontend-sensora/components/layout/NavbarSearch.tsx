@@ -273,6 +273,7 @@ export default function NavbarSearch({
               action={ROUTES.LOJA_PRODUTOS}
               method="get"
               onSubmit={irParaCatalogo}
+              role="search"
               className="px-4 py-3"
             >
               {campo}

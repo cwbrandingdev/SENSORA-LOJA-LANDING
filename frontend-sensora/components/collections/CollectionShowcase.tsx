@@ -9,6 +9,8 @@ import type { Collection } from "@/lib/content";
 
 type CollectionShowcaseProps = {
   collection: Collection;
+  /** Na página própria da coleção o título é o H1 (e os itens, H2). */
+  principal?: boolean;
 };
 
 // Vitrine editorial de uma coleção: apresenta, não vende — o único caminho
@@ -18,8 +20,11 @@ type CollectionShowcaseProps = {
 // (sem `lojaSlug`) continuam exatamente como antes, sem link nenhum.
 export default function CollectionShowcase({
   collection,
+  principal = false,
 }: CollectionShowcaseProps) {
   const headingId = `${collection.slug}-heading`;
+  const Titulo = principal ? "h1" : "h2";
+  const TituloItem = principal ? "h2" : "h3";
 
   return (
     <section
@@ -42,12 +47,12 @@ export default function CollectionShowcase({
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
           {collection.eyebrow ?? "Produtos"}
         </p>
-        <h2
+        <Titulo
           id={headingId}
           className="mt-4 font-serif text-3xl font-normal tracking-tight text-brand-navy sm:teFdesxt-4xl"
         >
           <TextReveal>{collection.name}</TextReveal>
-        </h2>
+        </Titulo>
         {collection.tagline && (
           <p className="mt-3 text-sm font-light text-slate-500 sm:text-base">
             {collection.tagline}
@@ -97,9 +102,9 @@ export default function CollectionShowcase({
                   <span aria-hidden className="h-px w-5 bg-brand-orange/40" />
                 </div>
               )}
-              <h3 className="mt-3 font-serif text-xl font-normal text-brand-navy transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5">
+              <TituloItem className="mt-3 font-serif text-xl font-normal text-brand-navy transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5">
                 {item.name}
-              </h3>
+              </TituloItem>
               {item.mood && (
                 <p className="mx-auto mt-2 max-w-[26ch] text-sm leading-relaxed text-slate-600">
                   {item.mood}

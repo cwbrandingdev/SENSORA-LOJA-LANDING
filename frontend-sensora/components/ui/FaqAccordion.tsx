@@ -62,7 +62,7 @@ export default function FaqAccordion({
 
         return (
           <div key={item.id}>
-            <h3 className="text-lg">
+            <h2 className="text-lg">
               <button
                 id={buttonId}
                 type="button"
@@ -81,7 +81,7 @@ export default function FaqAccordion({
                   }`}
                 />
               </button>
-            </h3>
+            </h2>
 
             {/* aria-hidden (não o atributo `hidden`) — precisa continuar em
                 fluxo normal (display != none) para a transição de altura
@@ -90,7 +90,6 @@ export default function FaqAccordion({
                 visualmente colapsado a 0px. */}
             <div
               id={panelId}
-              role="region"
               aria-labelledby={buttonId}
               aria-hidden={!isOpen}
               style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}

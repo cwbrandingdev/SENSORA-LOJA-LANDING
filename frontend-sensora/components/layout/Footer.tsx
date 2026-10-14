@@ -25,9 +25,9 @@ export default function Footer() {
         </div>
 
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-brand-orange">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-brand-orange">
             Navegação
-          </h3>
+          </h2>
           <ul className="mt-4 space-y-2 text-sm text-white/80">
             {NAV_CATEGORIES.map((item) => (
               <li key={item.label}>
@@ -47,9 +47,9 @@ export default function Footer() {
         </div>
 
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-brand-orange">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-brand-orange">
             Categorias
-          </h3>
+          </h2>
           <ul className="mt-4 space-y-2 text-sm text-white/80">
             {PRODUCT_CATEGORIES.map((item) => (
               <li key={item.id}>
@@ -69,9 +69,9 @@ export default function Footer() {
         </div>
 
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-brand-orange">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-brand-orange">
             Institucional
-          </h3>
+          </h2>
           <ul className="mt-4 space-y-2 text-sm text-white/80">
             <li>
               <FooterLink href={ROTAS_LEGAIS.quemSomos}>Quem somos</FooterLink>
