@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsInt,
   IsNotEmpty,
@@ -17,6 +19,7 @@ import {
 // reais já existentes no banco (ex.: produtos com imagemUrl apontando para
 // /images/products/... servido pelo próprio frontend, fora do ImageKit).
 const IMAGEM_URL_PATTERN = /^(https?:\/\/|\/)/;
+export const MAXIMO_IMAGENS_PRODUTO = 8;
 const IMAGEM_URL_MENSAGEM =
   'imagemUrl deve ser uma URL http(s) válida ou um caminho relativo começando com "/"';
 
@@ -40,6 +43,15 @@ export class CreateProdutoDto {
   @IsOptional()
   @Matches(IMAGEM_URL_PATTERN, { message: IMAGEM_URL_MENSAGEM })
   imagemUrl?: string;
+
+  // Galeria na ordem escolhida no Admin; a 1ª vira a capa (imagemUrl), ver
+  // ProdutosService.comCapa. Quando enviada, prevalece sobre imagemUrl.
+  @IsArray()
+  @IsOptional()
+  @ArrayMaxSize(MAXIMO_IMAGENS_PRODUTO)
+  @IsString({ each: true })
+  @Matches(IMAGEM_URL_PATTERN, { each: true, message: IMAGEM_URL_MENSAGEM })
+  imagens?: string[];
 
   @IsBoolean()
   @IsOptional()

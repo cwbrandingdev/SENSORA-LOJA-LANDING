@@ -25,7 +25,7 @@ function toPayload(data: ProductFormValues): CreateProdutoPayload {
     preco: data.preco,
     quantidade: data.quantidade,
     categoriaId: data.categoriaId ? Number(data.categoriaId) : undefined,
-    imagemUrl: data.imagemUrl || undefined,
+    imagens: data.imagens,
     ativo: data.ativo,
     destaque: data.destaque,
   };

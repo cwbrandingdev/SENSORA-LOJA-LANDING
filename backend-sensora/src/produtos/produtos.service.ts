@@ -11,6 +11,22 @@ import { CreateProdutoDto } from './dto/create-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
 import { Produto } from './entities/produto.entity';
 
+// Mantém capa e galeria em sincronia: com `imagens`, a capa (imagemUrl) é
+// sempre a 1ª (ou nenhuma, se a galeria ficou vazia); só com `imagemUrl`
+// (cliente antigo), a galeria vira essa foto. Sem nenhum dos dois, nada
+// muda nas imagens.
+function comCapa<T extends { imagemUrl?: string; imagens?: string[] }>(
+  dto: T,
+): T & { imagemUrl?: string | null } {
+  if (dto.imagens !== undefined) {
+    return { ...dto, imagemUrl: dto.imagens[0] ?? null };
+  }
+  if (dto.imagemUrl !== undefined) {
+    return { ...dto, imagens: dto.imagemUrl ? [dto.imagemUrl] : [] };
+  }
+  return dto;
+}
+
 @Injectable()
 export class ProdutosService {
   constructor(private readonly prisma: PrismaService) {}
@@ -34,7 +50,7 @@ export class ProdutosService {
     }
     const slug = await this.gerarSlugUnico(createProdutoDto.nome);
     const produto = await this.prisma.produto.create({
-      data: { ...createProdutoDto, slug },
+      data: { ...comCapa(createProdutoDto), slug },
     });
     return this.paraProduto(produto);
   }
@@ -49,7 +65,7 @@ export class ProdutosService {
     }
     const produto = await this.prisma.produto.update({
       where: { id },
-      data: updateProdutoDto,
+      data: comCapa(updateProdutoDto),
     });
     return this.paraProduto(produto);
   }
@@ -153,6 +169,7 @@ export class ProdutosService {
       descricao: produto.descricao ?? undefined,
       aroma: produto.aroma ?? undefined,
       imagemUrl: produto.imagemUrl ?? undefined,
+      imagens: produto.imagens,
       ativo: produto.ativo,
       categoriaId: produto.categoriaId ?? undefined,
       preco: Number(produto.preco),

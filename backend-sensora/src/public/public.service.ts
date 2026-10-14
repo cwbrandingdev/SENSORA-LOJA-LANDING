@@ -52,6 +52,7 @@ export class PublicService {
       descricao: produto.descricao ?? undefined,
       preco: Number(produto.preco),
       imagemUrl: produto.imagemUrl ?? undefined,
+      imagens: produto.imagens,
       aroma: produto.aroma ?? undefined,
       destaque: produto.destaque,
       categoriaId: produto.categoriaId ?? undefined,

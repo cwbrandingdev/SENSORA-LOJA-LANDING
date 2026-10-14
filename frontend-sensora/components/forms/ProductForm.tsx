@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import FormButton from "@/components/ui/FormButton";
-import ImageUploader from "@/components/forms/ImageUploader";
+import ImageUploader, { MAXIMO_IMAGENS } from "@/components/forms/ImageUploader";
 import RevisorTexto from "@/components/forms/RevisorTexto";
 import type { Categoria, Produto } from "@/lib/types/loja";
 
@@ -27,13 +27,12 @@ const productSchema = z.object({
   // conversão para number|undefined do CreateProdutoPayload acontece em
   // app/workspace-x/produtos/page.tsx, não aqui (o form não conhece o payload).
   categoriaId: z.string().optional(),
-  imagemUrl: z
-    .string()
-    .trim()
-    .optional()
-    .refine((val) => !val || /^(https?:\/\/|\/)/.test(val), {
-      message: "Informe uma URL válida (http(s) ou caminho começando com /)",
-    }),
+  // Galeria na ordem da loja; a 1ª é a capa (o backend grava imagemUrl = imagens[0]).
+  imagens: z
+    .array(
+      z.string().regex(/^(https?:\/\/|\/)/, "Informe uma URL válida (http(s) ou caminho começando com /)"),
+    )
+    .max(MAXIMO_IMAGENS, `No máximo ${MAXIMO_IMAGENS} fotos`),
   destaque: z.boolean(),
   ativo: z.boolean(),
 });
@@ -48,7 +47,12 @@ function toDefaultValues(produto?: Produto): ProductFormInput {
     preco: produto?.preco ?? "",
     quantidade: produto?.quantidade ?? ("" as unknown as number),
     categoriaId: produto?.categoriaId != null ? String(produto.categoriaId) : "",
-    imagemUrl: produto?.imagemUrl ?? "",
+    // Produto de antes da galeria (imagens vazio) começa com a capa que já tem.
+    imagens: produto?.imagens?.length
+      ? produto.imagens
+      : produto?.imagemUrl
+        ? [produto.imagemUrl]
+        : [],
     destaque: produto?.destaque ?? false,
     ativo: produto?.ativo ?? true,
   };
@@ -92,7 +96,7 @@ export default function ProductForm({
     reset(toDefaultValues(initialData));
   }, [initialData, reset]);
 
-  const imagemUrl = watch("imagemUrl");
+  const imagens = watch("imagens");
   const nome = watch("nome");
   const descricao = watch("descricao") ?? "";
   // Correção vinda do "Revisar texto" entra no campo como se fosse digitada.
@@ -182,15 +186,15 @@ export default function ProductForm({
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className={labelClass}>Imagem do produto</label>
+        <label className={labelClass}>Fotos do produto</label>
         <ImageUploader
           key={initialData?.id ?? "new"}
-          value={imagemUrl}
-          onChange={(url) => setValue("imagemUrl", url, { shouldValidate: true, shouldDirty: true })}
+          value={imagens}
+          onChange={(urls) => setValue("imagens", urls, { shouldValidate: true, shouldDirty: true })}
           nomeProduto={nome}
         />
-        {errors.imagemUrl && (
-          <p className={errorClass}>{errors.imagemUrl.message}</p>
+        {errors.imagens && (
+          <p className={errorClass}>{errors.imagens.message ?? "Confira as fotos."}</p>
         )}
       </div>
 

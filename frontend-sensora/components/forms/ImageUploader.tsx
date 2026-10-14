@@ -1,23 +1,27 @@
 "use client";
 
-// Upload direto do navegador para o ImageKit (arquivo nunca passa pelo
-// nosso backend — só as credenciais de GET /imagekit/auth passam por lá).
-// Envia o File original sem nenhum processamento (sem canvas, sem resize,
-// sem recompressão) — a otimização de entrega fica a cargo do CDN do
-// ImageKit em uma etapa futura.
-import { useEffect, useRef, useState } from "react";
+// Galeria de fotos do produto. Upload direto do navegador para o ImageKit
+// (arquivo nunca passa pelo nosso backend — só as credenciais de GET
+// /imagekit/auth passam por lá), um arquivo de cada vez, sem processamento
+// (sem canvas, sem resize, sem recompressão). A ordem da lista é a ordem da
+// loja e a 1ª foto é a capa: as setas reordenam e "Capa" leva a foto para o
+// começo. O backend repete a regra (imagemUrl = imagens[0]).
+import { useState } from "react";
+import { ArrowLeft, ArrowRight, Plus, Star, Trash2 } from "lucide-react";
 import { obterAutenticacaoImageKit } from "@/services/imagekit";
 
 const IMAGEKIT_UPLOAD_URL = "https://upload.imagekit.io/api/v1/files/upload";
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const IMAGEKIT_FOLDER = "/sensora/products";
-
-type UploadStatus = "idle" | "uploading" | "success" | "error";
+// Mesmo limite do backend (MAXIMO_IMAGENS_PRODUTO).
+export const MAXIMO_IMAGENS = 8;
+// Mesma regra do schema do ProductForm e do backend.
+const URL_IMAGEM_VALIDA = /^(https?:\/\/|\/)/;
 
 type ImageUploaderProps = {
-  /** imagemUrl atual — string local (/images/...) ou do ImageKit (https://ik.imagekit.io/...). */
-  value?: string;
-  onChange: (url: string) => void;
+  /** Fotos na ordem da loja — URLs do ImageKit ou caminhos locais (/images/...). */
+  value: string[];
+  onChange: (urls: string[]) => void;
   /** Usado só para compor um nome de arquivo legível; produto pode ainda não existir no banco. */
   nomeProduto?: string;
 };
@@ -39,142 +43,201 @@ function nomeArquivoSeguro(nomeProduto: string | undefined, file: File): string 
   return `${base || "produto"}-${Date.now()}${extensao}`;
 }
 
-const buttonClass =
-  "inline-flex w-fit cursor-pointer items-center justify-center rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100";
+// Cada envio pede credenciais novas: o token do ImageKit vale para um upload só.
+async function enviarParaImageKit(file: File, nomeProduto?: string): Promise<string> {
+  const auth = await obterAutenticacaoImageKit();
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("fileName", nomeArquivoSeguro(nomeProduto, file));
+  formData.append("publicKey", auth.publicKey);
+  formData.append("signature", auth.signature);
+  formData.append("expire", String(auth.expire));
+  formData.append("token", auth.token);
+  formData.append("folder", IMAGEKIT_FOLDER);
+  formData.append("useUniqueFileName", "true");
+
+  const response = await fetch(IMAGEKIT_UPLOAD_URL, { method: "POST", body: formData });
+  if (!response.ok) {
+    throw new Error("Upload para o ImageKit falhou");
+  }
+  const data = (await response.json()) as { url?: string };
+  if (!data.url) {
+    throw new Error("Resposta do ImageKit sem URL");
+  }
+  return data.url;
+}
+
+function mover(lista: string[], de: number, para: number): string[] {
+  const nova = [...lista];
+  const [foto] = nova.splice(de, 1);
+  nova.splice(para, 0, foto);
+  return nova;
+}
+
+const botaoIcone =
+  "flex h-7 w-7 items-center justify-center rounded bg-white/90 text-slate-700 shadow-sm hover:bg-white hover:text-brand-navy disabled:cursor-not-allowed disabled:opacity-30";
 
 export default function ImageUploader({ value, onChange, nomeProduto }: ImageUploaderProps) {
-  const [status, setStatus] = useState<UploadStatus>("idle");
-  const [errorMessage, setErrorMessage] = useState("");
-  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState("");
+  const [erro, setErro] = useState("");
   const [manualMode, setManualMode] = useState(false);
-  const objectUrlRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-      }
-    };
-  }, []);
-
-  const previewSrc = localPreview ?? value;
+  const [urlManual, setUrlManual] = useState("");
+  const vagas = MAXIMO_IMAGENS - value.length;
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    // Permite selecionar o mesmo arquivo de novo (ex.: depois de um erro).
+    const selecionados = Array.from(event.target.files ?? []);
+    // Permite selecionar os mesmos arquivos de novo (ex.: depois de um erro).
     event.target.value = "";
-    if (!file) return;
+    if (selecionados.length === 0) return;
 
-    if (!file.type.startsWith("image/")) {
-      setStatus("error");
-      setErrorMessage("Selecione um arquivo de imagem.");
+    setErro("");
+    const invalido = selecionados.find(
+      (file) => !file.type.startsWith("image/") || file.size > MAX_FILE_SIZE_BYTES,
+    );
+    if (invalido) {
+      setErro(`"${invalido.name}" não foi enviada: use imagens de até 10 MB.`);
       return;
     }
-
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      setStatus("error");
-      setErrorMessage("A imagem deve ter no máximo 10 MB.");
-      return;
+    const arquivos = selecionados.slice(0, vagas);
+    if (selecionados.length > vagas) {
+      setErro(`Só cabem ${MAXIMO_IMAGENS} fotos: ${selecionados.length - vagas} ficaram de fora.`);
     }
 
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-    }
-    const objectUrl = URL.createObjectURL(file);
-    objectUrlRef.current = objectUrl;
-    setLocalPreview(objectUrl);
-    setStatus("uploading");
-    setErrorMessage("");
-
-    try {
-      const auth = await obterAutenticacaoImageKit();
-
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("fileName", nomeArquivoSeguro(nomeProduto, file));
-      formData.append("publicKey", auth.publicKey);
-      formData.append("signature", auth.signature);
-      formData.append("expire", String(auth.expire));
-      formData.append("token", auth.token);
-      formData.append("folder", IMAGEKIT_FOLDER);
-      formData.append("useUniqueFileName", "true");
-
-      const response = await fetch(IMAGEKIT_UPLOAD_URL, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error("Upload para o ImageKit falhou");
+    let urls = value;
+    for (const [indice, file] of arquivos.entries()) {
+      setEnviando(`Enviando ${indice + 1} de ${arquivos.length}...`);
+      try {
+        urls = [...urls, await enviarParaImageKit(file, nomeProduto)];
+        onChange(urls);
+      } catch {
+        setErro("Não foi possível enviar a imagem. Tente novamente.");
+        break;
       }
-
-      const data = (await response.json()) as { url?: string };
-      if (!data.url) {
-        throw new Error("Resposta do ImageKit sem URL");
-      }
-
-      onChange(data.url);
-      setStatus("success");
-    } catch {
-      setStatus("error");
-      setErrorMessage("Não foi possível enviar a imagem. Tente novamente.");
     }
+    setEnviando("");
   }
 
-  function handleManualChange(event: React.ChangeEvent<HTMLInputElement>) {
-    setLocalPreview(null);
-    setStatus("idle");
-    onChange(event.target.value);
+  function adicionarUrlManual() {
+    const url = urlManual.trim();
+    if (!URL_IMAGEM_VALIDA.test(url)) {
+      setErro("Informe uma URL válida (http(s) ou caminho começando com /)");
+      return;
+    }
+    setErro("");
+    onChange([...value, url]);
+    setUrlManual("");
   }
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-4">
-        {previewSrc && (
-          <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+      <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+        {value.map((url, indice) => (
+          <li
+            key={`${url}-${indice}`}
+            className="relative aspect-square overflow-hidden rounded-md border border-slate-200 bg-slate-50"
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewSrc}
-              alt="Pré-visualização da imagem do produto"
-              className="h-full w-full object-cover"
-            />
-          </div>
+            <img src={url} alt={`Foto ${indice + 1} do produto`} className="h-full w-full object-cover" />
+            {indice === 0 ? (
+              <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+                <Star className="h-3 w-3 fill-current" aria-hidden />
+                Capa
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onChange(mover(value, indice, 0))}
+                className="absolute left-1 top-1 inline-flex items-center gap-1 rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-navy shadow-sm hover:bg-brand-navy hover:text-white"
+              >
+                <Star className="h-3 w-3" aria-hidden />
+                Tornar capa
+              </button>
+            )}
+            <div className="absolute inset-x-1 bottom-1 flex justify-between gap-1">
+              <button
+                type="button"
+                className={botaoIcone}
+                disabled={indice === 0}
+                onClick={() => onChange(mover(value, indice, indice - 1))}
+                aria-label={`Mover foto ${indice + 1} para a esquerda`}
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                className={botaoIcone}
+                onClick={() => onChange(value.filter((_, i) => i !== indice))}
+                aria-label={`Remover foto ${indice + 1}`}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                className={botaoIcone}
+                disabled={indice === value.length - 1}
+                onClick={() => onChange(mover(value, indice, indice + 1))}
+                aria-label={`Mover foto ${indice + 1} para a direita`}
+              >
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </li>
+        ))}
+
+        {vagas > 0 && (
+          <li>
+            <label
+              className={`flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-slate-300 text-xs text-slate-500 transition-colors hover:border-brand-navy hover:text-brand-navy ${enviando ? "pointer-events-none opacity-50" : ""}`}
+            >
+              <Plus className="h-5 w-5" />
+              Adicionar fotos
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                disabled={Boolean(enviando)}
+                onChange={handleFileChange}
+              />
+            </label>
+          </li>
         )}
+      </ul>
 
-        <div className="flex flex-col gap-1">
-          <label className={`${buttonClass} ${status === "uploading" ? "pointer-events-none opacity-50" : ""}`}>
-            {previewSrc ? "Trocar imagem" : "Selecionar imagem"}
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              disabled={status === "uploading"}
-              onChange={handleFileChange}
-            />
-          </label>
+      <p className="text-xs text-slate-500">
+        {enviando ||
+          `A 1ª foto é a capa: clique em "Tornar capa" para trocar. Use as setas para ordenar (até ${MAXIMO_IMAGENS} fotos).`}
+      </p>
+      {erro && <p className="text-xs text-red-600">{erro}</p>}
 
-          {status === "uploading" && <p className="text-xs text-slate-500">Enviando imagem...</p>}
-          {status === "success" && <p className="text-xs text-green-700">Imagem enviada</p>}
-          {status === "error" && <p className="text-xs text-red-600">{errorMessage}</p>}
+      {vagas > 0 && (
+        <button
+          type="button"
+          onClick={() => setManualMode((prev) => !prev)}
+          className="w-fit text-xs text-slate-400 underline underline-offset-2 hover:text-slate-600"
+        >
+          {manualMode ? "Ocultar URL manual" : "Adicionar por URL"}
+        </button>
+      )}
+
+      {manualMode && vagas > 0 && (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="https://..."
+            value={urlManual}
+            onChange={(event) => setUrlManual(event.target.value)}
+            className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy"
+          />
+          <button
+            type="button"
+            onClick={adicionarUrlManual}
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          >
+            Adicionar
+          </button>
         </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => setManualMode((prev) => !prev)}
-        className="w-fit text-xs text-slate-400 underline underline-offset-2 hover:text-slate-600"
-      >
-        {manualMode ? "Ocultar URL manual" : "Usar URL manual"}
-      </button>
-
-      {manualMode && (
-        <input
-          type="text"
-          placeholder="https://..."
-          value={value ?? ""}
-          onChange={handleManualChange}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy"
-        />
       )}
     </div>
   );

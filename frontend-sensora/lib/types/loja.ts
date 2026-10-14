@@ -135,6 +135,8 @@ export type Produto = {
   preco: number;
   quantidade: number;
   imagemUrl?: string | null;
+  /** Galeria na ordem da loja; a 1ª é a capa (= imagemUrl). */
+  imagens?: string[];
   aroma?: string | null;
   ativo: boolean;
   destaque: boolean;
@@ -147,6 +149,8 @@ export type CreateProdutoPayload = {
   descricao?: string;
   aroma?: string;
   imagemUrl?: string;
+  /** Quando enviada, define a capa (imagemUrl = imagens[0]) no backend. */
+  imagens?: string[];
   ativo?: boolean;
   destaque?: boolean;
   categoriaId?: number;

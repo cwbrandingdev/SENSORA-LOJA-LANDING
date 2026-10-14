@@ -23,6 +23,8 @@ export type ProdutoPublico = {
   descricao?: string;
   preco: number;
   imagemUrl?: string;
+  /** Galeria na ordem do Admin; a 1ª é a capa (= imagemUrl). */
+  imagens?: string[];
   aroma?: string;
   destaque: boolean;
   categoriaId?: number;

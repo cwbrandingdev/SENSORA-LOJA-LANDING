@@ -140,7 +140,12 @@ model Produto {
   descricao   String?
   preco       Decimal      @db.Decimal(10, 2)
   quantidade  Int
+  // Capa do produto: sempre igual a imagens[0] (mantido pelo
+  // ProdutosService). Continua sendo o campo lido por cards, carrinho,
+  // checkout etc.
   imagemUrl   String?
+  // Galeria completa, na ordem escolhida no Admin (a 1ª é a capa).
+  imagens     String[]     @default([])
   aroma       String?
   ativo       Boolean      @default(true)
   destaque    Boolean      @default(false)

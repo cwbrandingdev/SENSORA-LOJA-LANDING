@@ -7,11 +7,10 @@ import {
 } from "@/lib/api-publica";
 import { LOJA_PRODUTO_URL } from "@/lib/config";
 import { ROUTES } from "@/lib/routes";
-import PlaceholderImage from "@/components/ui/PlaceholderImage";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
-import ImageReveal from "@/components/ui/ImageReveal";
 import AddToCartControls from "@/components/loja/AddToCartControls";
 import AvisosProduto from "@/components/loja/AvisosProduto";
+import GaleriaProduto from "@/components/loja/GaleriaProduto";
 import { imagemKitRedimensionada } from "@/lib/loja-imagens";
 import JsonLd from "@/components/seo/JsonLd";
 import { OPEN_GRAPH_PADRAO, breadcrumbJsonLd, resumir, urlAbsoluta } from "@/lib/seo";
@@ -93,14 +92,21 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
     notFound();
   }
 
-  // Preço, foto e disponibilidade nos resultados do Google e para as IAs.
+  // Produto de antes da galeria (ou backend ainda sem `imagens`): só a capa.
+  const imagens = produto.imagens?.length
+    ? produto.imagens
+    : produto.imagemUrl
+      ? [produto.imagemUrl]
+      : [];
+
+  // Preço, fotos e disponibilidade nos resultados do Google e para as IAs.
   const produtoJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: produto.nome,
     sku: String(produto.id),
     ...(produto.descricao && { description: produto.descricao }),
-    ...(produto.imagemUrl && { image: urlAbsoluta(produto.imagemUrl) }),
+    ...(imagens.length > 0 && { image: imagens.map((url) => urlAbsoluta(url)) }),
     ...(produto.categoria?.nome && { category: produto.categoria.nome }),
     brand: { "@type": "Brand", name: "Sensora" },
     offers: {
@@ -136,23 +142,7 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
       </Link>
 
       <div className="mt-8 grid grid-cols-1 gap-12 lg:grid-cols-[1.2fr_1fr] lg:gap-20">
-        <div className="relative aspect-[4/5] overflow-hidden rounded-sm bg-brand-navy lg:aspect-[3/4]">
-          {produto.destaque && (
-            <span className="absolute left-4 top-4 z-10 bg-background/95 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.25em] text-brand-orange">
-              Destaque
-            </span>
-          )}
-          <ImageReveal>
-            <PlaceholderImage
-              src={imagemKitRedimensionada(produto.imagemUrl, 1200)}
-              alt={produto.nome}
-              label={produto.nome}
-              priority
-              unoptimized={Boolean(produto.imagemUrl)}
-              sizes="(min-width: 1024px) 50vw, 100vw"
-            />
-          </ImageReveal>
-        </div>
+        <GaleriaProduto imagens={imagens} nome={produto.nome} destaque={produto.destaque} />
 
         <RevealOnScroll delayMs={80} className="flex flex-col justify-center">
           {produto.categoria?.nome && (
