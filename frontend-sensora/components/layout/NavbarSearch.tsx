@@ -3,8 +3,9 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Search, X } from "lucide-react";
+import { ArrowRight, Search, X } from "lucide-react";
 import { filtrarProdutos, sugerirProdutos } from "@/lib/busca-produtos";
+import { filtrarPaginas, sugerirPaginas } from "@/lib/busca-paginas";
 import { LOJA_PRODUTO_URL } from "@/lib/config";
 import { ROUTES } from "@/lib/routes";
 import type { ProdutoPublico } from "@/lib/api-publica";
@@ -55,10 +56,11 @@ export default function NavbarSearch({
   const listaId = useId();
   const termo = query.trim();
   const encontrados = produtos && termo ? filtrarProdutos(produtos, termo) : [];
+  const paginas = termo ? filtrarPaginas(termo) : [];
+  const nadaEncontrado = encontrados.length === 0 && paginas.length === 0;
   const sugestoes =
-    produtos && termo && encontrados.length === 0
-      ? sugerirProdutos(produtos, termo)
-      : [];
+    produtos && termo && nadaEncontrado ? sugerirProdutos(produtos, termo) : [];
+  const sugestoesPaginas = termo && nadaEncontrado ? sugerirPaginas(termo) : [];
   const mostrarPainel = aberto && termo.length > 0;
 
   useEffect(() => {
@@ -112,10 +114,14 @@ export default function NavbarSearch({
     const buscado = String(
       new FormData(event.currentTarget).get("q") ?? "",
     ).trim();
+    // Sem produto mas com página (ex.: "suporte"), o Enter abre a página.
+    const pagina = encontrados.length === 0 ? paginas[0] : undefined;
     router.push(
-      buscado
-        ? `${ROUTES.LOJA_PRODUTOS}?q=${encodeURIComponent(buscado)}`
-        : ROUTES.LOJA_PRODUTOS,
+      pagina
+        ? pagina.href
+        : buscado
+          ? `${ROUTES.LOJA_PRODUTOS}?q=${encodeURIComponent(buscado)}`
+          : ROUTES.LOJA_PRODUTOS,
     );
     fechar();
   }
@@ -140,7 +146,7 @@ export default function NavbarSearch({
         }
         className="sr-only"
       >
-        Buscar produtos
+        Buscar no site
       </label>
       <input
         id={variant === "barra" ? "navbar-search-desktop" : "navbar-search"}
@@ -149,7 +155,7 @@ export default function NavbarSearch({
         type="text"
         value={query}
         onChange={(evento) => setQuery(evento.target.value)}
-        placeholder="Buscar produtos"
+        placeholder="Buscar no site"
         autoComplete="off"
         aria-autocomplete="list"
         aria-controls={mostrarPainel ? listaId : undefined}
@@ -181,48 +187,78 @@ export default function NavbarSearch({
     >
       {produtos === null ? (
         <p className="px-4 py-3 text-sm text-brand-navy/60">Buscando…</p>
-      ) : encontrados.length > 0 ? (
-        <ul className="max-h-80 overflow-y-auto py-1.5">
-          {encontrados.slice(0, 6).map((produto) => (
-            <li key={produto.id}>
-              <Link
-                href={LOJA_PRODUTO_URL(produto.slug)}
-                onClick={fechar}
-                className="flex items-center gap-3 px-3 py-2 transition-colors duration-300 hover:bg-stone-50"
-              >
-                {produto.imagemUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={produto.imagemUrl}
-                    alt=""
-                    className="h-11 w-11 shrink-0 rounded-lg object-cover"
-                  />
-                ) : (
-                  <span className="h-11 w-11 shrink-0 rounded-lg bg-stone-100" />
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">
-                    {produto.nome}
-                  </span>
-                  {produto.aroma && (
-                    <span className="block truncate text-xs text-brand-navy/55">
-                      {produto.aroma}
+      ) : !nadaEncontrado ? (
+        <div className="max-h-80 overflow-y-auto py-1.5">
+          {encontrados.length > 0 && (
+            <ul>
+              {encontrados.slice(0, 6).map((produto) => (
+                <li key={produto.id}>
+                  <Link
+                    href={LOJA_PRODUTO_URL(produto.slug)}
+                    onClick={fechar}
+                    className="flex items-center gap-3 px-3 py-2 transition-colors duration-300 hover:bg-stone-50"
+                  >
+                    {produto.imagemUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={produto.imagemUrl}
+                        alt=""
+                        className="h-11 w-11 shrink-0 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <span className="h-11 w-11 shrink-0 rounded-lg bg-stone-100" />
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">
+                        {produto.nome}
+                      </span>
+                      {produto.aroma && (
+                        <span className="block truncate text-xs text-brand-navy/55">
+                          {produto.aroma}
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-                <span className="shrink-0 text-sm tabular-nums text-brand-navy/80">
-                  {formatPrice.format(produto.preco)}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                    <span className="shrink-0 text-sm tabular-nums text-brand-navy/80">
+                      {formatPrice.format(produto.preco)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {paginas.length > 0 && (
+            <>
+              {encontrados.length > 0 && (
+                <p className="mt-1.5 border-t border-stone-100 px-4 pt-2.5 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-navy/45">
+                  Páginas
+                </p>
+              )}
+              <ul>
+                {paginas.map((pagina) => (
+                  <li key={pagina.href}>
+                    <Link
+                      href={pagina.href}
+                      onClick={fechar}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors duration-300 hover:bg-stone-50"
+                    >
+                      <ArrowRight
+                        className="h-4 w-4 shrink-0 text-brand-orange"
+                        strokeWidth={1.75}
+                      />
+                      {pagina.titulo}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
       ) : (
         <div className="px-4 py-3.5">
           <p className="font-serif text-base text-brand-navy">
-            Não achamos esse produto.
+            Não achamos nada com esse nome.
           </p>
-          {sugestoes.length > 0 && (
+          {(sugestoes.length > 0 || sugestoesPaginas.length > 0) && (
             <>
               <p className="mt-2 text-sm text-brand-navy/70">
                 Você quis dizer…?
@@ -236,6 +272,17 @@ export default function NavbarSearch({
                       className="block rounded-lg px-2 py-1.5 text-sm text-brand-navy underline-offset-4 transition-colors duration-300 hover:bg-stone-50 hover:underline"
                     >
                       {produto.nome}
+                    </Link>
+                  </li>
+                ))}
+                {sugestoesPaginas.map((pagina) => (
+                  <li key={pagina.href}>
+                    <Link
+                      href={pagina.href}
+                      onClick={fechar}
+                      className="block rounded-lg px-2 py-1.5 text-sm text-brand-navy underline-offset-4 transition-colors duration-300 hover:bg-stone-50 hover:underline"
+                    >
+                      {pagina.titulo}
                     </Link>
                   </li>
                 ))}
@@ -253,7 +300,7 @@ export default function NavbarSearch({
         <button
           type="button"
           onClick={() => setAberto((valor) => !valor)}
-          aria-label={aberto ? "Fechar busca" : "Buscar produtos"}
+          aria-label={aberto ? "Fechar busca" : "Buscar no site"}
           aria-expanded={aberto}
           className="inline-flex h-10 w-10 items-center justify-center text-brand-navy/70 transition-colors hover:text-brand-navy"
         >

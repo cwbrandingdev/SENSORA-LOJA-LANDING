@@ -47,9 +47,11 @@ function similaridade(consulta: string, palavra: string) {
   return 1 - distancia(consulta, palavra) / maior;
 }
 
-function pontuar(termo: string, produto: ProdutoPublico) {
+// Quão perto o termo chega das palavras de um texto (0 a 1) — usado no
+// "Você quis dizer…?" de produtos e de páginas (lib/busca-paginas.ts).
+export function pontuarTexto(termo: string, texto: string) {
   const partes = tokens(termo);
-  const palavras = tokens(textoDoProduto(produto)).filter((palavra) => palavra.length > 1);
+  const palavras = tokens(texto).filter((palavra) => palavra.length > 1);
   if (!partes.length || !palavras.length) return 0;
   const notas = partes.map((parte) =>
     Math.max(...palavras.map((palavra) => similaridade(parte, palavra))),
@@ -70,7 +72,7 @@ export function filtrarProdutos(produtos: ProdutoPublico[], termo: string) {
 
 export function sugerirProdutos(produtos: ProdutoPublico[], termo: string, limite = 3) {
   return produtos
-    .map((produto) => ({ produto, nota: pontuar(termo, produto) }))
+    .map((produto) => ({ produto, nota: pontuarTexto(termo, textoDoProduto(produto)) }))
     .filter((item) => item.nota >= 0.62)
     .sort((a, b) => b.nota - a.nota)
     .slice(0, limite)
