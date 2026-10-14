@@ -11,6 +11,8 @@ type CollectionShowcaseProps = {
   collection: Collection;
   /** Na página própria da coleção o título é o H1 (e os itens, H2). */
   principal?: boolean;
+  /** Esconde a foto grande do topo (a página da categoria abre sem ela). */
+  semImagem?: boolean;
 };
 
 // Vitrine editorial de uma coleção: apresenta, não vende — o único caminho
@@ -21,6 +23,7 @@ type CollectionShowcaseProps = {
 export default function CollectionShowcase({
   collection,
   principal = false,
+  semImagem = false,
 }: CollectionShowcaseProps) {
   const headingId = `${collection.slug}-heading`;
   const Titulo = principal ? "h1" : "h2";
@@ -31,7 +34,7 @@ export default function CollectionShowcase({
       aria-labelledby={headingId}
       className="mx-auto max-w-7xl px-6 pb-24 sm:pb-32 lg:px-10 lg:pb-40"
     >
-      {collection.heroImageSrc && (
+      {collection.heroImageSrc && !semImagem && (
         <RevealOnScroll className="relative mx-auto aspect-[4/5] w-full max-w-6xl overflow-hidden rounded-sm shadow-2xl shadow-brand-navy/10 sm:aspect-[16/10] lg:aspect-[21/9]">
           <ImageReveal>
             <PlaceholderImage

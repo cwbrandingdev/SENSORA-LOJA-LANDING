@@ -4,7 +4,6 @@ import CollectionShowcase from "@/components/collections/CollectionShowcase";
 import KitShowcaseCard from "@/components/collections/KitShowcaseCard";
 import CategoryProducts from "@/components/sections/CategoryProducts";
 import EmptyState from "@/components/ui/EmptyState";
-import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import {
   CATEGORIES,
   KIT_4_ESTACOES_SHOWCASE,
@@ -57,23 +56,13 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
           { nome: category.label, caminho: getCategoryHref(category.slug) },
         ])}
       />
-      <section className="relative mx-auto max-w-3xl overflow-hidden px-6 py-8 text-center  lg:px-10">
-        <RevealOnScroll>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
-            Categoria
-          </p>
-          <h1 className="mt-4 font-serif text-4xl font-normal tracking-tight text-brand-navy sm:mt-16 sm:text-5xl">
-            {category.label}
-          </h1>
-          <p className="mt-6 text-base leading-relaxed text-slate-600">
-            {category.description}
-          </p>
-        </RevealOnScroll>
-      </section>
+      {/* Sem cabeçalho visível: a página abre direto na coleção. O H1 fica
+          só para buscadores, agentes e leitores de tela. */}
+      <h1 className="sr-only">{category.label}</h1>
 
       {collections.length > 0 ? (
         collections.map((collection) => (
-          <CollectionShowcase key={collection.slug} collection={collection} />
+          <CollectionShowcase key={collection.slug} collection={collection} semImagem />
         ))
       ) : category.products && category.products.length > 0 ? (
         <CategoryProducts products={category.products} />
