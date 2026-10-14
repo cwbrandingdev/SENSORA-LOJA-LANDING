@@ -5,6 +5,7 @@
 // nenhum padrão visual novo.
 import PlaceholderImage from "@/components/ui/PlaceholderImage";
 import type { CartItem } from "@/context/CartContext";
+import { imagemKitRedimensionada } from "@/lib/loja-imagens";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -20,7 +21,7 @@ export default function CheckoutItemRow({ item }: CheckoutItemRowProps) {
     <li className="flex items-center gap-4 py-5">
       <div className="relative aspect-[4/5] w-16 shrink-0 overflow-hidden rounded-sm">
         <PlaceholderImage
-          src={item.imagemUrl}
+          src={imagemKitRedimensionada(item.imagemUrl, 160)}
           alt={item.nome}
           label={item.nome}
           unoptimized={Boolean(item.imagemUrl)}

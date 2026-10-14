@@ -8,6 +8,7 @@ import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { statusEstoque } from "@/lib/estoque";
 import type { ProdutoPublico } from "@/lib/api-publica";
+import { imagemKitRedimensionada } from "@/lib/loja-imagens";
 
 export type ReleaseItem = {
   key: string;
@@ -78,7 +79,7 @@ export default function LatestReleaseCard({ produto }: { produto: ReleaseItem })
           <div className="relative aspect-4/5 w-full">
             {mostrarImagem ? (
               <Image
-                src={produto.imagemUrl as string}
+                src={imagemKitRedimensionada(produto.imagemUrl as string, 700)}
                 alt={produto.nome}
                 fill
                 sizes="(max-width: 639px) 85vw, (max-width: 1023px) 50vw, (max-width: 1152px) 25vw, 270px"

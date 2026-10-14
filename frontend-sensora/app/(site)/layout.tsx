@@ -10,15 +10,31 @@ import PageFadeIn from "@/components/ui/PageFadeIn";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { ToastProvider } from "@/context/ToastContext";
+import { COOKIE_CONSENT_KEY } from "@/lib/constants";
+import {
+  COOKIE_CONSENT_BANNER_OCULTO_ATTR,
+  COOKIE_CONSENT_VERSION,
+} from "@/lib/cookieConsent";
+
+// Roda antes da primeira pintura: se já existe um consentimento válido
+// (mesmas regras de parseStored em lib/cookieConsent.ts), marca o <html>
+// para o CSS esconder o aviso que vem no HTML do servidor — sem piscar.
+// O aviso vem do servidor para aparecer junto com a página, e não só
+// depois de todo o JavaScript (era o LCP do PageSpeed mobile, ~7s).
+const scriptConsentimento = `try{var r=localStorage.getItem(${JSON.stringify(COOKIE_CONSENT_KEY)});if(r){var p=JSON.parse(r),c=p&&p.categories;if(p&&p.version===${COOKIE_CONSENT_VERSION}&&p.decidedAt&&c&&c.essential===true&&typeof c.analytics==="boolean"&&typeof c.marketing==="boolean")document.documentElement.setAttribute(${JSON.stringify(COOKIE_CONSENT_BANNER_OCULTO_ATTR)},"")}}catch(e){}`;
 
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
 });
 
+// Geist Mono (só nos <code> da Política de Cookies) e Nunito (só no menu)
+// sem preload: não disputam banda com o que aparece no topo da página no
+// celular. Continuam carregando quando usadas (display: swap).
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  preload: false,
 });
 
 const fraunces = Fraunces({
@@ -30,6 +46,7 @@ const fraunces = Fraunces({
 const nunito = Nunito({
   variable: "--font-nunito",
   subsets: ["latin"],
+  preload: false,
 });
 
 // Sem canonical aqui de propósito: todas as páginas herdariam o da home.
@@ -60,7 +77,12 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       className={`${inter.variable} ${geistMono.variable} ${fraunces.variable} ${nunito.variable} antialiased`}
+      // O script abaixo pode marcar o <html> antes da hidratação.
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: scriptConsentimento }} />
+      </head>
       <body className="bg-background text-slate-900">
         <CartProvider>
           <ToastProvider>

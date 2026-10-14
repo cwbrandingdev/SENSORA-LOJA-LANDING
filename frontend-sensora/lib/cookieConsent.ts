@@ -8,6 +8,10 @@ export const COOKIE_CONSENT_VERSION = 2;
 export const COOKIE_CONSENT_OPEN_EVENT = "sensora:open-cookie-preferences";
 export const COOKIE_CONSENT_CHANGED_EVENT = "sensora:cookie-consent-changed";
 
+// Marcado no <html> pelo script do layout quando já há consentimento: o CSS
+// (globals.css) esconde o aviso que vem no HTML do servidor.
+export const COOKIE_CONSENT_BANNER_OCULTO_ATTR = "data-cookie-consentido";
+
 export type CookieConsentCategories = {
   essential: true;
   analytics: boolean;

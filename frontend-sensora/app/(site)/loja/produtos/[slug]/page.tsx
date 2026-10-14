@@ -12,6 +12,7 @@ import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import ImageReveal from "@/components/ui/ImageReveal";
 import AddToCartControls from "@/components/loja/AddToCartControls";
 import AvisosProduto from "@/components/loja/AvisosProduto";
+import { imagemKitRedimensionada } from "@/lib/loja-imagens";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -99,7 +100,7 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
           )}
           <ImageReveal>
             <PlaceholderImage
-              src={produto.imagemUrl}
+              src={imagemKitRedimensionada(produto.imagemUrl, 1200)}
               alt={produto.nome}
               label={produto.nome}
               priority

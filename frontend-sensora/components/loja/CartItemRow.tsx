@@ -11,6 +11,7 @@ import QuantityStepper from "@/components/ui/QuantityStepper";
 import { useCart, type CartItem } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { estoqueInsuficienteNoCarrinho, mensagemEstoque } from "@/lib/estoque";
+import { imagemKitRedimensionada } from "@/lib/loja-imagens";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -55,7 +56,7 @@ export default function CartItemRow({ item }: CartItemRowProps) {
         className="relative aspect-[4/5] w-20 shrink-0 overflow-hidden rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40 sm:w-24 lg:w-28"
       >
         <PlaceholderImage
-          src={item.imagemUrl}
+          src={imagemKitRedimensionada(item.imagemUrl, 240)}
           alt={item.nome}
           label={item.nome}
           unoptimized={Boolean(item.imagemUrl)}

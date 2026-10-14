@@ -19,6 +19,16 @@ const AUTOPLAY_MS = 6000;
 export default function HeroCarousel() {
   const [api, setApi] = useState<CarouselApi>();
   const [index, setIndex] = useState(0);
+  // Só a foto do 1º slide entra no carregamento inicial; as dos outros
+  // (fora da tela, mas baixadas cedo por estarem ao lado no trilho) vêm
+  // 2s depois ou assim que a pessoa mexer no carrossel. Libera a banda do
+  // celular para o que aparece no topo (PageSpeed mobile).
+  const [carregarDemais, setCarregarDemais] = useState(false);
+
+  useEffect(() => {
+    const espera = window.setTimeout(() => setCarregarDemais(true), 2000);
+    return () => window.clearTimeout(espera);
+  }, []);
 
   useEffect(() => {
     if (!api) return undefined;
@@ -26,14 +36,19 @@ export default function HeroCarousel() {
     // Toda troca de slide (setas, teclado, swipe) reinicia o autoplay do
     // zero; reset() não faz nada se o autoplay estiver parado.
     const onSelect = () => {
-      setIndex(api.selectedScrollSnap());
+      const atual = api.selectedScrollSnap();
+      setIndex(atual);
+      if (atual !== 0) setCarregarDemais(true);
       api.plugins().autoplay?.reset();
     };
+    const onPointerDown = () => setCarregarDemais(true);
     onSelect();
     api.on("select", onSelect);
+    api.on("pointerDown", onPointerDown);
 
     return () => {
       api.off("select", onSelect);
+      api.off("pointerDown", onPointerDown);
     };
   }, [api]);
 
@@ -69,7 +84,7 @@ export default function HeroCarousel() {
                       : "sm:duration-0 sm:scale-100"
                   }`}
                 >
-                  {slide.imageSrcMobile ? (
+                  {slideIndex > 0 && !carregarDemais ? null : slide.imageSrcMobile ? (
                     <>
                       <div className="absolute inset-0 lg:hidden">
                         <PlaceholderImage

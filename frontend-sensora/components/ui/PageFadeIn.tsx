@@ -12,16 +12,20 @@ function prefersReducedMotion() {
   );
 }
 
-// Fade único para toda a navegação da landing: cobre tanto o primeiro load
-// quanto a troca entre rotas (ex.: clicar na logo em /velas para voltar à
-// home). Como o RootLayout não remonta entre navegações client-side, é este
-// componente — e só ele — que decide quando o fade acontece; não duplicar
-// essa lógica em outro lugar.
+// Fade único para a troca entre rotas da landing (ex.: clicar na logo em
+// /velas para voltar à home). Como o RootLayout não remonta entre
+// navegações client-side, é este componente — e só ele — que decide quando
+// o fade acontece; não duplicar essa lógica em outro lugar.
+//
+// O primeiro load NÃO faz fade: a página já vem visível no HTML do
+// servidor. Começar em opacity-0 deixava a tela em branco até o JavaScript
+// rodar e fazia o Chrome descartar a foto do topo como LCP (pintada
+// invisível) — no PageSpeed mobile o LCP ia para ~7s.
 export default function PageFadeIn({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [renderedPathname, setRenderedPathname] = useState(pathname);
   const [displayChildren, setDisplayChildren] = useState(children);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
 
   // Ajuste de estado durante o render (padrão recomendado pelo React para
   // sincronizar estado quando uma prop muda, sem passar por um efeito):
@@ -38,8 +42,8 @@ export default function PageFadeIn({ children }: { children: React.ReactNode }) 
     setDisplayChildren(children);
   }
 
-  // Único responsável por "revelar": dispara tanto no primeiro load quanto
-  // depois de cada fade-out disparado por uma troca de rota.
+  // Único responsável por "revelar": dispara depois de cada fade-out
+  // disparado por uma troca de rota.
   useEffect(() => {
     if (visible) return undefined;
     const timeout = setTimeout(() => {

@@ -13,3 +13,20 @@ const BANNER_POR_SLUG_CATEGORIA: Record<string, string> = {
 export function bannerParaCategoria(slug: string): string | null {
   return BANNER_POR_SLUG_CATEGORIA[slug] ?? null;
 }
+
+// Fotos de produto vêm do ImageKit no tamanho original (~150–180 KB cada) e
+// são exibidas com `unoptimized`. O ImageKit redimensiona pela própria URL
+// (`?tr=w-<largura>`, já entregando WebP): passe o dobro da largura exibida
+// para telas de alta densidade. Qualquer outra URL (ex.: fotos locais em
+// /images) volta sem mudança.
+export function imagemKitRedimensionada<T extends string | undefined>(url: T, largura: number): T {
+  if (!url) return url;
+  try {
+    const endereco = new URL(url);
+    if (endereco.hostname !== "ik.imagekit.io" || endereco.searchParams.has("tr")) return url;
+    endereco.searchParams.set("tr", `w-${largura}`);
+    return endereco.toString() as T;
+  } catch {
+    return url;
+  }
+}

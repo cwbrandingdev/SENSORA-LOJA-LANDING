@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import PlaceholderImage from "@/components/ui/PlaceholderImage";
 import type { CartItem } from "@/context/CartContext";
+import { imagemKitRedimensionada } from "@/lib/loja-imagens";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -92,7 +93,7 @@ export default function CheckoutItemsShowcase({
             }`}
           >
             <PlaceholderImage
-              src={entry.imagemUrl}
+              src={imagemKitRedimensionada(entry.imagemUrl, 1000)}
               alt={entry.nome}
               label={entry.nome}
               unoptimized={Boolean(entry.imagemUrl)}

@@ -8,12 +8,12 @@ import Link from "next/link";
 import Button from "@/components/ui/Button";
 import {
   acceptAllOptionalCookies,
+  COOKIE_CONSENT_BANNER_OCULTO_ATTR,
   COOKIE_CONSENT_OPEN_EVENT,
   getCookieConsent,
   rejectOptionalCookies,
   saveCustomCookieConsent,
 } from "@/lib/cookieConsent";
-import { motion } from "framer-motion";
 
 type Panel = "banner" | "preferences";
 
@@ -59,18 +59,14 @@ function CategoryToggle({
 
 export default function CookieConsentBanner() {
   const titleId = useId();
-  const [visible, setVisible] = useState(false);
-  const [entered, setEntered] = useState(false);
+  // Começa visível: o aviso vem no HTML do servidor e aparece junto com a
+  // página. Para quem já consentiu, o script do layout esconde via CSS antes
+  // da primeira pintura, e o efeito abaixo o retira depois de hidratar.
+  const [visible, setVisible] = useState(true);
+  const [entered, setEntered] = useState(true);
   const [panel, setPanel] = useState<Panel>("banner");
   const [analytics, setAnalytics] = useState(false);
   const [marketing, setMarketing] = useState(false);
-  const [showCookies, setShowCookies] = useState(false);
-
-  useEffect(() => {
-    setTimeout(() => {
-      setShowCookies(true);
-    }, 1000);
-  }, []);
 
   const close = useCallback(() => {
     setEntered(false);
@@ -78,6 +74,8 @@ export default function CookieConsentBanner() {
   }, []);
 
   const openPreferences = useCallback(() => {
+    // Sem isto o CSS de "já consentiu" esconderia as preferências reabertas.
+    document.documentElement.removeAttribute(COOKIE_CONSENT_BANNER_OCULTO_ATTR);
     const existing = getCookieConsent();
     setAnalytics(existing?.categories.analytics ?? false);
     setMarketing(existing?.categories.marketing ?? false);
@@ -87,11 +85,7 @@ export default function CookieConsentBanner() {
   }, []);
 
   useEffect(() => {
-    if (!getCookieConsent()) {
-      setVisible(true);
-      const raf = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf);
-    }
+    if (getCookieConsent()) setVisible(false);
   }, []);
 
   useEffect(() => {
@@ -120,12 +114,7 @@ export default function CookieConsentBanner() {
 
   return (
     <>
-      {showCookies ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.6 }}
-        >
+      <div data-cookie-banner>
           <div
             className={`fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-end sm:justify-start sm:p-0 ${
               isDialog ? "bg-brand-navy/40" : "pointer-events-none"
@@ -269,8 +258,7 @@ export default function CookieConsentBanner() {
               </div>
             </div>
           </div>
-        </motion.div>
-      ) : null}
+      </div>
     </>
   );
 }

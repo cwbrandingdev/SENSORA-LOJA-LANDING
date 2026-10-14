@@ -97,6 +97,22 @@ async function hasHorizontalOverflow(page: Page): Promise<boolean> {
   return page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 24);
 }
 
+// O aviso de cookies vem no HTML e cobre o rodapé da tela: estes testes
+// simulam quem já respondeu a ele (o próprio aviso é testado em
+// cookie-consent.spec.ts).
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "sensora_cookie_consent",
+      JSON.stringify({
+        version: 2,
+        decidedAt: new Date().toISOString(),
+        categories: { essential: true, analytics: false, marketing: false },
+      }),
+    );
+  });
+});
+
 test.describe("Carrinho — carrinho vazio", () => {
   test("mostra EmptyState com CTA para o catálogo", async ({ page }) => {
     await page.goto(CARRINHO_URL);

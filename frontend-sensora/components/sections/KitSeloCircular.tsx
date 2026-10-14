@@ -12,6 +12,7 @@ import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { statusEstoque } from "@/lib/estoque";
 import type { ReleaseItem } from "./LatestReleaseCard";
+import { imagemKitRedimensionada } from "@/lib/loja-imagens";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -84,7 +85,7 @@ export default function KitSeloCircular({ item }: { item: ReleaseItem }) {
         <Link href={item.href} className="group absolute inset-[13%] block overflow-hidden rounded-full bg-white">
           {item.imagemUrl && !imagemQuebrou ? (
             <Image
-              src={item.imagemUrl}
+              src={imagemKitRedimensionada(item.imagemUrl, 700)}
               alt={item.nome}
               fill
               sizes="(max-width: 767px) 70vw, 340px"

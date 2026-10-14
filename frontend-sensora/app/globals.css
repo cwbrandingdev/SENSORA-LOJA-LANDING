@@ -115,3 +115,9 @@ html::-webkit-scrollbar-thumb {
     scrollbar-color: var(--brand-orange) transparent;
   }
 }
+
+/* Aviso de cookies: vem no HTML do servidor e some antes da primeira
+   pintura quando já existe consentimento (script no layout do site). */
+html[data-cookie-consentido] [data-cookie-banner] {
+  display: none;
+}

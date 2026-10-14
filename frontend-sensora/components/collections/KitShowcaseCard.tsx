@@ -8,6 +8,7 @@ import PlaceholderImage from "@/components/ui/PlaceholderImage";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import { LOJA_PRODUTO_URL } from "@/lib/config";
 import type { KitShowcase } from "@/lib/content";
+import { imagemKitRedimensionada } from "@/lib/loja-imagens";
 
 type KitShowcaseCardProps = {
   kit: KitShowcase;
@@ -50,7 +51,7 @@ export default function KitShowcaseCard({ kit }: KitShowcaseCardProps) {
     >
       <ImageReveal>
         <PlaceholderImage
-          src={kit.imageSrc}
+          src={imagemKitRedimensionada(kit.imageSrc, 800)}
           alt={kit.imageAlt}
           label={kit.name}
           unoptimized={imagemRemota}
