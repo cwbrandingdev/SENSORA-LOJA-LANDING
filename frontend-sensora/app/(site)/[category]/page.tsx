@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import CollectionShowcase from "@/components/collections/CollectionShowcase";
 import KitShowcaseCard from "@/components/collections/KitShowcaseCard";
@@ -8,8 +9,11 @@ import {
   CATEGORIES,
   KIT_4_ESTACOES_SHOWCASE,
   getCategory,
+  getCategoryHref,
   getCollectionsByCategory,
 } from "@/lib/content";
+import JsonLd from "@/components/seo/JsonLd";
+import { OPEN_GRAPH_PADRAO, breadcrumbJsonLd } from "@/lib/seo";
 
 export function generateStaticParams() {
   return CATEGORIES.map((category) => ({ category: category.slug }));
@@ -18,6 +22,22 @@ export function generateStaticParams() {
 type CategoryPageProps = {
   params: Promise<{ category: string }>;
 };
+
+export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
+  const category = getCategory((await params).category);
+  if (!category) return {};
+  return {
+    title: category.label,
+    description: category.description,
+    alternates: { canonical: getCategoryHref(category.slug) },
+    openGraph: {
+      ...OPEN_GRAPH_PADRAO,
+      title: category.label,
+      description: category.description,
+      url: getCategoryHref(category.slug),
+    },
+  };
+}
 
 export default async function CategoryPage({ params }: CategoryPageProps) {
   const { category: categorySlug } = await params;
@@ -31,6 +51,12 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
 
   return (
     <>
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { nome: "Início", caminho: "/" },
+          { nome: category.label, caminho: getCategoryHref(category.slug) },
+        ])}
+      />
       <section className="relative mx-auto max-w-3xl overflow-hidden px-6 py-8 text-center  lg:px-10">
         <RevealOnScroll>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">

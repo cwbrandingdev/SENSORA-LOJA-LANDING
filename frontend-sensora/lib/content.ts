@@ -490,8 +490,8 @@ export const ABOUT_CONTENT: AboutContent = {
   eyebrow: "SensoraHome",
   title: "Sobre a Sensora",
   paragraphs: [
-    "Na Sensora Home, acreditamos que os aromas têm o poder de transformar a forma como vivemos nossos espaços. Uma fragrância pode despertar uma lembrança, marcar um momento ou simplesmente mudar a atmosfera de um ambiente. É por isso que criamos aromas que convidam você a sentir a casa de uma maneira diferente.",
-    "Cada produto nasce da nossa experiência com o SensoraHome, unindo perfumaria, estética e cuidado para transformar o cotidiano em experiências que despertam os sentidos. Porque uma casa bem perfumada não é apenas percebida — ela é sentida.",
+    "Na Sensora Home, acreditamos que os aromas têm o poder de transformar a atmosfera de um ambiente, despertar lembranças e tornar especiais até os momentos mais simples. É nessa conexão entre fragrâncias, sensações e cotidiano que nasce a Sensora Home.",
+    "Criamos velas aromáticas, difusores e sprays de ambiente para acompanhar diferentes momentos da vida, acolher, renovar os espaços e dar à sua casa uma identidade própria. Produtos pensados para quem valoriza os detalhes e acredita que sentir-se bem em casa faz toda a diferença.",
   ],
   imageAlt: "Spray de ambiente Sensora Baunilha em um quarto aconchegante",
   imageSrc: "/images/about/sobre-sensora.png",
@@ -605,7 +605,7 @@ export const FAQ_ITEMS: FaqItem[] = [
 ];
 
 export const FOOTER_CONTENT = {
-  tagline: "Marcas sentidas, em cada detalhe.",
+  tagline: "Onde marcas sentidas, em cada detalhe.",
   contact: {
     email: "contato@sensorahome.com.br",
     phone: "",

@@ -9,6 +9,9 @@ import FaqSection from "@/components/sections/FaqSection";
 
 export const metadata: Metadata = {
   title: "Perguntas frequentes",
+  description:
+    "Dúvidas sobre pedidos, pagamento, entrega, trocas e produtos da Sensora.",
+  alternates: { canonical: "/faq" },
 };
 
 export default function FaqPage() {

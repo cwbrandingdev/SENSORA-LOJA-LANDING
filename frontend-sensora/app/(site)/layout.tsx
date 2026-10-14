@@ -15,6 +15,9 @@ import {
   COOKIE_CONSENT_BANNER_OCULTO_ATTR,
   COOKIE_CONSENT_VERSION,
 } from "@/lib/cookieConsent";
+import JsonLd from "@/components/seo/JsonLd";
+import { EMPRESA } from "@/lib/empresa";
+import { OPEN_GRAPH_PADRAO, SITE_URL, urlAbsoluta } from "@/lib/seo";
 
 // Roda antes da primeira pintura: se já existe um consentimento válido
 // (mesmas regras de parseStored em lib/cookieConsent.ts), marca o <html>
@@ -52,19 +55,35 @@ const nunito = Nunito({
 // Sem canonical aqui de propósito: todas as páginas herdariam o da home.
 // Os canonicals ficam só nas páginas que precisam (home, catálogo, produto).
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ?? "https://sensorahome.com.br",
-  ),
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "Sensora | Home",
+    default: "Sensora | Velas aromáticas, sprays e difusores de ambiente",
     template: "%s | Sensora",
   },
   description:
-    "Conheça as velas aromáticas, sprays de ambiente, difusores de aroma e kits da Sensora.",
-  openGraph: {
-    siteName: "Sensora",
-    locale: "pt_BR",
-    type: "website",
+    "Velas aromáticas veganas de cera de coco, sprays de ambiente, difusores de aroma e kits da Sensora. Fragrâncias para transformar a atmosfera da sua casa.",
+  openGraph: OPEN_GRAPH_PADRAO,
+};
+
+// Quem é a Sensora, para o Google (painel da marca) e para as IAs.
+const organizacaoJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: EMPRESA.nomeFantasia,
+  legalName: EMPRESA.razaoSocial,
+  taxID: EMPRESA.cnpj,
+  url: SITE_URL,
+  logo: urlAbsoluta("/logo.png"),
+  image: urlAbsoluta("/og-image.jpg"),
+  email: EMPRESA.email,
+  sameAs: [EMPRESA.instagramUrl],
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: EMPRESA.endereco,
+    addressLocality: EMPRESA.cidade,
+    addressRegion: EMPRESA.uf,
+    postalCode: EMPRESA.cep,
+    addressCountry: "BR",
   },
 };
 
@@ -84,6 +103,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: scriptConsentimento }} />
       </head>
       <body className="bg-background text-slate-900">
+        <JsonLd data={organizacaoJsonLd} />
         <CartProvider>
           <ToastProvider>
             <PageFadeIn>

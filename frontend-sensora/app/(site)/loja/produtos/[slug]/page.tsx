@@ -13,6 +13,8 @@ import ImageReveal from "@/components/ui/ImageReveal";
 import AddToCartControls from "@/components/loja/AddToCartControls";
 import AvisosProduto from "@/components/loja/AvisosProduto";
 import { imagemKitRedimensionada } from "@/lib/loja-imagens";
+import JsonLd from "@/components/seo/JsonLd";
+import { OPEN_GRAPH_PADRAO, breadcrumbJsonLd, resumir, urlAbsoluta } from "@/lib/seo";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -33,9 +35,22 @@ export async function generateMetadata({
     if (!produto) {
       return { title: "Produto não encontrado" };
     }
+    const description = resumir(
+      produto.descricao || `${produto.nome}${produto.aroma ? ` — ${produto.aroma}` : ""}, da Sensora.`,
+    );
     return {
       title: produto.nome,
+      description,
       alternates: { canonical: LOJA_PRODUTO_URL(produto.slug) },
+      openGraph: {
+        ...OPEN_GRAPH_PADRAO,
+        title: produto.nome,
+        description,
+        url: LOJA_PRODUTO_URL(produto.slug),
+        ...(produto.imagemUrl && {
+          images: [{ url: imagemKitRedimensionada(produto.imagemUrl, 1200), alt: produto.nome }],
+        }),
+      },
     };
   } catch {
     return { title: "Catálogo" };
@@ -78,8 +93,37 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
     notFound();
   }
 
+  // Preço, foto e disponibilidade nos resultados do Google e para as IAs.
+  const produtoJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: produto.nome,
+    sku: String(produto.id),
+    ...(produto.descricao && { description: produto.descricao }),
+    ...(produto.imagemUrl && { image: urlAbsoluta(produto.imagemUrl) }),
+    ...(produto.categoria?.nome && { category: produto.categoria.nome }),
+    brand: { "@type": "Brand", name: "Sensora" },
+    offers: {
+      "@type": "Offer",
+      url: urlAbsoluta(LOJA_PRODUTO_URL(produto.slug)),
+      price: produto.preco.toFixed(2),
+      priceCurrency: "BRL",
+      itemCondition: "https://schema.org/NewCondition",
+      availability:
+        produto.quantidade > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+    },
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-6 pt-4 pb-12 sm:pt-0 lg:px-10 lg:pb-20">
+      <JsonLd data={produtoJsonLd} />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { nome: "Início", caminho: "/" },
+          { nome: "Catálogo", caminho: ROUTES.LOJA_PRODUTOS },
+          { nome: produto.nome, caminho: LOJA_PRODUTO_URL(produto.slug) },
+        ])}
+      />
       <Link
         href={
           produto.categoria?.slug

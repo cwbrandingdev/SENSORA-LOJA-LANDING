@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import ImageReveal from "@/components/ui/ImageReveal";
@@ -19,6 +20,13 @@ function rotuloAromas(collection: Collection) {
   const total = collection.items.length;
   return `${collection.eyebrow ?? "Kit"} · ${total} ${total === 1 ? "aroma" : "aromas"}`;
 }
+
+export const metadata: Metadata = {
+  title: "Kits",
+  description:
+    "Kits Sensora: conjuntos de velas aromáticas, sprays de ambiente e difusores criados para contar uma história sensorial completa.",
+  alternates: { canonical: "/colecoes" },
+};
 
 export default function ColecoesPage() {
   return (
