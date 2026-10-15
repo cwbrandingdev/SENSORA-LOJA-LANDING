@@ -3,16 +3,18 @@
 // Detalhe de uma solicitação de suporte (GET /admin/suporte/:id) — destino
 // do link do e-mail de aviso aos admins. ADMIN-only (o backend responde 403
 // aos demais). O painel só acompanha o status: a resposta ao cliente é por
-// e-mail, pelo link "Responder por e-mail", fora do sistema.
+// e-mail, pelo menu "Responder por e-mail" (Gmail, Outlook…), fora do sistema.
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { isAxiosError } from "axios";
+import { Copy } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EmptyState from "@/components/ui/EmptyState";
 import FormButton from "@/components/ui/FormButton";
 import InlineErrorState from "@/components/ui/InlineErrorState";
 import TableSkeleton from "@/components/ui/TableSkeleton";
+import ResponderEmail from "@/components/admin/ResponderEmail";
 import StatusSuporteBadge, { formatarDataSuporte } from "@/components/admin/StatusSuporteBadge";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
@@ -29,6 +31,8 @@ import { atualizarStatusSuporte, buscarSolicitacaoSuporte } from "@/services/sup
 type NovoStatus = "EM_ATENDIMENTO" | "RESOLVIDA";
 
 const cardClass = "rounded-lg border border-slate-200 bg-white p-4";
+const botaoCopiarClass =
+  "inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-brand-navy hover:text-brand-navy";
 
 export default function SuporteDetalhePage() {
   const { id } = useParams<{ id: string }>();
@@ -70,6 +74,15 @@ export default function SuporteDetalhePage() {
   function recarregar() {
     setErro(null);
     setTentativa((n) => n + 1);
+  }
+
+  async function copiar(texto: string, aviso: string) {
+    try {
+      await navigator.clipboard.writeText(texto);
+      toast.success(aviso);
+    } catch {
+      toast.error("Não foi possível copiar. Selecione o texto e copie manualmente.");
+    }
   }
 
   async function handleConfirmarStatus() {
@@ -121,9 +134,15 @@ export default function SuporteDetalhePage() {
     return <TableSkeleton rows={4} columns={2} />;
   }
 
-  const responder = `mailto:${solicitacao.email}?subject=${encodeURIComponent(
-    `Re: ${solicitacao.assunto}`,
-  )}`;
+  const categoria = ROTULOS_CATEGORIA_SUPORTE[solicitacao.categoria] ?? solicitacao.categoria;
+  const textoCompleto = [
+    `Solicitação #${solicitacao.id} — ${categoria}`,
+    `Cliente: ${solicitacao.nome} <${solicitacao.email}>`,
+    `Aberta em: ${formatarDataSuporte(solicitacao.criadaEm)}`,
+    `Assunto: ${solicitacao.assunto}`,
+    "",
+    solicitacao.mensagem,
+  ].join("\n");
 
   return (
     <div className="flex flex-col gap-4">
@@ -137,12 +156,13 @@ export default function SuporteDetalhePage() {
           <StatusSuporteBadge status={solicitacao.status} />
         </div>
         <div className="flex flex-wrap gap-2">
-          <a
-            href={responder}
-            className="inline-flex items-center justify-center rounded-md border border-brand-navy bg-white px-3 py-3 text-sm font-medium text-brand-navy transition-colors hover:bg-slate-50 sm:py-2"
-          >
-            Responder por e-mail
-          </a>
+          <ResponderEmail
+            email={solicitacao.email}
+            nome={solicitacao.nome}
+            assunto={solicitacao.assunto}
+            mensagem={solicitacao.mensagem}
+            data={formatarDataSuporte(solicitacao.criadaEm)}
+          />
           {solicitacao.status !== "EM_ATENDIMENTO" && (
             <FormButton type="button" variant="secondary" onClick={() => setNovoStatus("EM_ATENDIMENTO")}>
               Marcar em atendimento
@@ -162,7 +182,18 @@ export default function SuporteDetalhePage() {
           <dt className="text-slate-500">Nome</dt>
           <dd>{solicitacao.nome}</dd>
           <dt className="text-slate-500">E-mail</dt>
-          <dd>{solicitacao.email}</dd>
+          <dd className="flex min-w-0 items-center gap-2">
+            <span className="truncate">{solicitacao.email}</span>
+            <button
+              type="button"
+              onClick={() => copiar(solicitacao.email, "E-mail copiado.")}
+              aria-label="Copiar e-mail do cliente"
+              title="Copiar e-mail"
+              className="shrink-0 rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-brand-navy"
+            >
+              <Copy className="h-3.5 w-3.5" aria-hidden />
+            </button>
+          </dd>
           <dt className="text-slate-500">Aberta em</dt>
           <dd>{formatarDataSuporte(solicitacao.criadaEm)}</dd>
           <dt className="text-slate-500">Atualizada em</dt>
@@ -171,9 +202,27 @@ export default function SuporteDetalhePage() {
       </section>
 
       <section className={cardClass} aria-label="Solicitação">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-          {ROTULOS_CATEGORIA_SUPORTE[solicitacao.categoria] ?? solicitacao.categoria}
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{categoria}</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => copiar(`${solicitacao.assunto}\n\n${solicitacao.mensagem}`, "Mensagem copiada.")}
+              className={botaoCopiarClass}
+            >
+              <Copy className="h-3.5 w-3.5" aria-hidden />
+              Copiar mensagem
+            </button>
+            <button
+              type="button"
+              onClick={() => copiar(textoCompleto, "Solicitação copiada.")}
+              className={botaoCopiarClass}
+            >
+              <Copy className="h-3.5 w-3.5" aria-hidden />
+              Copiar tudo
+            </button>
+          </div>
+        </div>
         <h3 className="mt-1 text-sm font-semibold text-brand-navy">{solicitacao.assunto}</h3>
         <p className="mt-3 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700">
           {solicitacao.mensagem}
