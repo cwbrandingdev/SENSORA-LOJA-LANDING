@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 import { listarProdutosPublicos } from "@/lib/api-publica";
 import { LOJA_PRODUTO_URL } from "@/lib/config";
 import { CATEGORIES, COLLECTIONS, getCategoryHref } from "@/lib/content";
+import { SITE_URL } from "@/lib/seo";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sensorahome.com.br";
 
 // Só páginas públicas para visitantes. Ficam fora: carrinho/checkout,
 // autenticação, /conta, /workspace-x, /icon e as variações com query de

@@ -1,7 +1,7 @@
 // Dados compartilhados de SEO: Open Graph base e JSON-LD (schema.org).
 // Nada aqui aparece na tela — só no <head> e em <script type="application/ld+json">.
 
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sensorahome.com.br";
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.sensorahome.com.br";
 
 // O `openGraph` de uma página substitui o do layout inteiro (não mescla),
 // então as páginas que definem o próprio espalham este objeto. A imagem é

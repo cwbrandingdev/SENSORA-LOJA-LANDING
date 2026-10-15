@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { SITE_URL } from "@/lib/seo";
 
 // /workspace-x fica fora de propósito: listá-lo aqui anunciaria o caminho
 // do painel. Ele sai do índice via `robots: noindex` no próprio layout.
@@ -19,6 +20,6 @@ export default function robots(): MetadataRoute.Robots {
         "/reset-password",
       ],
     },
-    sitemap: "https://sensorahome.com.br/sitemap.xml",
+    sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }
