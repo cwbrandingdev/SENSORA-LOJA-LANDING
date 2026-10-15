@@ -252,6 +252,22 @@ export default function Navbar() {
                         {contaLabel}
                       </Link>
                     </li>
+                    {/* Suporte a um toque no celular. Visitante passa pelo
+                        login e volta para cá; equipe atende pelo painel. */}
+                    {!(perfil !== null && STAFF_ROLES.includes(perfil)) && (
+                      <li>
+                        <Link
+                          href={ROUTES.CONTA_SUPORTE}
+                          onClick={() => setMenuOpen(false)}
+                          className={cn(
+                            mobileLinkClass,
+                            isActive(ROUTES.CONTA_SUPORTE) && "text-brand-navy",
+                          )}
+                        >
+                          Suporte
+                        </Link>
+                      </li>
+                    )}
                     {isAuthenticated && (
                       <li>
                         <button
