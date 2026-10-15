@@ -141,14 +141,18 @@ export default function Footer() {
             <p className="uppercase tracking-[0.2em]">SensoraHome</p>
           </div>
         </div>
-        <div className="mx-auto max-w-7xl px-6 pb-6 text-center text-[11px] text-white/40 lg:px-10 ">
+        <div className="mx-auto flex max-w-7xl justify-center px-6 pb-6 lg:px-10">
+          {/* Crédito da agência: um reflexo laranja passa pelo nome no hover. */}
           <a
-            className="underline lg:no-underline hover:text-white hover:text-[12px] transition-all"
             href="https://cwbranding.com.br/"
             target="_blank"
             rel="noopener noreferrer"
+            className="group inline-flex items-baseline gap-2"
           >
-            Loja feita pela agencia CWBranding
+            <span className="text-[10px] uppercase tracking-[0.25em] text-white/40">feito por</span>
+            <span className="bg-[linear-gradient(110deg,rgba(255,255,255,0.7)_40%,#d97f5c_50%,rgba(255,255,255,0.7)_60%)] bg-[length:250%_100%] bg-clip-text bg-[position:100%_0] font-serif text-xl italic text-transparent transition-[background-position] duration-1000 ease-out group-hover:bg-[position:0%_0]">
+              CWBranding
+            </span>
           </a>
         </div>
       </div>

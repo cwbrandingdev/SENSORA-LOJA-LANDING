@@ -154,7 +154,7 @@ export const CATEGORIES: Category[] = [
     label: "Difusores",
     description:
       "Uma presença perfumada que transforma o ambiente em uma extensão do seu estilo.",
-    imageSrc: "/images/categories/difusores-baunilha-zoom.jpg",
+    imageSrc: "/images/categories/difusores-especiarias.jpg",
   },
 ];
 
