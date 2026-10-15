@@ -60,6 +60,12 @@ type PedidoTableProps = {
   onRemove: (pedido: Pedido) => void;
   onMarcarEnviado: (pedido: Pedido) => void;
   marcandoEnviadoId?: number | null;
+  // Etiqueta do Melhor Envio: gerar (pedido PAGO + NAO_ENVIADO sem
+  // etiqueta) e imprimir (etiqueta já gerada). `etiquetaEmAndamentoId`
+  // desabilita os botões da linha durante a chamada.
+  onGerarEtiqueta: (pedido: Pedido) => void;
+  onImprimirEtiqueta: (pedido: Pedido) => void;
+  etiquetaEmAndamentoId?: number | null;
   // Filtros (PedidosFiltros.tsx) — distingue "não há nenhum pedido
   // cadastrado" de "nenhum pedido corresponde ao filtro atual", para não
   // sugerir que a loja não tem pedido nenhum quando é só o filtro que não
@@ -74,6 +80,9 @@ export default function PedidoTable({
   onRemove,
   onMarcarEnviado,
   marcandoEnviadoId,
+  onGerarEtiqueta,
+  onImprimirEtiqueta,
+  etiquetaEmAndamentoId,
   filtrosAtivos = false,
 }: PedidoTableProps) {
   if (!pedidos || pedidos.length === 0) {
@@ -134,6 +143,7 @@ export default function PedidoTable({
             // status continua sendo rejeitada com 409 pelo backend).
             const podeExcluir = pedido.status === StatusPedido.PENDENTE;
             const marcando = marcandoEnviadoId === pedido.id;
+            const etiquetaEmAndamento = etiquetaEmAndamentoId === pedido.id;
             const temFrete =
               pedido.freteTransportadora || pedido.freteServico || pedido.freteValor != null;
 
@@ -198,6 +208,24 @@ export default function PedidoTable({
                     {podeExcluir && (
                       <FormButton variant="danger" onClick={() => onRemove(pedido)}>
                         Remover
+                      </FormButton>
+                    )}
+                    {podeMarcarEnviado && !pedido.etiquetaGeradaEm && (
+                      <FormButton
+                        variant="secondary"
+                        disabled={etiquetaEmAndamento}
+                        onClick={() => onGerarEtiqueta(pedido)}
+                      >
+                        Gerar etiqueta
+                      </FormButton>
+                    )}
+                    {pedido.etiquetaGeradaEm && (
+                      <FormButton
+                        variant="secondary"
+                        disabled={etiquetaEmAndamento}
+                        onClick={() => onImprimirEtiqueta(pedido)}
+                      >
+                        {etiquetaEmAndamento ? "Abrindo..." : "Imprimir etiqueta"}
                       </FormButton>
                     )}
                     {podeMarcarEnviado && (

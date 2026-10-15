@@ -922,6 +922,7 @@ export class PedidosService {
       statusEnvio: pedido.statusEnvio as StatusEnvio,
       enviadoEm: pedido.enviadoEm ?? undefined,
       codigoRastreio: pedido.codigoRastreio ?? undefined,
+      etiquetaGeradaEm: pedido.etiquetaGeradaEm ?? undefined,
     };
   }
 

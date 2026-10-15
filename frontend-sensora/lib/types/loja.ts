@@ -250,6 +250,8 @@ export type Pedido = {
   statusEnvio: StatusEnvio;
   enviadoEm?: string | null;
   codigoRastreio?: string | null;
+  // Etiqueta do Melhor Envio já gerada (botão "Imprimir etiqueta").
+  etiquetaGeradaEm?: string | null;
 
   // Infraestrutura Fiscal (preparação arquitetural) — só para alinhar com o
   // que GET /pedidos/:id já devolve (PedidosService.findOne); sempre `null`

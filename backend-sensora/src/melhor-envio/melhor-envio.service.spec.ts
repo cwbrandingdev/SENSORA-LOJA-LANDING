@@ -1291,6 +1291,48 @@ describe('MelhorEnvioService — logística reversa (Etapa 8)', () => {
     });
   });
 
+  it('criarEnvio: POST /api/v2/me/cart com loja como remetente e cliente como destinatário; sem NF vai como declaração de conteúdo', async () => {
+    const { service } = await conectado();
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(resposta(201, { id: 'ord-ida-1', price: 22.5 }));
+    global.fetch = fetchMock;
+
+    const ENVIO = {
+      servicoId: REVERSA.servicoId,
+      destinatario: REVERSA.remetente,
+      itens: REVERSA.itens,
+      pacote: REVERSA.pacote,
+      valorDeclarado: REVERSA.valorDeclarado,
+    };
+    await expect(service.criarEnvio(ENVIO)).resolves.toEqual({
+      id: 'ord-ida-1',
+      preco: 22.5,
+    });
+
+    expect((fetchMock.mock.calls as unknown[][])[0][0]).toBe(
+      'https://sandbox.melhorenvio.com.br/api/v2/me/cart',
+    );
+    const corpo = corpoDa(fetchMock);
+    expect(corpo.from.company_document).toBe('12345678000195');
+    expect(corpo.to.document).toBe('52998224725');
+    expect(corpo.to.postal_code).toBe('01310100');
+    expect(corpo.volumes).toEqual([
+      { height: 10, width: 15, length: 20, weight: 0.6 },
+    ]);
+    expect(corpo.options.non_commercial).toBe(true);
+    expect(corpo.options.invoice).toBeUndefined();
+
+    const chave = '1'.repeat(44);
+    await service.criarEnvio({ ...ENVIO, chaveNotaFiscal: chave });
+    const comNota = JSON.parse(
+      ((fetchMock.mock.calls as unknown[][])[1][1] as RequestInit)
+        .body as string,
+    );
+    expect(comNota.options.non_commercial).toBe(false);
+    expect(comNota.options.invoice).toEqual({ key: chave });
+  });
+
   it('loja com CPF: vai em document, não em company_document', async () => {
     const { service } = await conectado({
       ...CONFIG_REVERSA,

@@ -26,6 +26,8 @@ import {
   atualizarPedido,
   removerPedido,
   marcarPedidoComoEnviado,
+  gerarEtiquetaPedido,
+  urlEtiquetaPedido,
 } from "@/services/pedidos";
 import { StatusEnvio, StatusPedido, type Pedido } from "@/lib/types/loja";
 
@@ -72,6 +74,11 @@ function PedidosConteudo() {
   const [marcandoEnviadoId, setMarcandoEnviadoId] = useState<number | null>(null);
   const [pedidoParaEnviar, setPedidoParaEnviar] = useState<Pedido | null>(null);
   const [codigoRastreio, setCodigoRastreio] = useState("");
+  // Etiqueta do Melhor Envio — pedido com geração/impressão em andamento e
+  // pedido aberto no diálogo de geração (com a chave da NF-e opcional).
+  const [etiquetaEmAndamentoId, setEtiquetaEmAndamentoId] = useState<number | null>(null);
+  const [pedidoParaEtiqueta, setPedidoParaEtiqueta] = useState<Pedido | null>(null);
+  const [chaveNotaFiscal, setChaveNotaFiscal] = useState("");
 
   // Destaque "Pedidos para enviar" + filtros — inteiramente client-side
   // sobre a lista já carregada (nenhum parâmetro novo em GET /pedidos).
@@ -225,6 +232,43 @@ function PedidosConteudo() {
     }
   }
 
+  function handleFecharGerarEtiqueta() {
+    if (etiquetaEmAndamentoId !== null) return;
+    setPedidoParaEtiqueta(null);
+    setChaveNotaFiscal("");
+  }
+
+  async function handleConfirmarGerarEtiqueta() {
+    if (!pedidoParaEtiqueta || etiquetaEmAndamentoId !== null) return;
+
+    setEtiquetaEmAndamentoId(pedidoParaEtiqueta.id);
+    try {
+      await gerarEtiquetaPedido(pedidoParaEtiqueta.id, chaveNotaFiscal);
+      toast.success("Etiqueta gerada. Clique em \"Imprimir etiqueta\".");
+      setPedidoParaEtiqueta(null);
+      setChaveNotaFiscal("");
+      await carregarPedidos();
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Não foi possível gerar a etiqueta."));
+    } finally {
+      setEtiquetaEmAndamentoId(null);
+    }
+  }
+
+  async function handleImprimirEtiqueta(pedido: Pedido) {
+    if (etiquetaEmAndamentoId !== null) return;
+
+    setEtiquetaEmAndamentoId(pedido.id);
+    try {
+      const url = await urlEtiquetaPedido(pedido.id);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Não foi possível abrir a etiqueta."));
+    } finally {
+      setEtiquetaEmAndamentoId(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -255,6 +299,9 @@ function PedidosConteudo() {
             onRemove={handleRemove}
             onMarcarEnviado={handleAbrirMarcarEnviado}
             marcandoEnviadoId={marcandoEnviadoId}
+            onGerarEtiqueta={setPedidoParaEtiqueta}
+            onImprimirEtiqueta={handleImprimirEtiqueta}
+            etiquetaEmAndamentoId={etiquetaEmAndamentoId}
             filtrosAtivos={temFiltroAtivo(filtros)}
           />
         </>
@@ -290,6 +337,45 @@ function PedidosConteudo() {
         confirming={marcandoEnviadoId !== null}
         onConfirm={handleConfirmarMarcarEnviado}
         onCancel={handleFecharMarcarEnviado}
+      />
+
+      <ConfirmDialog
+        open={pedidoParaEtiqueta !== null}
+        title="Gerar etiqueta?"
+        description={
+          <div className="flex flex-col gap-3">
+            <p>
+              Gerar a etiqueta do pedido {pedidoParaEtiqueta?.numero} no Melhor
+              Envio ({[pedidoParaEtiqueta?.freteTransportadora, pedidoParaEtiqueta?.freteServico]
+                .filter(Boolean)
+                .join(" · ")}). O valor do frete é debitado do saldo da carteira
+              do Melhor Envio.
+            </p>
+            <label className="flex flex-col gap-1">
+              <span className="font-medium text-slate-700">
+                Chave da NF-e (opcional)
+              </span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={chaveNotaFiscal}
+                onChange={(event) => setChaveNotaFiscal(event.target.value)}
+                maxLength={60}
+                disabled={etiquetaEmAndamentoId !== null}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm transition-colors duration-200 focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy"
+              />
+              <span className="text-xs text-slate-500">
+                Sem a chave, a etiqueta vai com declaração de conteúdo.
+              </span>
+            </label>
+          </div>
+        }
+        confirmLabel="Gerar etiqueta"
+        confirmingLabel="Gerando..."
+        confirmVariant="primary"
+        confirming={etiquetaEmAndamentoId !== null}
+        onConfirm={handleConfirmarGerarEtiqueta}
+        onCancel={handleFecharGerarEtiqueta}
       />
     </div>
   );

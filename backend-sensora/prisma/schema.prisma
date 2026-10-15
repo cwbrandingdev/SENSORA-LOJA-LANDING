@@ -226,6 +226,13 @@ model Pedido {
   // para o cliente ver em Meus Pedidos (Decreto 7.962/2013, art. 2º, V).
   codigoRastreio String?
 
+  // Etiqueta de ida gerada pelo admin no Melhor Envio (PedidoEtiquetaService).
+  // `etiquetaIdExterno` é gravado logo após criar o envio no carrinho, para
+  // uma nova tentativa continuar do mesmo envio; `etiquetaGeradaEm` só
+  // depois de pago e gerado — a partir daí a etiqueta pode ser impressa.
+  etiquetaIdExterno String?
+  etiquetaGeradaEm  DateTime?
+
   // Achado da auditoria: usuarioId já era usado pela aplicação (ver
   // PedidosService.podeAcessar) para restringir VENDEDOR aos próprios
   // pedidos, mas nunca teve uma FK real no banco. onDelete: SetNull mantém o

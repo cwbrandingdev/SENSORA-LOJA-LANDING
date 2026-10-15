@@ -156,6 +156,26 @@ export async function marcarPedidoComoEnviado(
   return response.data;
 }
 
+// Etiqueta de ida no Melhor Envio (só ADMIN): cria, paga com o saldo da
+// carteira e gera. Sem chave da NF-e, vai com declaração de conteúdo.
+export async function gerarEtiquetaPedido(
+  id: number,
+  chaveNotaFiscal?: string,
+): Promise<Pedido> {
+  const chave = chaveNotaFiscal?.replace(/\D/g, "");
+  const response = await api.post<Pedido>(
+    `/pedidos/${id}/etiqueta`,
+    chave ? { chaveNotaFiscal: chave } : {},
+  );
+  return response.data;
+}
+
+// URL do PDF da etiqueta, gerada na hora pelo Melhor Envio (nunca guardada).
+export async function urlEtiquetaPedido(id: number): Promise<string> {
+  const response = await api.get<{ url: string }>(`/pedidos/${id}/etiqueta`);
+  return response.data.url;
+}
+
 export async function atualizarEnderecoMeuPedido(
   id: number,
   enderecoId: number,

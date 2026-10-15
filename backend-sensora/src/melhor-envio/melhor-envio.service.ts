@@ -52,6 +52,16 @@ export interface MelhorEnvioReversaInput {
   valorDeclarado: number;
 }
 
+// Etiqueta de ida — o cliente do pedido é o destinatário.
+export interface MelhorEnvioEnvioInput {
+  servicoId: number;
+  destinatario: MelhorEnvioRemetente;
+  itens: { nome: string; quantidade: number; valorUnitario: number }[];
+  pacote: MelhorEnvioPacote;
+  valorDeclarado: number;
+  chaveNotaFiscal?: string;
+}
+
 // Situação de um envio no Melhor Envio (GET /api/v2/me/orders/{id}), já nos
 // termos do projeto. `status` é o valor cru do Melhor Envio (guardado como
 // última situação); pago/gerado/postado já interpretam status + datas.
@@ -844,14 +854,6 @@ export class MelhorEnvioService {
   async criarReversa(
     input: MelhorEnvioReversaInput,
   ): Promise<{ id: string; preco: number | null }> {
-    const faltando = this.dadosLojaFaltando;
-    if (faltando.length > 0) {
-      throw new InternalServerErrorException(
-        `Dados da loja incompletos: defina ${faltando.join(', ')}.`,
-      );
-    }
-    const loja = (nome: string) => this.configService.get<string>(nome)!.trim();
-    const documentoLoja = loja('LOJA_DOCUMENTO').replace(/\D/g, '');
     const { remetente, pacote } = input;
 
     const resposta = await this.chamarApi('POST', '/api/v2/me/cart/reverse', {
@@ -859,39 +861,8 @@ export class MelhorEnvioService {
       new_sender_mail: remetente.email,
       new_sender_phone: remetente.telefone,
       insurance_value: input.valorDeclarado,
-      from: {
-        name: remetente.nome,
-        document: remetente.cpf,
-        phone: remetente.telefone,
-        email: remetente.email,
-        address: remetente.rua,
-        number: remetente.numero,
-        ...(remetente.complemento ? { complement: remetente.complemento } : {}),
-        district: remetente.bairro,
-        city: remetente.cidade,
-        state_abbr: remetente.uf,
-        postal_code: this.normalizarCep(remetente.cep),
-        country_id: 'BR',
-      },
-      to: {
-        name: loja('LOJA_NOME'),
-        // CNPJ vai em company_document; CPF em document.
-        ...(documentoLoja.length === 14
-          ? { company_document: documentoLoja }
-          : { document: documentoLoja }),
-        phone: loja('LOJA_TELEFONE'),
-        email: loja('LOJA_EMAIL'),
-        address: loja('LOJA_RUA'),
-        number: loja('LOJA_NUMERO'),
-        ...(this.configService.get<string>('LOJA_COMPLEMENTO')?.trim()
-          ? { complement: loja('LOJA_COMPLEMENTO') }
-          : {}),
-        district: loja('LOJA_BAIRRO'),
-        city: loja('LOJA_CIDADE'),
-        state_abbr: loja('LOJA_UF'),
-        postal_code: this.normalizarCep(loja('MELHOR_ENVIO_CEP_ORIGEM')),
-        country_id: 'BR',
-      },
+      from: this.enderecoPessoa(remetente),
+      to: this.enderecoLoja(),
       products: input.itens.map((item) => ({
         name: item.nome,
         quantity: item.quantidade,
@@ -936,6 +907,107 @@ export class MelhorEnvioService {
     }
     const preco = Number(corpo.price);
     return { id: corpo.id, preco: Number.isFinite(preco) ? preco : null };
+  }
+
+  // Etiqueta de ida: cria o envio da loja para o cliente no carrinho do
+  // Melhor Envio (ainda sem cobrança). Depois segue o mesmo ciclo da
+  // reversa: comprarEnvio -> gerarEnvio -> urlImpressao (a etiqueta).
+  // Sem chave de NF-e, vai com declaração de conteúdo (non_commercial).
+  async criarEnvio(
+    input: MelhorEnvioEnvioInput,
+  ): Promise<{ id: string; preco: number | null }> {
+    const { pacote, chaveNotaFiscal } = input;
+
+    const resposta = await this.chamarApi('POST', '/api/v2/me/cart', {
+      service: input.servicoId,
+      from: this.enderecoLoja(),
+      to: this.enderecoPessoa(input.destinatario),
+      products: input.itens.map((item) => ({
+        name: item.nome,
+        quantity: item.quantidade,
+        unitary_value: item.valorUnitario,
+      })),
+      volumes: [
+        {
+          height: pacote.alturaCm,
+          width: pacote.larguraCm,
+          length: pacote.comprimentoCm,
+          weight: pacote.pesoGramas / 1000,
+        },
+      ],
+      options: {
+        insurance_value: input.valorDeclarado,
+        receipt: false,
+        own_hand: false,
+        reverse: false,
+        non_commercial: !chaveNotaFiscal,
+        ...(chaveNotaFiscal ? { invoice: { key: chaveNotaFiscal } } : {}),
+      },
+    });
+
+    if (!resposta.ok) {
+      throw this.falha(
+        'POST /cart',
+        resposta.status,
+        `O Melhor Envio recusou a criação da etiqueta (HTTP ${resposta.status}). Confira os dados do cliente, da loja e da nota fiscal.`,
+      );
+    }
+    const corpo = resposta.corpo as { id?: unknown; price?: unknown } | null;
+    if (typeof corpo?.id !== 'string' || !corpo.id) {
+      throw this.erroLogistica('Resposta inesperada do Melhor Envio');
+    }
+    const preco = Number(corpo.price);
+    return { id: corpo.id, preco: Number.isFinite(preco) ? preco : null };
+  }
+
+  // Endereço da loja no formato do Melhor Envio (remetente da etiqueta de
+  // ida, destinatária da reversa).
+  private enderecoLoja(): Record<string, string> {
+    const faltando = this.dadosLojaFaltando;
+    if (faltando.length > 0) {
+      throw new InternalServerErrorException(
+        `Dados da loja incompletos: defina ${faltando.join(', ')}.`,
+      );
+    }
+    const loja = (nome: string) => this.configService.get<string>(nome)!.trim();
+    const documentoLoja = loja('LOJA_DOCUMENTO').replace(/\D/g, '');
+    return {
+      name: loja('LOJA_NOME'),
+      // CNPJ vai em company_document; CPF em document.
+      ...(documentoLoja.length === 14
+        ? { company_document: documentoLoja }
+        : { document: documentoLoja }),
+      phone: loja('LOJA_TELEFONE'),
+      email: loja('LOJA_EMAIL'),
+      address: loja('LOJA_RUA'),
+      number: loja('LOJA_NUMERO'),
+      ...(this.configService.get<string>('LOJA_COMPLEMENTO')?.trim()
+        ? { complement: loja('LOJA_COMPLEMENTO') }
+        : {}),
+      district: loja('LOJA_BAIRRO'),
+      city: loja('LOJA_CIDADE'),
+      state_abbr: loja('LOJA_UF'),
+      postal_code: this.normalizarCep(loja('MELHOR_ENVIO_CEP_ORIGEM')),
+      country_id: 'BR',
+    };
+  }
+
+  // Endereço do cliente no formato do Melhor Envio.
+  private enderecoPessoa(pessoa: MelhorEnvioRemetente): Record<string, string> {
+    return {
+      name: pessoa.nome,
+      document: pessoa.cpf,
+      phone: pessoa.telefone,
+      email: pessoa.email,
+      address: pessoa.rua,
+      number: pessoa.numero,
+      ...(pessoa.complemento ? { complement: pessoa.complemento } : {}),
+      district: pessoa.bairro,
+      city: pessoa.cidade,
+      state_abbr: pessoa.uf,
+      postal_code: this.normalizarCep(pessoa.cep),
+      country_id: 'BR',
+    };
   }
 
   // Compra o envio com o saldo da carteira. "Já foi pago" conta como sucesso

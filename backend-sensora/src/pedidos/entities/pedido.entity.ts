@@ -45,6 +45,8 @@ export class Pedido {
   statusEnvio: StatusEnvio;
   enviadoEm?: Date;
   codigoRastreio?: string;
+  // Etiqueta do Melhor Envio já gerada (pode ser impressa).
+  etiquetaGeradaEm?: Date;
 
   // Infraestrutura Fiscal (preparação arquitetural) — só populado por
   // PedidosService.findOne (a única query que faz `include: { notaFiscal:
