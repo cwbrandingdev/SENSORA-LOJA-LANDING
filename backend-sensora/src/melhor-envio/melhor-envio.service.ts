@@ -234,8 +234,12 @@ export class MelhorEnvioService {
     this.redirectUri = this.configService.get<string>(
       'MELHOR_ENVIO_REDIRECT_URI',
     );
-    this.scope =
-      this.configService.get<string>('MELHOR_ENVIO_SCOPE') ?? ESCOPO_PADRAO;
+    // MELHOR_ENVIO_SCOPE=shipping-calculate sozinho impede etiqueta
+    // (cart-write/checkout/generate). Sempre une com o ciclo completo;
+    // reconectar a conta aplica o token novo.
+    this.scope = this.escopoAutorizacao(
+      this.configService.get<string>('MELHOR_ENVIO_SCOPE'),
+    );
     this.userAgent = this.configService.get<string>('MELHOR_ENVIO_USER_AGENT');
     this.cepOrigem = this.configService.get<string>('MELHOR_ENVIO_CEP_ORIGEM');
     // Etapa 6.5 (achado da auditoria 6.5): Produto não tem peso/dimensões
@@ -379,6 +383,14 @@ export class MelhorEnvioService {
           : 'Não foi possível verificar a integração com o Melhor Envio.';
       return { operational: false, mensagem };
     }
+  }
+
+  private escopoAutorizacao(configurado?: string): string {
+    const extra = (configurado ?? '')
+      .split(/[,\s]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return [...new Set([...ESCOPO_PADRAO.split(' '), ...extra])].join(' ');
   }
 
   // ---- OAuth2 (Parte 2) ---------------------------------------------------
@@ -919,7 +931,7 @@ export class MelhorEnvioService {
   ): Promise<{ id: string; preco: number | null }> {
     const { pacote, chaveNotaFiscal } = input;
 
-    const resposta = await this.chamarApi('POST', '/api/v2/me/cart', {
+    const payload: Record<string, unknown> = {
       service: input.servicoId,
       from: this.enderecoLoja(),
       to: this.enderecoPessoa(input.destinatario),
@@ -944,7 +956,21 @@ export class MelhorEnvioService {
         non_commercial: !chaveNotaFiscal,
         ...(chaveNotaFiscal ? { invoice: { key: chaveNotaFiscal } } : {}),
       },
-    });
+    };
+
+    let resposta = await this.chamarApi('POST', '/api/v2/me/cart', payload);
+    // Sandbox costuma devolver 500 genérico sem `agency`. Em produção o
+    // OAuth da loja não deve mandar agência (exceto Latam/Azul/Buslog).
+    if (
+      !resposta.ok &&
+      this.ambiente === 'sandbox' &&
+      resposta.status === 500
+    ) {
+      resposta = await this.chamarApi('POST', '/api/v2/me/cart', {
+        ...payload,
+        agency: 1,
+      });
+    }
 
     if (!resposta.ok) {
       throw this.falha(
@@ -1166,6 +1192,9 @@ export class MelhorEnvioService {
     const texto = this.textoErroMelhorEnvio(corpo);
     if (/não-comerciais|nao-comerciais|non.?commercial/i.test(texto)) {
       return 'Esta transportadora não aceita declaração de conteúdo saindo deste estado. Informe a chave da NF-e (44 dígitos) para gerar a etiqueta.';
+    }
+    if (/salvar o pedido no carrinho/i.test(texto)) {
+      return 'O Melhor Envio não salvou o envio no carrinho (erro interno do sandbox/API). Reconecte a conta em Integrações para renovar os escopos de etiqueta e tente de novo.';
     }
     return `O Melhor Envio recusou a criação da etiqueta (HTTP ${status}). Confira os dados do cliente, da loja e da nota fiscal.`;
   }

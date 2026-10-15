@@ -61,9 +61,14 @@ export class PedidoEtiquetaService {
           'O pedido não tem o serviço de frete registrado.',
         );
       }
-      if (!usuario?.cpf || !usuario.telefone) {
+      if (!usuario?.cpf) {
         throw new ConflictException(
-          'O cliente não tem CPF ou telefone cadastrado. Peça para ele completar em Minha Conta > Dados pessoais.',
+          'O cliente não tem CPF cadastrado. Peça para ele completar em Minha Conta > Dados pessoais.',
+        );
+      }
+      if (!usuario.telefone) {
+        throw new ConflictException(
+          'O cliente não tem telefone cadastrado. Peça para ele completar em Minha Conta > Dados pessoais.',
         );
       }
       if (

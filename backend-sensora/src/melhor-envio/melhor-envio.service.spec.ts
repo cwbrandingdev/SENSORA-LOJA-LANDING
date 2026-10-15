@@ -1188,6 +1188,25 @@ describe('MelhorEnvioService — logística reversa (Etapa 8)', () => {
     ]);
   });
 
+  it('MELHOR_ENVIO_SCOPE só com cotação ainda pede o ciclo de etiqueta na URL de autorização', async () => {
+    const { service } = await criarService({
+      ...CONFIG_VALORES,
+      MELHOR_ENVIO_SCOPE: 'shipping-calculate',
+    });
+    const escopo = new URL(service.gerarUrlAutorizacao()).searchParams
+      .get('scope')!
+      .split(' ');
+    expect(escopo).toEqual(
+      expect.arrayContaining([
+        'shipping-calculate',
+        'cart-write',
+        'shipping-checkout',
+        'shipping-generate',
+        'shipping-print',
+      ]),
+    );
+  });
+
   it('cotarReversa: origem = CEP do cliente, destino = loja; só PAC/SEDEX (aceitos pela reversa)', async () => {
     const { service } = await conectado();
     const fetchMock = jest.fn().mockResolvedValue(
@@ -1503,6 +1522,35 @@ describe('MelhorEnvioService — logística reversa (Etapa 8)', () => {
     expect(erro).toBeInstanceOf(MelhorEnvioErroHttpError);
     expect((erro as Error).message).toContain('chave da NF-e');
     expect((erro as Error).message).not.toContain('HTTP 422');
+  });
+
+  it('criarEnvio no sandbox: 500 no carrinho tenta de novo com agency', async () => {
+    const { service } = await conectado();
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        resposta(500, {
+          error: 'Houve um erro ao salvar o pedido no carrinho.',
+        }),
+      )
+      .mockResolvedValueOnce(resposta(201, { id: 'ord-agency-1', price: 22.5 }));
+    global.fetch = fetchMock;
+
+    await expect(
+      service.criarEnvio({
+        servicoId: REVERSA.servicoId,
+        destinatario: REVERSA.remetente,
+        itens: REVERSA.itens,
+        pacote: REVERSA.pacote,
+        valorDeclarado: REVERSA.valorDeclarado,
+      }),
+    ).resolves.toEqual({ id: 'ord-agency-1', preco: 22.5 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const segunda = JSON.parse(
+      ((fetchMock.mock.calls as unknown[][])[1][1] as RequestInit).body as string,
+    );
+    expect(segunda.agency).toBe(1);
   });
 
   it('comprarEnvio: POST /shipment/checkout com o id', async () => {
