@@ -28,8 +28,8 @@ export default function TrocasEDevolucoesPage() {
     >
       <Secao title="Arrependimento: 7 dias">
         <p>
-          Pelo artigo 49 do Código de Defesa do Consumidor, você pode desistir
-          da compra em 7 dias contados do recebimento do produto. Não precisa
+          Pelo artigo 49 do Código de Defesa do Consumidor, você pode solicitar a
+          devolução da compra em 7 dias contados do recebimento do produto. Não precisa
           haver defeito e não precisa explicar o motivo.
         </p>
         <p>

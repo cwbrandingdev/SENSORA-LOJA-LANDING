@@ -104,7 +104,7 @@ export default function CheckoutSucessoPage() {
       <RevealOnScroll delayMs={90}>
         <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-slate-600">
           Seu pagamento foi concluído com sucesso. Acompanhe o pedido em
-          Minha Conta. O prazo de 7 dias para desistir começa quando você
+          Minha Conta. O prazo de 7 dias para devolução começa quando você
           receber o produto.{" "}
           <Link
             href={ROTAS_LEGAIS.trocas}

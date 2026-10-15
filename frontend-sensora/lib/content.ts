@@ -592,9 +592,9 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     id: "arrependimento",
-    question: "Posso desistir da compra?",
+    question: "Posso devolver a compra?",
     answer:
-      "Sim. Em compra feita pelo site, você tem 7 dias contados do recebimento para desistir, sem precisar justificar. O pedido é feito por e-mail (suporte@sensorahome.com.br), com o número do pedido. O valor pago, inclusive o frete da ida, é devolvido, e o frete da volta fica por conta da loja. O passo a passo está em Trocas e devoluções.",
+      "Sim. Em compra feita pelo site, você tem 7 dias contados do recebimento para solicitar a devolução, sem precisar justificar. O pedido é feito por e-mail (suporte@sensorahome.com.br), com o número do pedido. O valor pago, inclusive o frete da ida, é devolvido, e o frete da volta fica por conta da loja. O passo a passo está em Trocas e devoluções.",
   },
   {
     id: "defeito",

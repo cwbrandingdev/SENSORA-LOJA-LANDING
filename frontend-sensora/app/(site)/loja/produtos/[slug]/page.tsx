@@ -26,7 +26,7 @@ const formatPrice = new Intl.NumberFormat("pt-BR", {
 const CONFIANCA = [
   { icone: Truck, texto: "Frete calculado no checkout" },
   { icone: ShieldCheck, texto: "Pagamento seguro" },
-  { icone: Undo2, texto: "7 dias para desistir" },
+  { icone: Undo2, texto: "7 dias para devolução" },
 ];
 
 type ProdutoPageProps = {

@@ -62,7 +62,7 @@ export default function AvisosProduto({
       </div>
 
       <p>
-        Você pode desistir em 7 dias após o recebimento. Defeito tem garantia
+        Você pode solicitar a devolução em até 7 dias após o recebimento. Defeito tem garantia
         legal de 30 dias.{" "}
         <Link href={ROTAS_LEGAIS.trocas} className="text-brand-navy underline underline-offset-4">
           Trocas e devoluções

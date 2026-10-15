@@ -560,7 +560,7 @@ export default function MeuPedidoDetalhePage() {
           </div>
 
           <p className="mt-10 text-sm leading-relaxed text-slate-600">
-            Você pode desistir em 7 dias após o recebimento, ou acionar a
+            Você pode solicitar a devolução em até 7 dias após o recebimento, ou acionar a
             garantia de 30 dias se o produto vier com defeito.{" "}
             <Link
               href={ROTAS_LEGAIS.trocas}

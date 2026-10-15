@@ -1134,7 +1134,7 @@ export class CheckoutService {
           `<p>Total pago: <strong>${reais(pedido.total)}</strong></p>` +
           (enderecoHtml ? `<p>Entrega em:</p>${enderecoHtml}` : '') +
           `<p>A nota fiscal será enviada por e-mail em seguida.</p>` +
-          `<p>Você pode desistir da compra em até 7 dias depois de receber o produto, sem precisar justificar.</p>` +
+          `<p>Você pode solicitar a devolução em até 7 dias depois de receber o produto, sem precisar justificar.</p>` +
           (linkPedido
             ? `<p>Acompanhe o pedido: <a href="${escaparHtml(linkPedido)}">${escaparHtml(linkPedido)}</a></p>`
             : '') +

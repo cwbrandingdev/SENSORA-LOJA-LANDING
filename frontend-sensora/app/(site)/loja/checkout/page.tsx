@@ -695,7 +695,7 @@ export default function CheckoutPage() {
 
                   <div className="mt-6 rounded-sm border border-brand-orange/40 bg-brand-orange/5 px-4 py-3 text-sm leading-relaxed text-slate-700">
                     <p>
-                      Você pode desistir da compra em até 7 dias depois de
+                      Você pode solicitar a devolução em até 7 dias depois de
                       receber o produto, sem precisar justificar.{" "}
                       <Link
                         href={ROTAS_LEGAIS.trocas}

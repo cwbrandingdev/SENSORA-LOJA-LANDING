@@ -61,7 +61,7 @@ const ICONE_CATEGORIA: Record<CategoriaSuporte, LucideIcon> = {
 const DESCRICAO_CATEGORIA: Record<CategoriaSuporte, string> = {
   PRODUTO: "Aromas, uso, composição, cuidados",
   PEDIDO_ENTREGA: "Prazo, rastreio, atraso, endereço",
-  TROCA_DEVOLUCAO: "Desistência, defeito, produto errado",
+  TROCA_DEVOLUCAO: "Devolução, defeito, produto errado",
   PAGAMENTO: "Cobrança, Pix, cartão, estorno",
   CONTA: "Login, senha, dados pessoais",
   OUTRO: "Qualquer outro assunto",
