@@ -31,6 +31,10 @@ import {
 } from "@/services/pedidos";
 import { StatusEnvio, StatusPedido, type Pedido } from "@/lib/types/loja";
 
+function transportadoraExigeNfe(transportadora: string | null | undefined): boolean {
+  return (transportadora ?? "").toLowerCase().includes("jadlog");
+}
+
 // Filtros iniciais vindos da URL (ex.: alertas do Dashboard abrem
 // ?status=REEMBOLSO_SOLICITADO ou ?status=PAGO&dataAte=AAAA-MM-DD). Valores
 // desconhecidos são ignorados.
@@ -241,6 +245,17 @@ function PedidosConteudo() {
   async function handleConfirmarGerarEtiqueta() {
     if (!pedidoParaEtiqueta || etiquetaEmAndamentoId !== null) return;
 
+    const exigeNfe = transportadoraExigeNfe(
+      pedidoParaEtiqueta.freteTransportadora,
+    );
+    const chave = chaveNotaFiscal.replace(/\D/g, "");
+    if (exigeNfe && chave.length !== 44) {
+      toast.error(
+        "A Jadlog exige a chave da NF-e (44 dígitos) para gerar a etiqueta.",
+      );
+      return;
+    }
+
     setEtiquetaEmAndamentoId(pedidoParaEtiqueta.id);
     try {
       await gerarEtiquetaPedido(pedidoParaEtiqueta.id, chaveNotaFiscal);
@@ -353,7 +368,10 @@ function PedidosConteudo() {
             </p>
             <label className="flex flex-col gap-1">
               <span className="font-medium text-slate-700">
-                Chave da NF-e (opcional)
+                Chave da NF-e
+                {transportadoraExigeNfe(pedidoParaEtiqueta?.freteTransportadora)
+                  ? " (obrigatória)"
+                  : " (opcional)"}
               </span>
               <input
                 type="text"
@@ -365,7 +383,9 @@ function PedidosConteudo() {
                 className="w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm transition-colors duration-200 focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy"
               />
               <span className="text-xs text-slate-500">
-                Sem a chave, a etiqueta vai com declaração de conteúdo.
+                {transportadoraExigeNfe(pedidoParaEtiqueta?.freteTransportadora)
+                  ? "A Jadlog não aceita declaração de conteúdo saindo do Paraná. Cole os 44 dígitos da NF-e."
+                  : "Sem a chave, a etiqueta vai com declaração de conteúdo."}
               </span>
             </label>
           </div>

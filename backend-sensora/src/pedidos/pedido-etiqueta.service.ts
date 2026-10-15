@@ -85,6 +85,18 @@ export class PedidoEtiquetaService {
           `Dados da loja incompletos para gerar a etiqueta: defina ${faltandoLoja.join(', ')}.`,
         );
       }
+      // Jadlog (e o Melhor Envio no PR) recusa declaração de conteúdo.
+      // Sem a NF-e a API devolve 422; recusamos antes, com a instrução.
+      if (
+        !chaveNotaFiscal &&
+        (pedido.freteTransportadora ?? '')
+          .toLowerCase()
+          .includes('jadlog')
+      ) {
+        throw new ConflictException(
+          'A Jadlog não aceita declaração de conteúdo saindo do Paraná. Informe a chave da NF-e (44 dígitos) para gerar a etiqueta.',
+        );
+      }
 
       const itens = pedido.itens.map((item) => ({
         nome: item.produto.nome,

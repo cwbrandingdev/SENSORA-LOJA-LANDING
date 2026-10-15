@@ -94,6 +94,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
         // do que falta) enquanto não estiverem todas definidas.
         LOJA_NOME: Joi.string(),
         LOJA_DOCUMENTO: Joi.string(),
+        LOJA_INSCRICAO_ESTADUAL: Joi.string().allow(''),
         LOJA_TELEFONE: Joi.string(),
         LOJA_EMAIL: Joi.string(),
         LOJA_RUA: Joi.string(),

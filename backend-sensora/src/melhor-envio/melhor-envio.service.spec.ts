@@ -1259,6 +1259,7 @@ describe('MelhorEnvioService — logística reversa (Etapa 8)', () => {
       from: {
         name: 'Cliente Sensora',
         document: '52998224725',
+        state_register: 'ISENTO',
         phone: '41999998888',
         email: 'cliente@sensora.dev',
         address: 'Av. Paulista',
@@ -1273,6 +1274,8 @@ describe('MelhorEnvioService — logística reversa (Etapa 8)', () => {
       to: {
         name: 'Sensora Velas',
         company_document: '12345678000195',
+        document: '',
+        state_register: 'ISENTO',
         phone: '41988887777',
         email: 'loja@sensora.dev',
         address: 'Rua XV de Novembro',
@@ -1315,7 +1318,10 @@ describe('MelhorEnvioService — logística reversa (Etapa 8)', () => {
     );
     const corpo = corpoDa(fetchMock);
     expect(corpo.from.company_document).toBe('12345678000195');
+    expect(corpo.from.document).toBe('');
+    expect(corpo.from.state_register).toBe('ISENTO');
     expect(corpo.to.document).toBe('52998224725');
+    expect(corpo.to.state_register).toBe('ISENTO');
     expect(corpo.to.postal_code).toBe('01310100');
     expect(corpo.volumes).toEqual([
       { height: 10, width: 15, length: 20, weight: 0.6 },
@@ -1331,6 +1337,27 @@ describe('MelhorEnvioService — logística reversa (Etapa 8)', () => {
     );
     expect(comNota.options.non_commercial).toBe(false);
     expect(comNota.options.invoice).toEqual({ key: chave });
+  });
+
+  it('criarEnvio: LOJA_INSCRICAO_ESTADUAL substitui o ISENTO no remetente', async () => {
+    const { service } = await conectado({
+      ...CONFIG_REVERSA,
+      LOJA_INSCRICAO_ESTADUAL: '1234567890',
+    });
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(resposta(201, { id: 'ord-ie-1', price: 22.5 }));
+    global.fetch = fetchMock;
+
+    await service.criarEnvio({
+      servicoId: REVERSA.servicoId,
+      destinatario: REVERSA.remetente,
+      itens: REVERSA.itens,
+      pacote: REVERSA.pacote,
+      valorDeclarado: REVERSA.valorDeclarado,
+    });
+
+    expect(corpoDa(fetchMock).from.state_register).toBe('1234567890');
   });
 
   it('loja com CPF: vai em document, não em company_document', async () => {
@@ -1350,6 +1377,7 @@ describe('MelhorEnvioService — logística reversa (Etapa 8)', () => {
     const { to } = corpoDa(fetchMock);
     expect(to.document).toBe('52998224725');
     expect(to.company_document).toBeUndefined();
+    expect(to.state_register).toBe('ISENTO');
   });
 
   it('dados da loja ausentes: lista o que falta e nunca chama o Melhor Envio', async () => {
@@ -1386,8 +1414,95 @@ describe('MelhorEnvioService — logística reversa (Etapa 8)', () => {
     expect((erro as Error).message).not.toContain('52998224725');
     const registrado = JSON.stringify(logs.mock.calls);
     expect(registrado).toContain('422');
+    expect(registrado).toContain('chaves: error');
+    expect(registrado).toContain('campos: from');
     expect(registrado).not.toContain('52998224725');
     expect(registrado).not.toContain('Paulista');
+  });
+
+  it('criarEnvio recusado: o log leva os nomes dos campos, nunca CPF/endereço do 422', async () => {
+    const { service } = await conectado();
+    const logs = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    global.fetch = jest.fn().mockResolvedValue(
+      resposta(422, {
+        message: 'The given data was invalid.',
+        errors: {
+          'from.state_register': [
+            'O campo from.state register é obrigatório para CNPJ 12345678000195.',
+          ],
+          'to.postal_code': ['CEP 01310100 não corresponde à UF SP.'],
+        },
+      }),
+    );
+
+    await expect(
+      service.criarEnvio({
+        servicoId: REVERSA.servicoId,
+        destinatario: REVERSA.remetente,
+        itens: REVERSA.itens,
+        pacote: REVERSA.pacote,
+        valorDeclarado: REVERSA.valorDeclarado,
+      }),
+    ).rejects.toThrow(MelhorEnvioErroHttpError);
+
+    const registrado = JSON.stringify(logs.mock.calls);
+    expect(registrado).toContain('POST /cart -> 422');
+    expect(registrado).toContain('from.state_register');
+    expect(registrado).toContain('to.postal_code');
+    expect(registrado).not.toContain('12345678000195');
+    expect(registrado).not.toContain('01310100');
+  });
+
+  it('criarEnvio recusado com message string: loga o texto sem CEP/CPF', async () => {
+    const { service } = await conectado();
+    const logs = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    global.fetch = jest.fn().mockResolvedValue(
+      resposta(422, {
+        message: 'CEP 01310100 não corresponde à UF. CPF 52998224725 inválido.',
+      }),
+    );
+
+    await expect(
+      service.criarEnvio({
+        servicoId: REVERSA.servicoId,
+        destinatario: REVERSA.remetente,
+        itens: REVERSA.itens,
+        pacote: REVERSA.pacote,
+        valorDeclarado: REVERSA.valorDeclarado,
+      }),
+    ).rejects.toThrow(MelhorEnvioErroHttpError);
+
+    const registrado = JSON.stringify(logs.mock.calls);
+    expect(registrado).toContain('chaves: message');
+    expect(registrado).toContain('não corresponde');
+    expect(registrado).toContain('[num]');
+    expect(registrado).not.toContain('01310100');
+    expect(registrado).not.toContain('52998224725');
+  });
+
+  it('criarEnvio recusado por declaração de conteúdo: mensagem pede a NF-e', async () => {
+    const { service } = await conectado();
+    jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    global.fetch = jest.fn().mockResolvedValue(
+      resposta(422, {
+        error:
+          'Esta transportadora não aceita envios não-comerciais partindo deste estado',
+      }),
+    );
+
+    const erro = await service
+      .criarEnvio({
+        servicoId: REVERSA.servicoId,
+        destinatario: REVERSA.remetente,
+        itens: REVERSA.itens,
+        pacote: REVERSA.pacote,
+        valorDeclarado: REVERSA.valorDeclarado,
+      })
+      .catch((e: unknown) => e);
+
+    expect(erro).toBeInstanceOf(MelhorEnvioErroHttpError);
+    expect((erro as Error).message).toContain('chave da NF-e');
+    expect((erro as Error).message).not.toContain('HTTP 422');
   });
 
   it('comprarEnvio: POST /shipment/checkout com o id', async () => {

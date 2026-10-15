@@ -883,6 +883,7 @@ export class MelhorEnvioService {
         'POST /cart/reverse',
         resposta.status,
         `O Melhor Envio recusou a criação da logística reversa (HTTP ${resposta.status}). Confira os dados do cliente e da loja.`,
+        resposta.corpo,
       );
     }
     const corpo = resposta.corpo as {
@@ -949,7 +950,8 @@ export class MelhorEnvioService {
       throw this.falha(
         'POST /cart',
         resposta.status,
-        `O Melhor Envio recusou a criação da etiqueta (HTTP ${resposta.status}). Confira os dados do cliente, da loja e da nota fiscal.`,
+        this.mensagemRecusaCarrinho(resposta.corpo, resposta.status),
+        resposta.corpo,
       );
     }
     const corpo = resposta.corpo as { id?: unknown; price?: unknown } | null;
@@ -971,13 +973,21 @@ export class MelhorEnvioService {
     }
     const loja = (nome: string) => this.configService.get<string>(nome)!.trim();
     const documentoLoja = loja('LOJA_DOCUMENTO').replace(/\D/g, '');
+    // Declaração de conteúdo (sem NF-e): a API exige state_register vazio ou
+    // "ISENTO". Com NF-e, LOJA_INSCRICAO_ESTADUAL entra se estiver definida.
+    const inscricaoEstadual =
+      this.configService.get<string>('LOJA_INSCRICAO_ESTADUAL')?.trim() ||
+      'ISENTO';
+    const pessoaJuridica = documentoLoja.length === 14;
     return {
       name: loja('LOJA_NOME'),
-      // CNPJ vai em company_document; CPF em document.
-      ...(documentoLoja.length === 14
-        ? { company_document: documentoLoja }
+      // CNPJ vai em company_document; o Melhor Envio ainda espera `document`
+      // presente (string vazia). CPF vai só em document.
+      ...(pessoaJuridica
+        ? { company_document: documentoLoja, document: '' }
         : { document: documentoLoja }),
-      phone: loja('LOJA_TELEFONE'),
+      state_register: inscricaoEstadual,
+      phone: loja('LOJA_TELEFONE').replace(/\D/g, ''),
       email: loja('LOJA_EMAIL'),
       address: loja('LOJA_RUA'),
       number: loja('LOJA_NUMERO'),
@@ -995,16 +1005,19 @@ export class MelhorEnvioService {
   // Endereço do cliente no formato do Melhor Envio.
   private enderecoPessoa(pessoa: MelhorEnvioRemetente): Record<string, string> {
     return {
-      name: pessoa.nome,
-      document: pessoa.cpf,
-      phone: pessoa.telefone,
-      email: pessoa.email,
-      address: pessoa.rua,
-      number: pessoa.numero,
-      ...(pessoa.complemento ? { complement: pessoa.complemento } : {}),
-      district: pessoa.bairro,
-      city: pessoa.cidade,
-      state_abbr: pessoa.uf,
+      name: pessoa.nome.trim(),
+      document: pessoa.cpf.replace(/\D/g, ''),
+      state_register: 'ISENTO',
+      phone: pessoa.telefone.replace(/\D/g, ''),
+      email: pessoa.email.trim(),
+      address: pessoa.rua.trim(),
+      number: pessoa.numero.trim(),
+      ...(pessoa.complemento?.trim()
+        ? { complement: pessoa.complemento.trim() }
+        : {}),
+      district: pessoa.bairro.trim(),
+      city: pessoa.cidade.trim(),
+      state_abbr: pessoa.uf.trim(),
       postal_code: this.normalizarCep(pessoa.cep),
       country_id: 'BR',
     };
@@ -1037,6 +1050,7 @@ export class MelhorEnvioService {
       'POST /shipment/checkout',
       resposta.status,
       'O Melhor Envio recusou a compra do envio da devolução.',
+      resposta.corpo,
     );
   }
 
@@ -1056,6 +1070,7 @@ export class MelhorEnvioService {
         'POST /shipment/generate',
         resposta.status,
         'O Melhor Envio não gerou o código de devolução.',
+        resposta.corpo,
       );
     }
   }
@@ -1078,6 +1093,7 @@ export class MelhorEnvioService {
         'POST /shipment/print',
         resposta.status,
         'O Melhor Envio não devolveu o documento do envio.',
+        resposta.corpo,
       );
     }
     return url;
@@ -1097,6 +1113,7 @@ export class MelhorEnvioService {
         'GET /orders/:id',
         resposta.status,
         'Não foi possível consultar o envio no Melhor Envio.',
+        resposta.corpo,
       );
     }
     return this.paraSituacao(resposta.corpo);
@@ -1144,13 +1161,112 @@ export class MelhorEnvioService {
     return { ok: response.ok, status: response.status, corpo: dados };
   }
 
-  // Registra só rota e status (nunca o corpo) e devolve o erro seguro.
+  // Recusas do carrinho cuja mensagem o Melhor Envio já manda sem PII.
+  private mensagemRecusaCarrinho(corpo: unknown, status: number): string {
+    const texto = this.textoErroMelhorEnvio(corpo);
+    if (/não-comerciais|nao-comerciais|non.?commercial/i.test(texto)) {
+      return 'Esta transportadora não aceita declaração de conteúdo saindo deste estado. Informe a chave da NF-e (44 dígitos) para gerar a etiqueta.';
+    }
+    return `O Melhor Envio recusou a criação da etiqueta (HTTP ${status}). Confira os dados do cliente, da loja e da nota fiscal.`;
+  }
+
+  private textoErroMelhorEnvio(corpo: unknown): string {
+    if (typeof corpo === 'string') {
+      return corpo;
+    }
+    if (!corpo || typeof corpo !== 'object' || Array.isArray(corpo)) {
+      return '';
+    }
+    const obj = corpo as Record<string, unknown>;
+    if (typeof obj.error === 'string') {
+      return obj.error;
+    }
+    if (typeof obj.message === 'string') {
+      return obj.message;
+    }
+    return '';
+  }
+
+  // Só chaves de errors/error (ex.: from.state_register). Nunca valores:
+  // o 422 do Melhor Envio pode repetir CPF/endereço nas mensagens.
+  private nomesCamposRecusa(corpo: unknown): string[] {
+    if (!corpo || typeof corpo !== 'object' || Array.isArray(corpo)) {
+      return [];
+    }
+    const obj = corpo as Record<string, unknown>;
+    const bloco = obj.errors ?? obj.error;
+    if (!bloco || typeof bloco !== 'object' || Array.isArray(bloco)) {
+      return [];
+    }
+    return Object.keys(bloco).filter(
+      (nome) => nome.length > 0 && nome.length < 80,
+    );
+  }
+
+  // E-mail e sequências longas de dígitos (CPF/CNPJ/CEP/telefone/chave).
+  private redigirTexto(texto: string): string {
+    return texto
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
+      .replace(/\d{6,}/g, '[num]')
+      .slice(0, 180);
+  }
+
+  // O Melhor Envio às vezes manda só `message`/`error` string, sem `errors`.
+  private diagnosticoRecusa(corpo: unknown): string {
+    if (corpo == null) {
+      return 'corpo vazio';
+    }
+    if (typeof corpo === 'string') {
+      return this.redigirTexto(corpo);
+    }
+    if (typeof corpo !== 'object') {
+      return typeof corpo;
+    }
+    if (Array.isArray(corpo)) {
+      return corpo
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => this.redigirTexto(item))
+        .slice(0, 3)
+        .join('; ');
+    }
+    const obj = corpo as Record<string, unknown>;
+    const partes: string[] = [];
+    const chaves = Object.keys(obj);
+    if (chaves.length > 0) {
+      partes.push(`chaves: ${chaves.join(', ')}`);
+    }
+    const campos = this.nomesCamposRecusa(corpo);
+    if (campos.length > 0) {
+      partes.push(`campos: ${campos.join(', ')}`);
+    }
+    for (const nome of ['message', 'error'] as const) {
+      const valor = obj[nome];
+      if (typeof valor === 'string' && valor.trim()) {
+        partes.push(`${nome}: ${this.redigirTexto(valor)}`);
+      }
+    }
+    if (Array.isArray(obj.errors)) {
+      const msgs = obj.errors
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => this.redigirTexto(item))
+        .slice(0, 5);
+      if (msgs.length > 0) {
+        partes.push(`errors: ${msgs.join('; ')}`);
+      }
+    }
+    return partes.join(' | ') || 'corpo sem chaves';
+  }
+
+  // Registra rota, status e diagnóstico sem CPF/endereço.
   private falha(
     rota: string,
     status: number,
     mensagem: string,
+    corpo?: unknown,
   ): MelhorEnvioErroHttpError {
-    this.logger.error(`Melhor Envio recusou ${rota} -> ${status}`);
+    this.logger.error(
+      `Melhor Envio recusou ${rota} -> ${status} (${this.diagnosticoRecusa(corpo)})`,
+    );
     return this.erroLogistica(mensagem);
   }
 
