@@ -12,11 +12,24 @@ import { isAxiosError } from "axios";
 // CODIGO_ERRO_LOGISTICA_MELHOR_ENVIO no backend.
 // REEMBOLSO_ASAAS_RECUSADO: o Asaas recusou o estorno (ex.: saldo
 // insuficiente), sincronizado com CODIGO_ERRO_REEMBOLSO_ASAAS no backend.
+// Sincronizado com CODIGO_ERRO_AREA_ENTREGA no backend
+// (checkout/area-entrega.ts) — 400 de negócio, não precisa entrar em
+// CODIGOS_ERRO_SEGUROS (isso só libera mensagem de 5xx).
+export const CODIGO_ERRO_AREA_ENTREGA = "AREA_ENTREGA_FORA_DO_RAIO";
+
 const CODIGOS_ERRO_SEGUROS = new Set([
   "FRETE_MELHOR_ENVIO_INDISPONIVEL",
   "LOGISTICA_MELHOR_ENVIO_INDISPONIVEL",
   "REEMBOLSO_ASAAS_RECUSADO",
 ]);
+
+export function getErrorCode(error: unknown): string | undefined {
+  if (!isAxiosError(error)) {
+    return undefined;
+  }
+  const data = error.response?.data as { code?: string } | undefined;
+  return typeof data?.code === "string" ? data.code : undefined;
+}
 
 // Extrai uma mensagem segura para exibir ao usuário: usa a mensagem
 // específica que o backend devolveu (ex.: 409 de categoria com produtos

@@ -31,6 +31,7 @@ import {
   MelhorEnvioPacote,
   MelhorEnvioService,
 } from '../melhor-envio/melhor-envio.service';
+import { garantirCepNaAreaDeEntrega } from './area-entrega';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { CotarFreteDto } from './dto/cotar-frete.dto';
 import {
@@ -333,6 +334,12 @@ export class CheckoutService {
     subtotal: number,
     quantidadeTotal: number,
   ): Promise<OpcaoFreteResponse[]> {
+    // Área de entrega: só cotiza (e, por consequência, só cria sessão)
+    // para CEP a até 100 km de Curitiba. Fora disso o cliente vê a
+    // mensagem em POST /checkout/frete/cotacao; createSession recusa
+    // igual, para ninguém furar o bloqueio chamando o endpoint direto.
+    await garantirCepNaAreaDeEntrega(endereco.cep);
+
     const opcoes = await this.melhorEnvioService.cotar({
       cepDestino: endereco.cep,
       pacote: this.calcularPacote(quantidadeTotal),

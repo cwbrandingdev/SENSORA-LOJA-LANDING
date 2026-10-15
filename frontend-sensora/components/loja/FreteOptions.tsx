@@ -21,6 +21,7 @@ function formatarPrazo(prazoDias: number): string {
 type FreteOptionsProps = {
   carregando: boolean;
   erro: string | null;
+  foraDaArea?: boolean;
   opcoes: OpcaoFrete[];
   selecionadoId: number | null;
   onSelecionar: (opcao: OpcaoFrete) => void;
@@ -30,6 +31,7 @@ type FreteOptionsProps = {
 export default function FreteOptions({
   carregando,
   erro,
+  foraDaArea = false,
   opcoes,
   selecionadoId,
   onSelecionar,
@@ -37,6 +39,20 @@ export default function FreteOptions({
 }: FreteOptionsProps) {
   if (carregando) {
     return <FreteOptionsSkeleton />;
+  }
+
+  if (erro && foraDaArea) {
+    return (
+      <div
+        role="status"
+        className="rounded-sm border border-brand-orange/40 bg-brand-orange/5 px-4 py-4 text-sm leading-relaxed text-slate-700"
+      >
+        <p>{erro}</p>
+        <p className="mt-2 text-slate-500">
+          Se tiver outro endereço dentro da área de entrega, selecione-o acima.
+        </p>
+      </div>
+    );
   }
 
   if (erro) {

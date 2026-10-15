@@ -24,6 +24,10 @@ import { UsuariosService } from '../usuarios/usuarios.service';
 import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import {
+  AreaEntregaForaDoRaioError,
+  limparCacheAreaEntrega,
+} from './area-entrega';
+import {
   CheckoutService,
   EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT,
 } from './checkout.service';
@@ -1742,6 +1746,77 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
 
     expect(pedidoCreate).not.toHaveBeenCalled();
   });
+
+  it('CEP fora do raio de Curitiba: rejeita e nunca cria pedido', async () => {
+    limparCacheAreaEntrega();
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ lat: '-23.5614', lng: '-46.6558' }),
+    } as Response);
+
+    const pedidoCreate = jest.fn();
+    const enderecosService = {
+      findOneForUsuario: jest.fn(() => ({
+        ...ENDERECO_FAKE,
+        cidade: 'São Paulo',
+        estado: 'SP',
+        cep: '01310-100',
+      })),
+    };
+    const produtosService = {
+      findOne: jest.fn(() => ({
+        id: 5,
+        nome: 'Vela de Lavanda',
+        ativo: true,
+        quantidade: 10,
+        preco: 39.9,
+      })),
+    };
+    const melhorEnvioService = melhorEnvioServiceComOpcoes();
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({ CHECKOUT_GATEWAY: 'asaas' })[key as 'CHECKOUT_GATEWAY'],
+          },
+        },
+        { provide: PrismaService, useValue: { pedido: { create: pedidoCreate } } },
+        { provide: ProdutosService, useValue: produtosService },
+        { provide: EnderecosService, useValue: enderecosService },
+        { provide: AsaasService, useValue: {} },
+        { provide: UsuariosService, useValue: usuariosServiceVerificado },
+        { provide: MelhorEnvioService, useValue: melhorEnvioService },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
+      ],
+    }).compile();
+    const service = module.get<CheckoutService>(CheckoutService);
+
+    try {
+      await expect(
+        service.createSession(
+          {
+            itens: [{ produtoId: 5, quantidade: 1 }],
+            clienteEmail: 'cliente@sensora.dev',
+            enderecoId: 1,
+            freteServicoId: 1,
+          },
+          1,
+        ),
+      ).rejects.toBeInstanceOf(AreaEntregaForaDoRaioError);
+      expect(pedidoCreate).not.toHaveBeenCalled();
+      expect(melhorEnvioService.cotar).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+      limparCacheAreaEntrega();
+    }
+  });
 });
 
 // Etapa 6.4 (Confirmação de e-mail) — createSession agora consulta o estado
@@ -2570,5 +2645,43 @@ describe('CheckoutService — cotarFrete (Etapa 6.5)', () => {
       ),
     ).rejects.toThrow();
     expect(melhorEnvioService.cotar).not.toHaveBeenCalled();
+  });
+
+  it('CEP fora do raio de Curitiba: rejeita sem consultar o Melhor Envio', async () => {
+    limparCacheAreaEntrega();
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ lat: '-23.5614', lng: '-46.6558' }),
+    } as Response);
+
+    const enderecosService = {
+      findOneForUsuario: jest.fn(() => ({
+        ...ENDERECO_FAKE,
+        cidade: 'São Paulo',
+        estado: 'SP',
+        cep: '01310-100',
+      })),
+    };
+    const produtosService = { findOne: jest.fn(() => ({ id: 5, preco: 10.5 })) };
+    const melhorEnvioService = melhorEnvioServiceComOpcoes();
+    const service = await criarService(
+      enderecosService,
+      produtosService,
+      melhorEnvioService,
+    );
+
+    try {
+      await expect(
+        service.cotarFrete(
+          { itens: [{ produtoId: 5, quantidade: 1 }], enderecoId: 1 },
+          1,
+        ),
+      ).rejects.toBeInstanceOf(AreaEntregaForaDoRaioError);
+      expect(melhorEnvioService.cotar).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+      limparCacheAreaEntrega();
+    }
   });
 });

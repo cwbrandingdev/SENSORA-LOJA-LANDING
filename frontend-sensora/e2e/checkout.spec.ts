@@ -1584,6 +1584,47 @@ test.describe("Checkout — Etapa 6.5: frete", () => {
     ).toBeVisible();
   });
 
+  test("CEP fora da área de entrega: mostra aviso e não deixa ir ao pagamento", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await seedCart(page, [CART_ITEM]);
+    await page.route("**/enderecos", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({ json: [ENDERECO_PADRAO] });
+        return;
+      }
+      await route.continue();
+    });
+    await mockFreteCotacaoErroSeguro(
+      page,
+      400,
+      "Por enquanto a loja não está entregando nessa área. Atendemos um raio de 100 km a partir de Curitiba.",
+      "AREA_ENTREGA_FORA_DO_RAIO",
+    );
+    const sessionRequests = captureCheckoutSessionRequests(page);
+
+    await page.goto(CHECKOUT_URL);
+
+    await expect(
+      page.getByText(
+        "Por enquanto a loja não está entregando nessa área. Atendemos um raio de 100 km a partir de Curitiba.",
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "Se tiver outro endereço dentro da área de entrega, selecione-o acima.",
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Tentar novamente" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Continuar para pagamento →" }),
+    ).toBeDisabled();
+    expect(sessionRequests).toEqual([]);
+  });
+
   // O
   test("O: não é possível finalizar sem uma opção de frete resolvida (nenhuma disponível) — POST /checkout/session nunca é chamado", async ({
     page,

@@ -25,7 +25,11 @@ import IdentificacaoFornecedor from "@/components/legal/IdentificacaoFornecedor"
 import { EMPRESA, ROTAS_LEGAIS } from "@/lib/empresa";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
-import { getErrorMessage } from "@/lib/errors";
+import {
+  CODIGO_ERRO_AREA_ENTREGA,
+  getErrorCode,
+  getErrorMessage,
+} from "@/lib/errors";
 import { loginComRedirect, possuiSessaoValida } from "@/lib/auth-redirect";
 import { decodeToken } from "@/lib/jwt";
 import { ROUTES } from "@/lib/routes";
@@ -86,9 +90,11 @@ export default function CheckoutPage() {
   const [freteOpcoes, setFreteOpcoes] = useState<OpcaoFrete[]>([]);
   const [freteCarregando, setFreteCarregando] = useState(false);
   const [freteErro, setFreteErro] = useState<string | null>(null);
+  const [freteErroCodigo, setFreteErroCodigo] = useState<string | null>(null);
   const [freteSelecionadoId, setFreteSelecionadoId] = useState<number | null>(
     null,
   );
+  const freteForaDaArea = freteErroCodigo === CODIGO_ERRO_AREA_ENTREGA;
   const [destacarFrete, setDestacarFrete] = useState(false);
   const freteSectionRef = useRef<HTMLDivElement>(null);
 
@@ -172,6 +178,7 @@ export default function CheckoutPage() {
     async (enderecoId: number) => {
       setFreteCarregando(true);
       setFreteErro(null);
+      setFreteErroCodigo(null);
       setFreteOpcoes([]);
       setFreteSelecionadoId(null);
       try {
@@ -185,6 +192,7 @@ export default function CheckoutPage() {
         setFreteOpcoes(opcoes);
         setFreteSelecionadoId(opcoes[0]?.id ?? null);
       } catch (err) {
+        setFreteErroCodigo(getErrorCode(err) ?? null);
         setFreteErro(
           getErrorMessage(
             err,
@@ -205,6 +213,7 @@ export default function CheckoutPage() {
       setFreteOpcoes([]);
       setFreteSelecionadoId(null);
       setFreteErro(null);
+      setFreteErroCodigo(null);
     }
   }, [enderecoSelecionadoId, itens.length, carregarFrete]);
 
@@ -263,11 +272,13 @@ export default function CheckoutPage() {
     // DTO), mas bloquear aqui evita uma viagem de rede previsível.
     if (freteErro || freteCarregando || !freteSelecionadoId) {
       toast.error(
-        freteErro
-          ? "Não foi possível calcular o frete. Tente novamente."
-          : freteCarregando
-            ? "Aguarde o cálculo do frete para continuar."
-            : "Selecione uma opção de frete para continuar.",
+        freteForaDaArea && freteErro
+          ? freteErro
+          : freteErro
+            ? "Não foi possível calcular o frete. Tente novamente."
+            : freteCarregando
+              ? "Aguarde o cálculo do frete para continuar."
+              : "Selecione uma opção de frete para continuar.",
       );
       setDestacarFrete(true);
       freteSectionRef.current?.scrollIntoView({
@@ -344,6 +355,18 @@ export default function CheckoutPage() {
         err,
         "Não foi possível iniciar o pagamento. Tente novamente.",
       );
+
+      if (getErrorCode(err) === CODIGO_ERRO_AREA_ENTREGA) {
+        setFreteErroCodigo(CODIGO_ERRO_AREA_ENTREGA);
+        setFreteErro(mensagem);
+        toast.error(mensagem);
+        setDestacarFrete(true);
+        freteSectionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+        return;
+      }
 
       // Endereço pode ter sido removido (ou deixado de pertencer ao
       // usuário) entre o carregamento da página e o clique — a API não
@@ -631,6 +654,7 @@ export default function CheckoutPage() {
                       <FreteOptions
                         carregando={freteCarregando}
                         erro={freteErro}
+                        foraDaArea={freteForaDaArea}
                         opcoes={freteOpcoes}
                         selecionadoId={freteSelecionadoId}
                         onSelecionar={(opcao) =>
@@ -766,7 +790,12 @@ export default function CheckoutPage() {
                       onClick={handleContinuar}
                       variant="primary"
                       className="w-full"
-                      disabled={carregando || freteCarregando || criandoSessao}
+                      disabled={
+                        carregando ||
+                        freteCarregando ||
+                        criandoSessao ||
+                        freteForaDaArea
+                      }
                     >
                       {criandoSessao ? (
                         <span className="inline-flex items-center justify-center gap-2">
