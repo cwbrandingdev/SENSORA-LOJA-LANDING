@@ -26,15 +26,22 @@ const AVISO: Partial<Record<AlertaTipo, (novos: number) => string>> = {
 
 type AlertasAdmin = {
   alertas: Alerta[];
+  /** Hora da última consulta que deu certo (null antes da primeira). */
+  atualizadoEm: Date | null;
   /** Soma dos alertas cujo link leva a esta página do painel. */
   quantidadeEm: (href: string) => number;
 };
 
-const AlertasAdminContext = createContext<AlertasAdmin>({ alertas: [], quantidadeEm: () => 0 });
+const AlertasAdminContext = createContext<AlertasAdmin>({
+  alertas: [],
+  atualizadoEm: null,
+  quantidadeEm: () => 0,
+});
 
 export function AlertasAdminProvider({ children }: { children: ReactNode }) {
   const { perfil } = useAuth();
   const [alertas, setAlertas] = useState<Alerta[]>([]);
+  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   // null = ainda não carregou: o que já estava pendente ao abrir o painel
   // não vira aviso, só o que chegar depois.
   const anteriores = useRef<Map<AlertaTipo, number> | null>(null);
@@ -64,6 +71,7 @@ export function AlertasAdminProvider({ children }: { children: ReactNode }) {
         if (!ativo) return;
         avisarNovidades(lista);
         setAlertas(lista);
+        setAtualizadoEm(new Date());
       } catch {
         // Sem rede ou sessão expirada: mantém os últimos números.
       }
@@ -90,7 +98,9 @@ export function AlertasAdminProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AlertasAdminContext.Provider value={{ alertas, quantidadeEm }}>{children}</AlertasAdminContext.Provider>
+    <AlertasAdminContext.Provider value={{ alertas, atualizadoEm, quantidadeEm }}>
+      {children}
+    </AlertasAdminContext.Provider>
   );
 }
 

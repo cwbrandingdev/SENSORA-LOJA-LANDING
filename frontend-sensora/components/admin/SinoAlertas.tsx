@@ -16,7 +16,7 @@ const COR_SEVERIDADE = {
 } as const;
 
 export default function SinoAlertas() {
-  const { alertas } = useAlertasAdmin();
+  const { alertas, atualizadoEm } = useAlertasAdmin();
   const [aberto, setAberto] = useState(false);
   const [permissao, setPermissao] = useState<NotificationPermission | "indisponivel">("indisponivel");
   const raiz = useRef<HTMLDivElement>(null);
@@ -98,6 +98,12 @@ export default function SinoAlertas() {
             <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
               Avisos do navegador bloqueados. Para ativar, libere as notificações deste site nas configurações do
               navegador.
+            </p>
+          )}
+          {atualizadoEm && (
+            <p className="border-t border-slate-100 px-4 py-2 text-right text-[11px] text-slate-400">
+              Atualizado às{" "}
+              {atualizadoEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
             </p>
           )}
         </div>
