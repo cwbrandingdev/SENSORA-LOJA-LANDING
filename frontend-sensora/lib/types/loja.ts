@@ -718,7 +718,8 @@ export type AlertaTipo =
   | "PEDIDO_AGUARDANDO_ENVIO"
   | "MELHOR_ENVIO_DESCONECTADO"
   | "DEVOLUCAO_SOLICITADA"
-  | "PEDIDO_NOVO";
+  | "PEDIDO_NOVO"
+  | "SUPORTE_ABERTO";
 
 export type AlertaSeveridade = "info" | "warning" | "danger";
 

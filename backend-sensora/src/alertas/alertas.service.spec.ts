@@ -18,8 +18,13 @@ function criarPrismaMock(overrides: {
   produtoCount?: jest.Mock;
   pedidoCount?: jest.Mock;
   devolucaoCount?: jest.Mock;
+  suporteCount?: jest.Mock;
 }) {
   return {
+    // Por padrão nenhum chamado de suporte aberto.
+    solicitacaoSuporte: {
+      count: overrides.suporteCount ?? jest.fn().mockResolvedValue(0),
+    },
     produto: { count: overrides.produtoCount ?? jest.fn() },
     pedido: { count: overrides.pedidoCount ?? jest.fn() },
     // Etapa 7 — por padrão nenhuma devolução aguardando análise.
@@ -34,6 +39,7 @@ async function criarService(opts: {
   pedidoCount: jest.Mock;
   estaConectado: jest.Mock;
   devolucaoCount?: jest.Mock;
+  suporteCount?: jest.Mock;
 }): Promise<AlertasService> {
   const module: TestingModule = await Test.createTestingModule({
     providers: [
@@ -44,6 +50,7 @@ async function criarService(opts: {
           produtoCount: opts.produtoCount,
           pedidoCount: opts.pedidoCount,
           devolucaoCount: opts.devolucaoCount,
+          suporteCount: opts.suporteCount,
         }),
       },
       {
@@ -96,7 +103,10 @@ describe('AlertasService — obterAlertas', () => {
       // Segunda chamada de produto.count usa o limiar já centralizado no
       // Dashboard — nunca um número reinventado aqui.
       expect(produtoCount).toHaveBeenNthCalledWith(2, {
-        where: { ativo: true, quantidade: { gt: 0, lte: LIMIAR_ESTOQUE_BAIXO } },
+        where: {
+          ativo: true,
+          quantidade: { gt: 0, lte: LIMIAR_ESTOQUE_BAIXO },
+        },
       });
     });
 
@@ -285,7 +295,9 @@ describe('AlertasService — obterAlertas', () => {
 
       const alertas = await service.obterAlertas();
 
-      expect(alertas.find((a) => a.tipo === 'MELHOR_ENVIO_DESCONECTADO')).toBeUndefined();
+      expect(
+        alertas.find((a) => a.tipo === 'MELHOR_ENVIO_DESCONECTADO'),
+      ).toBeUndefined();
     });
   });
 
@@ -351,6 +363,31 @@ describe('AlertasService — obterAlertas', () => {
       const alertas = await service.obterAlertas();
 
       expect(alertas.map((a) => a.tipo)).not.toContain('DEVOLUCAO_SOLICITADA');
+    });
+  });
+
+  describe('SUPORTE_ABERTO', () => {
+    it('conta só chamados ABERTA: severidade info, link para o Suporte', async () => {
+      const suporteCount = jest.fn().mockResolvedValue(2);
+      const service = await criarService({
+        produtoCount: jest.fn().mockResolvedValue(0),
+        pedidoCount: jest.fn().mockResolvedValue(0),
+        estaConectado: jest.fn().mockResolvedValue(true),
+        suporteCount,
+      });
+
+      await expect(service.obterAlertas()).resolves.toEqual([
+        {
+          tipo: 'SUPORTE_ABERTO',
+          severidade: 'info',
+          titulo: 'Chamados de suporte abertos',
+          quantidade: 2,
+          link: '/workspace-x/suporte',
+        },
+      ]);
+      expect(suporteCount).toHaveBeenCalledWith({
+        where: { status: 'ABERTA' },
+      });
     });
   });
 });

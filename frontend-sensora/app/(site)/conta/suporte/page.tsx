@@ -57,11 +57,22 @@ const ICONE_CATEGORIA: Record<CategoriaSuporte, LucideIcon> = {
   OUTRO: CircleHelp,
 };
 
+// O que entra em cada categoria, para ajudar o cliente a escolher.
+const DESCRICAO_CATEGORIA: Record<CategoriaSuporte, string> = {
+  PRODUTO: "Aromas, uso, composição, cuidados",
+  PEDIDO_ENTREGA: "Prazo, rastreio, atraso, endereço",
+  TROCA_DEVOLUCAO: "Desistência, defeito, produto errado",
+  PAGAMENTO: "Cobrança, Pix, cartão, estorno",
+  CONTA: "Login, senha, dados pessoais",
+  OUTRO: "Qualquer outro assunto",
+};
+
 const suporteSchema = z.object({
-  // "" é o estado inicial (nenhuma aba escolhida): obriga a escolher.
+  // Nenhuma aba escolhida chega como "" ou null (rádio sem marcação): os
+  // dois casos mostram a mesma mensagem, nunca o "Invalid input" padrão.
   categoria: z
-    .string()
-    .refine((valor) => CATEGORIAS.includes(valor as CategoriaSuporte), "Escolha do que se trata"),
+    .string({ error: "Escolha uma categoria, por favor." })
+    .refine((valor) => CATEGORIAS.includes(valor as CategoriaSuporte), "Escolha uma categoria, por favor."),
   assunto: z
     .string()
     .trim()
@@ -279,9 +290,14 @@ export default function SuportePage() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit(onSubmit)} noValidate>
-                  <fieldset>
-                    <legend className="sr-only">Do que se trata?</legend>
-                    <div className="grid grid-cols-3 border-b border-slate-200 sm:grid-cols-6">
+                  <fieldset
+                    aria-describedby="categoria-ajuda"
+                    className="border-b border-slate-200 px-6 pt-6 pb-5 sm:px-8"
+                  >
+                    <legend className="float-left mb-3 w-full text-sm font-medium text-slate-700">
+                      Do que se trata? <span className="text-brand-orange">*</span>
+                    </legend>
+                    <div className="clear-both grid gap-2 sm:grid-cols-2">
                       {CATEGORIAS.map((c) => {
                         const Icone = ICONE_CATEGORIA[c];
                         const ativa = escolhida === c;
@@ -289,28 +305,54 @@ export default function SuportePage() {
                           <label
                             key={c}
                             className={cn(
-                              "flex cursor-pointer flex-col items-center gap-1.5 border-b-2 px-2 py-4 text-center text-xs transition-colors has-[:focus-visible]:bg-slate-50",
+                              "flex cursor-pointer items-center gap-3 rounded-md border px-4 py-3 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-navy",
                               ativa
-                                ? "border-brand-orange bg-brand-orange/5 font-medium text-brand-navy"
-                                : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-brand-navy",
+                                ? "border-brand-orange bg-brand-orange/5"
+                                : errors.categoria
+                                  ? "border-red-300 hover:border-brand-navy"
+                                  : "border-slate-200 hover:border-brand-navy",
                             )}
                           >
                             <input type="radio" value={c} className="sr-only" {...register("categoria")} />
-                            <Icone aria-hidden className={cn("h-5 w-5", ativa && "text-brand-orange")} />
-                            {ROTULOS_CATEGORIA_SUPORTE[c]}
+                            <span
+                              aria-hidden
+                              className={cn(
+                                "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
+                                ativa ? "border-brand-orange" : "border-slate-300",
+                              )}
+                            >
+                              {ativa && <span className="h-2 w-2 rounded-full bg-brand-orange" />}
+                            </span>
+                            <Icone
+                              aria-hidden
+                              className={cn("h-5 w-5 shrink-0", ativa ? "text-brand-orange" : "text-slate-400")}
+                            />
+                            <span className="min-w-0">
+                              <span
+                                className={cn("block text-sm", ativa ? "font-medium text-brand-navy" : "text-slate-700")}
+                              >
+                                {ROTULOS_CATEGORIA_SUPORTE[c]}
+                              </span>
+                              <span className="block text-xs text-slate-500">{DESCRICAO_CATEGORIA[c]}</span>
+                            </span>
                           </label>
                         );
                       })}
                     </div>
+                    {errors.categoria ? (
+                      <p id="categoria-ajuda" role="alert" className={cn(errorClass, "mt-3")}>
+                        {errors.categoria.message}
+                      </p>
+                    ) : (
+                      !escolhida && (
+                        <p id="categoria-ajuda" className="mt-3 text-sm text-slate-500">
+                          Escolha uma opção para direcionarmos seu chamado.
+                        </p>
+                      )
+                    )}
                   </fieldset>
 
                   <div className="flex flex-col gap-5 p-6 sm:p-8">
-                    {errors.categoria ? (
-                      <p className={errorClass}>{errors.categoria.message}</p>
-                    ) : (
-                      !escolhida && <p className="text-sm text-slate-500">Escolha acima do que se trata.</p>
-                    )}
-
                     <div className="flex flex-col gap-1">
                       <label htmlFor="assunto" className={labelClass}>
                         Assunto

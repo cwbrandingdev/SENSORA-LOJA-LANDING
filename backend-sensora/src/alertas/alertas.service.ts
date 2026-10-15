@@ -5,12 +5,14 @@ import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
 import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { StatusDevolucao } from '../devolucoes/enums/status-devolucao.enum';
+import { StatusSolicitacaoSuporte } from '../suporte/enums/status-solicitacao-suporte.enum';
 import {
   LIMIAR_DIAS_PEDIDO_SEM_ENVIO,
   LINK_DEVOLUCOES,
   LINK_INTEGRACOES,
   LINK_PEDIDOS,
   LINK_PRODUTOS,
+  LINK_SUPORTE,
 } from './constants/alertas.constants';
 import { Alerta } from './entities/alerta.entity';
 
@@ -42,6 +44,7 @@ export class AlertasService {
       melhorEnvioConectado,
       devolucoesAguardandoAnalise,
       pedidosNovos,
+      suporteAberto,
     ] = await Promise.all([
       this.prisma.produto.count({
         where: { ativo: true, quantidade: 0 },
@@ -77,6 +80,10 @@ export class AlertasService {
           statusEnvio: StatusEnvio.NAO_ENVIADO,
           data: { gte: limiteEnvio },
         },
+      }),
+      // Chamados de suporte que ninguém pegou ainda (status inicial).
+      this.prisma.solicitacaoSuporte.count({
+        where: { status: StatusSolicitacaoSuporte.ABERTA },
       }),
     ]);
 
@@ -138,6 +145,16 @@ export class AlertasService {
         titulo: 'Devoluções aguardando análise',
         quantidade: devolucoesAguardandoAnalise,
         link: `${LINK_DEVOLUCOES}?status=${StatusDevolucao.SOLICITADA}`,
+      });
+    }
+
+    if (suporteAberto > 0) {
+      alertas.push({
+        tipo: 'SUPORTE_ABERTO',
+        severidade: 'info',
+        titulo: 'Chamados de suporte abertos',
+        quantidade: suporteAberto,
+        link: LINK_SUPORTE,
       });
     }
 

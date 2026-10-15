@@ -9,6 +9,7 @@
 // menu (hambúrguer), visível só em mobile (`md:hidden`), que abre a Sidebar
 // como gaveta — a própria Sidebar decide como se comporta com `open`.
 import Logo from "@/components/ui/Logo";
+import SinoAlertas from "@/components/admin/SinoAlertas";
 import { useAuth } from "@/context/AuthContext";
 import { PerfilUsuario } from "@/lib/types/loja";
 
@@ -65,6 +66,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-3">
+        {/* Alertas vêm de GET /alertas, que é só ADMIN. */}
+        {perfil === PerfilUsuario.ADMIN && <SinoAlertas />}
         <div className="flex flex-col items-end leading-tight">
           <p className="max-w-[40vw] truncate text-sm text-white/90 sm:max-w-none">
             {email ?? "Usuário autenticado."}

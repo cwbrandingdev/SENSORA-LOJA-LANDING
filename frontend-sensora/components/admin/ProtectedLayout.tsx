@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { AlertasAdminProvider } from "@/context/AlertasAdminContext";
 import { ROUTES } from "@/lib/routes";
 import { STAFF_ROLES } from "@/lib/types/loja";
 import Header from "./Header";
@@ -48,12 +49,14 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex min-h-screen flex-1 flex-col">
-      <Header onMenuClick={() => setMobileMenuOpen(true)} />
-      <div className="flex flex-1">
-        <Sidebar open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
-        <main className="min-w-0 flex-1 bg-background p-4 sm:p-6">{children}</main>
+    <AlertasAdminProvider>
+      <div className="flex min-h-screen flex-1 flex-col">
+        <Header onMenuClick={() => setMobileMenuOpen(true)} />
+        <div className="flex flex-1">
+          <Sidebar open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
+          <main className="min-w-0 flex-1 bg-background p-4 sm:p-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </AlertasAdminProvider>
   );
 }

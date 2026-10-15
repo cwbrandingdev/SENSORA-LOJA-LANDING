@@ -11,7 +11,8 @@ export type AlertaTipo =
   | 'PEDIDO_AGUARDANDO_ENVIO'
   | 'MELHOR_ENVIO_DESCONECTADO'
   | 'DEVOLUCAO_SOLICITADA'
-  | 'PEDIDO_NOVO';
+  | 'PEDIDO_NOVO'
+  | 'SUPORTE_ABERTO';
 
 // Duas severidades bastam para os 4 alertas desta etapa (mesmos tons já
 // usados pelo componente Badge do frontend — nenhum tom novo é criado

@@ -36,6 +36,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useAlertasAdmin } from "@/context/AlertasAdminContext";
 import { ROUTES } from "@/lib/routes";
 import { PerfilUsuario } from "@/lib/types/loja";
 import FormButton from "@/components/ui/FormButton";
@@ -121,6 +122,7 @@ const DASHBOARD_LINK: SidebarLink = { href: ROUTES.DASHBOARD, label: "Dashboard"
 
 export default function Sidebar({ open = false, onClose }: SidebarProps) {
   const { groups, isActive, logout, pathname } = useAdminNav();
+  const { quantidadeEm } = useAlertasAdmin();
   const router = useRouter();
   const [termo, setTermo] = useState("");
   const campoBusca = useRef<HTMLInputElement>(null);
@@ -230,6 +232,7 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
                     const Icon = link.icon;
                     const active = isActive(link.href);
                     const destaque = link === primeiro;
+                    const pendentes = quantidadeEm(link.href);
 
                     return (
                       <li key={link.href}>
@@ -247,7 +250,20 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
                         >
                           <Icon className="h-4 w-4 shrink-0" aria-hidden />
                           {link.label}
-                          {destaque && <span className="ml-auto text-[10px] text-white/50">Enter ↵</span>}
+                          {destaque ? (
+                            <span className="ml-auto text-[10px] text-white/50">Enter ↵</span>
+                          ) : (
+                            pendentes > 0 && (
+                              <span
+                                aria-label={`${pendentes} pendentes`}
+                                className={`ml-auto rounded-full px-1.5 text-[10px] font-semibold leading-4 ${
+                                  active ? "bg-white text-brand-orange" : "bg-brand-orange text-white"
+                                }`}
+                              >
+                                {pendentes}
+                              </span>
+                            )
+                          )}
                         </Link>
                       </li>
                     );
