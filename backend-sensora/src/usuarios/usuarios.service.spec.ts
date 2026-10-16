@@ -490,6 +490,35 @@ describe('UsuariosService — atualizarMeusDados: CPF/telefone', () => {
     expect(resultado.telefone).toBeNull();
   });
 
+  it('garantirTelefone grava telefone formatado já normalizado', async () => {
+    const resultado = await service.garantirTelefone(1, '(41) 99999-9999');
+
+    expect(resultado).toBe('41999999999');
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { telefone: '41999999999' },
+    });
+  });
+
+  it('garantirTelefone não escreve de novo se o telefone já é o salvo', async () => {
+    usuariosFake.set(1, usuarioBase({ telefone: '41999999999' }));
+
+    await expect(service.garantirTelefone(1, '(41) 99999-9999')).resolves.toBe(
+      '41999999999',
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('garantirTelefone recusa vazio ou inválido', async () => {
+    await expect(service.garantirTelefone(1, '')).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(service.garantirTelefone(1, '123')).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
   // ---- findOne (GET /usuarios/me) --------------------------------------
 
   it('findOne (GET /usuarios/me) devolve cpf/telefone salvos, nunca a senha', async () => {

@@ -4,6 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   AsaasErroHttpError,
@@ -18,6 +19,7 @@ import {
 } from '../ocorrencias/ocorrencias.service';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { EnderecosService } from '../enderecos/enderecos.service';
+import { MailService } from '../mail/mail.service';
 import { ItensPedidoService } from '../itens-pedido/itens-pedido.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
@@ -174,6 +176,17 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
         { provide: AsaasService, useValue: asaasService },
         { provide: EnderecosService, useValue: {} },
         { provide: OcorrenciasService, useValue: ocorrenciasService },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({
+                FRONTEND_URL: 'https://sensorahome.com.br',
+                LOJA_NOME: 'Sensora',
+              })[key],
+          },
+        },
       ],
     }).compile();
 
@@ -829,6 +842,17 @@ describe('PedidosService — create/update (Etapa 8.1, fechamento do HIGH-01 + e
         { provide: AsaasService, useValue: {} },
         { provide: EnderecosService, useValue: {} },
         { provide: OcorrenciasService, useValue: ocorrenciasService },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({
+                FRONTEND_URL: 'https://sensorahome.com.br',
+                LOJA_NOME: 'Sensora',
+              })[key],
+          },
+        },
       ],
     }).compile();
 
@@ -1025,6 +1049,17 @@ describe('PedidosService — remove (Etapa 8.2, fechamento do HIGH-02)', () => {
         { provide: AsaasService, useValue: {} },
         { provide: EnderecosService, useValue: {} },
         { provide: OcorrenciasService, useValue: ocorrenciasService },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({
+                FRONTEND_URL: 'https://sensorahome.com.br',
+                LOJA_NOME: 'Sensora',
+              })[key],
+          },
+        },
       ],
     }).compile();
 
@@ -1154,6 +1189,17 @@ describe('PedidosService — findAll (ordenação da listagem do Admin)', () => 
         { provide: AsaasService, useValue: {} },
         { provide: EnderecosService, useValue: {} },
         { provide: OcorrenciasService, useValue: ocorrenciasService },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({
+                FRONTEND_URL: 'https://sensorahome.com.br',
+                LOJA_NOME: 'Sensora',
+              })[key],
+          },
+        },
       ],
     }).compile();
 
@@ -1196,6 +1242,7 @@ describe('PedidosService — findAll (ordenação da listagem do Admin)', () => 
 // enviado não chama nenhum gateway externo).
 describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
   let service: PedidosService;
+  let mailService: { enviarEmail: jest.Mock };
   let prisma: {
     pedido: {
       findUnique: jest.Mock;
@@ -1213,6 +1260,8 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
     numero: string;
     data: Date;
     total: number;
+    clienteNome: string | null;
+    clienteEmail: string | null;
   };
 
   const ADMIN: UsuarioAutenticado = {
@@ -1237,7 +1286,11 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
       numero: 'PED-1',
       data: new Date('2026-09-01'),
       total: 39.9,
+      clienteNome: 'Cliente Sensora',
+      clienteEmail: 'cliente@sensora.dev',
     };
+
+    mailService = { enviarEmail: jest.fn() };
 
     prisma = {
       pedido: {
@@ -1291,6 +1344,17 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
         { provide: AsaasService, useValue: {} },
         { provide: EnderecosService, useValue: {} },
         { provide: OcorrenciasService, useValue: ocorrenciasService },
+        { provide: MailService, useValue: mailService },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({
+                FRONTEND_URL: 'https://sensorahome.com.br',
+                LOJA_NOME: 'Sensora',
+              })[key],
+          },
+        },
       ],
     }).compile();
 
@@ -1308,6 +1372,15 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
 
     expect(resultado.statusEnvio).toBe(StatusEnvio.ENVIADO);
     expect(resultado.enviadoEm).toBeInstanceOf(Date);
+    expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
+    const enviado = mailService.enviarEmail.mock.calls[0][0] as {
+      to: string;
+      subject: string;
+      html: string;
+    };
+    expect(enviado.to).toBe('cliente@sensora.dev');
+    expect(enviado.subject).toContain('PED-1 enviado');
+    expect(enviado.html).toContain('foi enviado');
   });
 
   // C/D/E/F — só PAGO pode ser marcado como enviado; os demais status
@@ -1357,6 +1430,7 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
     expect(resultado.statusEnvio).toBe(StatusEnvio.ENVIADO);
     expect(resultado.enviadoEm).toEqual(dataOriginal);
     expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
+    expect(mailService.enviarEmail).not.toHaveBeenCalled();
   });
 
   // H — duas requisições simultâneas (mesmo padrão de Promise.all já usado
@@ -1406,6 +1480,8 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
 
     expect(resultado.statusEnvio).toBe(StatusEnvio.ENVIADO);
     expect(resultado.codigoRastreio).toBe('AA123456789BR');
+    const enviado = mailService.enviarEmail.mock.calls[0][0] as { html: string };
+    expect(enviado.html).toContain('AA123456789BR');
   });
 
   it('K: pedido já ENVIADO pode receber código de rastreio depois, sem alterar enviadoEm', async () => {
@@ -1535,6 +1611,17 @@ describe('PedidosService — atualizarEnderecoEntrega', () => {
         { provide: AsaasService, useValue: {} },
         { provide: EnderecosService, useValue: enderecosService },
         { provide: OcorrenciasService, useValue: ocorrenciasService },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({
+                FRONTEND_URL: 'https://sensorahome.com.br',
+                LOJA_NOME: 'Sensora',
+              })[key],
+          },
+        },
       ],
     }).compile();
 

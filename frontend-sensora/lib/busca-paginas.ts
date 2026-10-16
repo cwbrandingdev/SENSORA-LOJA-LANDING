@@ -48,7 +48,7 @@ export const PAGINAS_BUSCA: PaginaBusca[] = [
     titulo: "Perguntas frequentes",
     href: "/faq",
     palavras:
-      "faq dúvidas perguntas frete pagamento pix cartão boleto nota fiscal prazo",
+      "faq dúvidas perguntas frete pagamento pix cartão boleto nota fiscal prazo curitiba região metropolitana entrega",
   },
   {
     titulo: "Quem somos",

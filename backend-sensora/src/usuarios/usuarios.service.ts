@@ -381,6 +381,32 @@ export class UsuariosService {
     return cpfNormalizado;
   }
 
+  // Checkout: telefone é obrigatório para gerar a etiqueta depois. Vazio
+  // não limpa o cadastro — recusa a compra. Se o valor já é o salvo, não
+  // escreve de novo.
+  async garantirTelefone(
+    id: number,
+    telefoneInformado: string,
+  ): Promise<string> {
+    const telefone = this.normalizarEValidarTelefone(telefoneInformado);
+    if (!telefone) {
+      throw new BadRequestException(
+        'Informe um telefone válido para finalizar a compra.',
+      );
+    }
+
+    const atual = await this.localizar(id);
+    if (atual.telefone === telefone) {
+      return telefone;
+    }
+
+    await this.prisma.usuario.update({
+      where: { id },
+      data: { telefone },
+    });
+    return telefone;
+  }
+
   // Telefone vazio ("") limpa o campo. Sem checagem de duplicidade (nunca é
   // @unique — ver schema.prisma).
   private normalizarEValidarTelefone(telefoneInformado: string): string | null {

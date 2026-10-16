@@ -149,6 +149,10 @@ export class CheckoutService {
       );
     }
 
+    // Telefone entra na compra (não só em Minha Conta): a etiqueta do
+    // Melhor Envio recusa pedido sem telefone no cadastro do cliente.
+    await this.usuariosService.garantirTelefone(usuarioId, dto.telefone);
+
     if (!dto.itens.length) {
       throw new BadRequestException('O carrinho está vazio');
     }

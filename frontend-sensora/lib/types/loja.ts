@@ -279,9 +279,12 @@ export type CheckoutItemPayload = {
 // (buscado no próprio CheckoutService.createSession), nunca mais um nome
 // enviado pelo frontend — mesmo raciocínio de nunca confiar em preço/
 // estoque/frete vindos do cliente, aplicado aqui pela primeira vez ao nome.
+// `telefone` é obrigatório na compra: o backend grava em Usuario antes de
+// criar a sessão (etiqueta do Melhor Envio exige o número).
 export type CriarSessaoCheckoutPayload = {
   itens: CheckoutItemPayload[];
   clienteEmail: string;
+  telefone: string;
   enderecoId: number;
   freteServicoId: number;
 };

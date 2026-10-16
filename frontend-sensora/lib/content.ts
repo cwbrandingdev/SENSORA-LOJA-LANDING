@@ -576,7 +576,13 @@ export const FAQ_ITEMS: FaqItem[] = [
     id: "frete",
     question: "Como funciona o cálculo do frete?",
     answer:
-      "O frete é calculado automaticamente no checkout, a partir do endereço de entrega escolhido. Você vê diferentes opções de transportadora, com prazo em dias úteis e valor, e escolhe a que preferir.",
+      "O frete é calculado automaticamente no checkout, a partir do endereço de entrega escolhido. Você vê diferentes opções de transportadora, com prazo em dias úteis e valor, e escolhe a que preferir. Por enquanto a entrega cobre só Curitiba e a região metropolitana.",
+  },
+  {
+    id: "area-entrega",
+    question: "Para quais cidades vocês entregam?",
+    answer:
+      "Por enquanto operamos apenas em Curitiba e região metropolitana. Se o CEP estiver fora dessa área, o checkout avisa e a compra não segue.",
   },
   {
     id: "acompanhar-pedido",

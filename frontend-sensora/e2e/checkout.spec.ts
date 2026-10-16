@@ -110,13 +110,35 @@ const ENDERECO_SECUNDARIO = {
   padrao: false,
 };
 
-async function seedSession(page: Page) {
+async function mockMeuPerfil(page: Page, telefone: string | null = "41999999999") {
+  await page.route("**/usuarios/me", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      json: {
+        id: 1,
+        nome: "Cliente Sensora",
+        email: "cliente@sensora.dev",
+        perfil: "CLIENTE",
+        ativo: true,
+        emailVerificado: true,
+        cpf: "52998224725",
+        telefone,
+      },
+    });
+  });
+}
+
+async function seedSession(page: Page, telefone: string | null = "41999999999") {
   await page.addInitScript(
     ([tokenKey, token]) => {
       window.localStorage.setItem(tokenKey, token);
     },
     [TOKEN_KEY, fakeToken()] as const,
   );
+  await mockMeuPerfil(page, telefone);
 }
 
 // Etapa (Carrinho por conta) — espelha a resolução de chave de
@@ -685,6 +707,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
     const sessionRequests = captureCheckoutSessionRequests(page);
 
     await page.goto(CHECKOUT_URL);
+    await expect(page.getByLabel("Telefone")).toHaveValue("(41) 99999-9999");
     // Escopado ao <aside> (resumo do pedido) — o rótulo do botão muda para
     // "Processando..." assim que clicado, então um locator preso ao nome
     // original quebraria na segunda verificação.
@@ -716,6 +739,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
       // `clienteNome` não é mais enviado pelo frontend: o backend usa
       // Usuario.nome diretamente (nunca mais "chutado" a partir da parte
       // local do e-mail).
+      telefone: "(41) 99999-9999",
       enderecoId: ENDERECO_PADRAO.id,
       // Etapa 6.5 (Frete) — única opção mockada (OPCAO_FRETE_PADRAO), já
       // auto-selecionada pela página (mesmo padrão de UX do endereço).
@@ -1679,5 +1703,29 @@ test.describe("Checkout — Etapa 6.5: frete", () => {
     expect((cotacoes.at(-1) as { enderecoId: number }).enderecoId).toBe(
       ENDERECO_SECUNDARIO.id,
     );
+  });
+
+  test("sem telefone: não inicia o pagamento e pede o número na hora da compra", async ({
+    page,
+  }) => {
+    await seedSession(page, null);
+    await seedCart(page, [CART_ITEM]);
+    await mockEnderecos(page, [ENDERECO_PADRAO]);
+    await mockFreteCotacao(page);
+    const sessionRequests = captureCheckoutSessionRequests(page);
+
+    await page.goto(CHECKOUT_URL);
+    await expect(page.getByLabel("Telefone")).toBeVisible();
+    await expect(page.getByLabel("Telefone")).toHaveValue("");
+
+    await aceitarTermosDeCompra(page);
+    await page.getByRole("button", { name: "Continuar para pagamento →" }).click();
+
+    await expect(
+      page.getByText(
+        "Informe um telefone válido. A transportadora usa esse número na entrega.",
+      ),
+    ).toBeVisible();
+    expect(sessionRequests).toEqual([]);
   });
 });

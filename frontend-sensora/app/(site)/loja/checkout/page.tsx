@@ -34,6 +34,8 @@ import { loginComRedirect, possuiSessaoValida } from "@/lib/auth-redirect";
 import { decodeToken } from "@/lib/jwt";
 import { ROUTES } from "@/lib/routes";
 import { getToken, setCheckoutPendente } from "@/lib/storage";
+import { formatarTelefone, telefoneValido } from "@/lib/telefone";
+import { buscarMeuPerfil } from "@/services/conta";
 import { criarEndereco, listarEnderecos } from "@/services/enderecos";
 import {
   criarSessaoCheckout,
@@ -81,6 +83,10 @@ export default function CheckoutPage() {
   // sem selecionar nenhum — some sozinho, sem exigir outra interação.
   const [destacarEndereco, setDestacarEndereco] = useState(false);
   const enderecoSectionRef = useRef<HTMLDivElement>(null);
+
+  const [telefone, setTelefone] = useState("");
+  const [destacarTelefone, setDestacarTelefone] = useState(false);
+  const telefoneSectionRef = useRef<HTMLDivElement>(null);
 
   // Etapa 6.5 (Frete) — cotação é sempre reconsultada quando o endereço
   // selecionado muda (ver useEffect abaixo). `freteSelecionadoId` nunca é
@@ -149,6 +155,16 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (autorizado) {
       carregarEnderecos();
+      buscarMeuPerfil()
+        .then((perfil) => {
+          if (perfil.telefone) {
+            setTelefone(formatarTelefone(perfil.telefone));
+          }
+        })
+        .catch(() => {
+          // Sem telefone no cadastro o campo fica vazio: o cliente preenche
+          // aqui. Falha de rede não bloqueia o restante do checkout.
+        });
     }
   }, [autorizado, carregarEnderecos]);
 
@@ -157,6 +173,12 @@ export default function CheckoutPage() {
     const timer = window.setTimeout(() => setDestacarEndereco(false), 1800);
     return () => window.clearTimeout(timer);
   }, [destacarEndereco]);
+
+  useEffect(() => {
+    if (!destacarTelefone) return;
+    const timer = window.setTimeout(() => setDestacarTelefone(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [destacarTelefone]);
 
   useEffect(() => {
     if (!destacarFrete) return;
@@ -265,6 +287,18 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (!telefoneValido(telefone)) {
+      toast.error(
+        "Informe um telefone válido. A transportadora usa esse número na entrega.",
+      );
+      setDestacarTelefone(true);
+      telefoneSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      return;
+    }
+
     // Etapa 6.5 (Frete) — mesmo padrão de bloqueio local do endereço acima:
     // nunca deixa "Continuar" seguir sem uma opção de frete escolhida (nem
     // enquanto a cotação ainda está carregando, nem se a última cotação
@@ -318,6 +352,7 @@ export default function CheckoutPage() {
           quantidade: item.quantidade,
         })),
         clienteEmail: payload.email,
+        telefone,
         enderecoId: enderecoSelecionadoId,
         freteServicoId: freteSelecionadoId,
       });
@@ -628,6 +663,44 @@ export default function CheckoutPage() {
                         )}
                       </div>
                     )}
+                  </div>
+                </div>
+
+                <div
+                  ref={telefoneSectionRef}
+                  className={`mt-10 rounded-sm transition-shadow duration-500 ${
+                    destacarTelefone
+                      ? "ring-2 ring-brand-orange ring-offset-4 ring-offset-background"
+                      : ""
+                  }`}
+                >
+                  <div className="border-b border-slate-200 pb-4">
+                    <h2 className="font-serif text-xl font-normal text-brand-navy">
+                      Telefone para entrega
+                    </h2>
+                  </div>
+                  <div className="mt-6">
+                    <label
+                      htmlFor="checkout-telefone"
+                      className="text-sm font-medium text-slate-700"
+                    >
+                      Telefone
+                    </label>
+                    <input
+                      id="checkout-telefone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      value={telefone}
+                      onChange={(event) =>
+                        setTelefone(formatarTelefone(event.target.value))
+                      }
+                      placeholder="(41) 99999-9999"
+                      className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-brand-navy placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-navy/40"
+                    />
+                    <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                      A transportadora precisa deste número para a entrega.
+                    </p>
                   </div>
                 </div>
 

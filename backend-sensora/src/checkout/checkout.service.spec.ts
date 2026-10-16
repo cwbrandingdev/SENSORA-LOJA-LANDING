@@ -48,6 +48,9 @@ import {
 // toda suíte que chega até a criação do pedido exercite o mesmo caminho.
 const usuariosServiceVerificado = {
   findOne: jest.fn(() => ({ emailVerificado: true, nome: 'Cliente Sensora' })),
+  garantirTelefone: jest.fn(async (_id: number, telefone: string) =>
+    telefone.replace(/\D/g, ''),
+  ),
 };
 
 // Etapa 6.5 (Frete) — endereço/opção de frete "de verdade" reaproveitados
@@ -1423,6 +1426,7 @@ describe('CheckoutService — createSession: produto inativo (Task 16)', () => {
         {
           itens: [{ produtoId: 5, quantidade: 1 }],
           clienteEmail: 'cliente@sensora.dev',
+          telefone: '41999999999',
           enderecoId: 1,
           freteServicoId: 1,
         },
@@ -1495,6 +1499,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
       {
         itens: [{ produtoId: 5, quantidade: 2 }],
         clienteEmail: 'cliente@sensora.dev',
+        telefone: '41999999999',
         enderecoId: 1,
         freteServicoId: OPCAO_FRETE_FAKE.id,
       },
@@ -1601,7 +1606,15 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         { provide: ProdutosService, useValue: produtosService },
         { provide: EnderecosService, useValue: enderecosService },
         { provide: AsaasService, useValue: { criarCheckout: jest.fn(() => ({ id: 'chk_x', link: 'x', status: 'ACTIVE' })) } },
-        { provide: UsuariosService, useValue: { findOne } },
+        {
+          provide: UsuariosService,
+          useValue: {
+            findOne,
+            garantirTelefone: jest.fn(async (_id: number, telefone: string) =>
+              telefone.replace(/\D/g, ''),
+            ),
+          },
+        },
         { provide: MelhorEnvioService, useValue: melhorEnvioServiceComOpcoes() },
         { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
@@ -1616,6 +1629,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         // clienteNome. O e-mail é deliberadamente diferente do nome real,
         // para que a asserção abaixo não passe "por acidente".
         clienteEmail: 'thiago.freitas@sensora.dev',
+        telefone: '41999999999',
         enderecoId: 1,
         freteServicoId: OPCAO_FRETE_FAKE.id,
       },
@@ -1630,6 +1644,69 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         }),
       }),
     );
+  });
+
+  it('recusa a sessão se o telefone for inválido, sem criar pedido', async () => {
+    const pedidoCreate = jest.fn();
+    const garantirTelefone = jest.fn(async () => {
+      throw new BadRequestException(
+        'Informe um telefone válido para finalizar a compra.',
+      );
+    });
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({ CHECKOUT_GATEWAY: 'asaas' })[key as 'CHECKOUT_GATEWAY'],
+          },
+        },
+        {
+          provide: PrismaService,
+          useValue: { pedido: { create: pedidoCreate } },
+        },
+        { provide: ProdutosService, useValue: { findOne: jest.fn() } },
+        {
+          provide: EnderecosService,
+          useValue: { findOneForUsuario: jest.fn() },
+        },
+        { provide: AsaasService, useValue: {} },
+        {
+          provide: UsuariosService,
+          useValue: {
+            findOne: jest.fn(() => ({
+              emailVerificado: true,
+              nome: 'Cliente Sensora',
+            })),
+            garantirTelefone,
+          },
+        },
+        { provide: MelhorEnvioService, useValue: {} },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
+      ],
+    }).compile();
+    const service = module.get<CheckoutService>(CheckoutService);
+
+    await expect(
+      service.createSession(
+        {
+          itens: [{ produtoId: 5, quantidade: 1 }],
+          clienteEmail: 'cliente@sensora.dev',
+          telefone: '123',
+          enderecoId: 1,
+          freteServicoId: 1,
+        },
+        1,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(garantirTelefone).toHaveBeenCalledWith(1, '123');
+    expect(pedidoCreate).not.toHaveBeenCalled();
   });
 
   // Etapa 6.5 (Frete), teste D — cliente manda um `freteServicoId` que não
@@ -1680,6 +1757,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         {
           itens: [{ produtoId: 5, quantidade: 1 }],
           clienteEmail: 'cliente@sensora.dev',
+          telefone: '41999999999',
           enderecoId: 1,
           freteServicoId: 999, // não existe em OPCAO_FRETE_FAKE
         },
@@ -1737,6 +1815,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         {
           itens: [{ produtoId: 5, quantidade: 1 }],
           clienteEmail: 'cliente@sensora.dev',
+          telefone: '41999999999',
           enderecoId: 1,
           freteServicoId: 1,
         },
@@ -1804,6 +1883,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
           {
             itens: [{ produtoId: 5, quantidade: 1 }],
             clienteEmail: 'cliente@sensora.dev',
+            telefone: '41999999999',
             enderecoId: 1,
             freteServicoId: 1,
           },
@@ -1866,6 +1946,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
         {
           itens: [{ produtoId: 5, quantidade: 1 }],
           clienteEmail: 'cliente@sensora.dev',
+          telefone: '41999999999',
           enderecoId: 1,
           freteServicoId: 1,
         },
@@ -1926,7 +2007,15 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
         { provide: ProdutosService, useValue: produtosService },
         { provide: EnderecosService, useValue: enderecosService },
         { provide: AsaasService, useValue: { criarCheckout } },
-        { provide: UsuariosService, useValue: { findOne } },
+        {
+          provide: UsuariosService,
+          useValue: {
+            findOne,
+            garantirTelefone: jest.fn(async (_id: number, telefone: string) =>
+              telefone.replace(/\D/g, ''),
+            ),
+          },
+        },
         { provide: MelhorEnvioService, useValue: melhorEnvioServiceComOpcoes() },
         { provide: MailService, useValue: { enviarEmail: jest.fn() } },
       ],
@@ -1937,6 +2026,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
       {
         itens: [{ produtoId: 5, quantidade: 1 }],
         clienteEmail: 'cliente@sensora.dev',
+        telefone: '41999999999',
         enderecoId: 1,
         freteServicoId: OPCAO_FRETE_FAKE.id,
       },

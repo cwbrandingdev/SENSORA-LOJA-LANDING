@@ -3,9 +3,11 @@ import {
   forwardRef,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type {
   NotaFiscal as NotaFiscalPrisma,
   Pedido as PedidoPrisma,
@@ -18,7 +20,9 @@ import {
 } from '../asaas/asaas.service';
 import { StatusDevolucao } from '../devolucoes/enums/status-devolucao.enum';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
+import { escaparHtml } from '../common/utils/html.util';
 import { EnderecosService } from '../enderecos/enderecos.service';
+import { MailService } from '../mail/mail.service';
 import { NotaFiscalResumo } from '../fiscal/entities/nota-fiscal.entity';
 import { StatusFiscal } from '../fiscal/enums/status-fiscal.enum';
 import { ItemPedido } from '../itens-pedido/entities/item-pedido.entity';
@@ -72,6 +76,8 @@ function soDigitosCep(valor: string | null | undefined): string {
 
 @Injectable()
 export class PedidosService {
+  private readonly logger = new Logger(PedidosService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => ItensPedidoService))
@@ -80,6 +86,8 @@ export class PedidosService {
     private readonly asaasService: AsaasService,
     private readonly enderecosService: EnderecosService,
     private readonly ocorrenciasService: OcorrenciasService,
+    private readonly mailService: MailService,
+    private readonly configService: ConfigService,
   ) {}
 
   // Etapa 10 / Task 5 (achado A6): ADMIN continua vendo/editando qualquer
@@ -707,7 +715,49 @@ export class PedidosService {
       );
     }
 
-    return this.findOne(id, user);
+    const enviado = await this.findOne(id, user);
+    await this.avisarPedidoEnviado(enviado);
+    return enviado;
+  }
+
+  // Fora da escrita de status (HTTP externo não pode segurar o claim).
+  // Falha de e-mail nunca desfaz o "marcado como enviado".
+  private async avisarPedidoEnviado(pedido: Pedido): Promise<void> {
+    if (!pedido.clienteEmail) {
+      return;
+    }
+
+    try {
+      const nome = escaparHtml(pedido.clienteNome ?? 'cliente');
+      const numero = escaparHtml(pedido.numero);
+      const lojaNome =
+        this.configService.get<string>('LOJA_NOME')?.trim() || 'Sensora';
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+      const linkPedido = frontendUrl
+        ? `${frontendUrl.replace(/\/$/, '')}/conta/pedidos/${pedido.id}`
+        : null;
+      const rastreio = pedido.codigoRastreio?.trim();
+
+      await this.mailService.enviarEmail({
+        to: pedido.clienteEmail,
+        subject: `Pedido ${pedido.numero} enviado — ${lojaNome}`,
+        html:
+          `<p>Olá, ${nome}.</p>` +
+          `<p>Seu pedido <strong>${numero}</strong> foi enviado.</p>` +
+          (rastreio
+            ? `<p>Código de rastreio: <strong>${escaparHtml(rastreio)}</strong></p>`
+            : `<p>O código de rastreio, quando disponível, aparece em Meus Pedidos.</p>`) +
+          (linkPedido
+            ? `<p>Acompanhe o pedido: <a href="${escaparHtml(linkPedido)}">${escaparHtml(linkPedido)}</a></p>`
+            : '') +
+          `<p>${escaparHtml(lojaNome)}</p>`,
+      });
+    } catch (erro) {
+      this.logger.error(
+        `Falha ao enviar e-mail de envio do pedido ${pedido.id}.`,
+        erro instanceof Error ? erro.stack : String(erro),
+      );
+    }
   }
 
   // Troca o snapshot de entrega de um pedido PAGO ainda NAO_ENVIADO por

@@ -4,6 +4,8 @@ import {
   IsInt,
   IsNotEmpty,
   IsPositive,
+  IsString,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -28,6 +30,14 @@ export class CreateCheckoutSessionDto {
   @IsEmail()
   @IsNotEmpty()
   clienteEmail: string;
+
+  // A etiqueta do Melhor Envio exige telefone. O checkout grava este valor
+  // em Usuario (CheckoutService.createSession → UsuariosService.
+  // garantirTelefone); sem ele a compra nem chega ao pagamento.
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(20)
+  telefone: string;
 
   // Etapa "Dados do Cliente / Cadastro" (achado da auditoria) — `clienteNome`
   // foi removido deste DTO de propósito: o nome do pedido nunca mais vem do
