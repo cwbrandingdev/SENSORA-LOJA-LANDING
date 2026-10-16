@@ -1,14 +1,13 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import CookiePreferencesTrigger from "@/components/layout/CookiePreferencesTrigger";
-import IdentificacaoFornecedor from "@/components/legal/IdentificacaoFornecedor";
 import Logo from "@/components/ui/Logo";
 import {
   FOOTER_CONTENT,
   NAV_CATEGORIES,
   PRODUCT_CATEGORIES,
 } from "@/lib/content";
-import { ROTAS_LEGAIS } from "@/lib/empresa";
+import { EMPRESA, ENDERECO_LINHA, ROTAS_LEGAIS } from "@/lib/empresa";
 import { ROUTES } from "@/lib/routes";
 
 export default function Footer() {
@@ -134,12 +133,28 @@ export default function Footer() {
       </div>
 
       <div className="border-t border-white/10">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-6 text-center text-xs text-white/60 sm:text-left lg:px-10">
-          <IdentificacaoFornecedor className="space-y-1 text-white/70" />
-          <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
-            <p>© {year} Sensora. Todos os direitos reservados.</p>
-            <p className="uppercase tracking-[0.2em]">SensoraHome</p>
-          </div>
+        {/* Identificação legal (Decreto 7.962/2013) em linha única, como a
+            referência: © ano, marca — direitos reservados razão social,
+            endereço completo, CNPJ e e-mail. Os documentos da loja ficam
+            na coluna Institucional acima. */}
+        <div className="mx-auto max-w-7xl px-6 py-6 text-center text-xs leading-relaxed text-white/60 lg:px-10">
+          <address className="not-italic">
+            <span className="uppercase">
+              © {year}, {EMPRESA.nomeFantasia} - Todos os direitos reservados{" "}
+              {EMPRESA.razaoSocial}
+            </span>
+            , {ENDERECO_LINHA}, CNPJ {EMPRESA.cnpj}. E-mail:{" "}
+            <a
+              href={`mailto:${EMPRESA.email}`}
+              className="underline underline-offset-2 hover:text-white"
+            >
+              {EMPRESA.email}
+            </a>
+          </address>
+          <p className="mt-2">
+            As promoções expostas neste site são válidas por tempo determinado
+            ou enquanto durarem os estoques.
+          </p>
         </div>
         <div className="mx-auto flex max-w-7xl justify-center px-6 pb-6 lg:px-10">
           {/* Crédito da agência: um reflexo laranja passa pelo nome no hover. */}

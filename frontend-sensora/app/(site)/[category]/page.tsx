@@ -24,7 +24,9 @@ type CategoryPageProps = {
   params: Promise<{ category: string }>;
 };
 
-export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: CategoryPageProps): Promise<Metadata> {
   const category = getCategory((await params).category);
   if (!category) return {};
   return {
@@ -49,8 +51,8 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
   }
 
   const produtos = await listarProdutosPublicos();
-  const collections = getCollectionsByCategory(category.slug).map((collection) =>
-    colecaoComProdutosDaLoja(collection, produtos),
+  const collections = getCollectionsByCategory(category.slug).map(
+    (collection) => colecaoComProdutosDaLoja(collection, produtos),
   );
 
   return (
@@ -76,13 +78,6 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
           title="Novidades a caminho"
           message={`Em breve, novos kits de ${category.label.toLowerCase()} por aqui.`}
         />
-      )}
-
-      {/* Kit 4 Estações — só em /velas, logo depois das 4 velas avulsas
-          acima. Card único do kit físico (ver KitShowcaseCard.tsx), não uma
-          Collection — por isso não vem de `collections`/`COLLECTIONS`. */}
-      {category.slug === "velas" && (
-        <KitShowcaseCard kit={KIT_4_ESTACOES_SHOWCASE} />
       )}
     </>
   );

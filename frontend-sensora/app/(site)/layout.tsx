@@ -25,7 +25,6 @@ import { OPEN_GRAPH_PADRAO, SITE_URL, urlAbsoluta } from "@/lib/seo";
 // O aviso vem do servidor para aparecer junto com a página, e não só
 // depois de todo o JavaScript (era o LCP do PageSpeed mobile, ~7s).
 const scriptConsentimento = `try{var r=localStorage.getItem(${JSON.stringify(COOKIE_CONSENT_KEY)});if(r){var p=JSON.parse(r),c=p&&p.categories;if(p&&p.version===${COOKIE_CONSENT_VERSION}&&p.decidedAt&&c&&c.essential===true&&typeof c.analytics==="boolean"&&typeof c.marketing==="boolean")document.documentElement.setAttribute(${JSON.stringify(COOKIE_CONSENT_BANNER_OCULTO_ATTR)},"")}}catch(e){}`;
-
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],

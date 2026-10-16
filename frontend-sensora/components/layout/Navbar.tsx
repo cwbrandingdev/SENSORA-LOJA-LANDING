@@ -3,19 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Droplets,
-  Flame,
-  Gift,
-  Menu,
-  ShoppingBag,
-  SprayCan,
-  Store,
-  UserRound,
-  UsersRound,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+import { Menu, ShoppingBag, UserRound, X } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import NavbarSearch from "@/components/layout/NavbarSearch";
 import { NAV_CATEGORIES } from "@/lib/content";
@@ -42,14 +30,10 @@ const CATEGORY_LINKS = [
   { label: "Quem somos", href: ROTAS_LEGAIS.quemSomos },
 ];
 
-const ICONES: Record<string, LucideIcon> = {
-  "/velas": Flame,
-  "/sprays": SprayCan,
-  "/difusores": Droplets,
-  "/colecoes": Gift,
-  "/quem-somos": UsersRound,
-  [ROUTES.LOJA_PRODUTOS]: Store,
-};
+const DESKTOP_LINKS = [
+  ...CATEGORY_LINKS,
+  { label: "Ver tudo", href: ROUTES.LOJA_PRODUTOS },
+];
 
 function IconLink({
   href,
@@ -86,16 +70,83 @@ function IconLink({
   );
 }
 
+function CategoryNav({
+  isActive,
+}: {
+  isActive: (href: string) => boolean;
+}) {
+  return (
+    <nav aria-label="Categorias de produtos">
+      <ul className="flex items-center gap-3">
+        {DESKTOP_LINKS.map((item) => {
+          return (
+            <li key={item.label}>
+              <Link
+                href={item.href}
+                className={cn(
+                  "flex w-24 flex-col items-center gap-1 rounded-2xl py-1.5 transition-colors",
+                  "text-brand-navy hover:bg-stone-100",
+                  isActive(item.href) && "text-brand-orange",
+                )}
+              >
+                <span className="text-[14px] font-semibold">{item.label}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+function UtilityCluster({
+  cartLabel,
+  totalItens,
+  loading,
+  contaHref,
+  contaLabel,
+  className,
+}: {
+  cartLabel: string;
+  totalItens: number;
+  loading: boolean;
+  contaHref: string;
+  contaLabel: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1 rounded-full bg-stone-100 p-1 ring-1 ring-stone-200/80",
+        className,
+      )}
+    >
+      <NavbarSearch variant="barra" />
+      <IconLink
+        href={ROUTES.LOJA_CARRINHO}
+        label={cartLabel}
+        badge={totalItens}
+        className="rounded-full hover:bg-slate-100"
+      >
+        <ShoppingBag className="h-4.5 w-4.5" strokeWidth={1.75} />
+      </IconLink>
+      {!loading && (
+        <IconLink
+          href={contaHref}
+          label={contaLabel}
+          className="rounded-full hover:bg-slate-100"
+        >
+          <UserRound className="h-4.5 w-4.5" strokeWidth={1.75} />
+        </IconLink>
+      )}
+    </div>
+  );
+}
+
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { totalItens } = useCart();
   const pathname = usePathname();
-  // Desktop: degradê navy só sobre o hero (home); fora dele a barra é branca.
-  // Já começa branco nas outras páginas para não piscar o degradê.
-  // "/index": a regeneração ISR da home na Vercel renderiza com esse pathname
-  // (ver SiteMain.tsx). Sem isso o HTML do servidor saía com a barra branca,
-  // a hidratação não corrige a classe e ela só voltava ao normal ao rolar.
-  const [foraHero, setForaHero] = useState(pathname !== "/" && pathname !== "/index");
   const { isAuthenticated, loading, perfil, logout } = useAuth();
 
   let contaLabel = "Entrar";
@@ -133,18 +184,6 @@ export default function Navbar() {
       document.body.style.overflow = previous;
     };
   }, [menuOpen]);
-
-  useEffect(() => {
-    const aoRolar = () => {
-      // Hero = seção full-bleed no topo do <main> (ex.: HeroCarousel da home)
-      const hero = document.querySelector("main > [data-full-bleed]");
-      // Sem hero (páginas internas) a barra fica branca desde o topo
-      setForaHero(!hero || hero.getBoundingClientRect().bottom <= 0);
-    };
-    aoRolar();
-    window.addEventListener("scroll", aoRolar, { passive: true });
-    return () => window.removeEventListener("scroll", aoRolar);
-  }, [pathname]);
 
   function toggleMenu() {
     setMenuOpen((value) => !value);
@@ -289,77 +328,30 @@ export default function Navbar() {
           )}
         </div>
 
-        <div
-          className={cn(
-            "pointer-events-auto hidden transition-[background-color,padding,box-shadow] duration-300 lg:block",
-            foraHero
-              ? "bg-white/95 shadow-[0_6px_24px_rgba(15,23,42,0.08)] backdrop-blur-md"
-              : "bg-linear-to-b from-brand-navy/80 via-brand-navy/45 to-transparent pb-6 [text-shadow:0_1px_6px_rgba(0,0,0,0.35)]",
-          )}
-        >
-          <div className="mx-auto grid h-18 max-w-384 grid-cols-[1fr_auto_1fr] items-center gap-6 px-8">
+        <div className="pointer-events-auto hidden border-b border-stone-200/80 bg-white lg:block">
+          <div className="mx-auto flex h-[var(--navbar-height)] max-w-384 flex-col items-center justify-center px-8">
             <Link
               href="/"
               aria-label="Sensora, ir para o início"
-              className="flex shrink-0 items-center justify-self-start"
+              className="flex shrink-0 items-center"
             >
               <Logo
-                variant={foraHero ? "dark" : "light"}
+                variant="dark"
                 showTagline={false}
-                className="h-8"
-                imageClassName="h-8 w-auto"
+                className="h-9"
+                imageClassName="h-9 w-auto"
               />
             </Link>
 
-            <nav aria-label="Categorias de produtos">
-              <ul className="flex items-center gap-3">
-                {[
-                  ...CATEGORY_LINKS,
-                  { label: "Ver tudo", href: ROUTES.LOJA_PRODUTOS },
-                ].map((item) => {
-                  const Icone = ICONES[item.href] ?? Store;
-                  return (
-                    <li key={item.label}>
-                      <Link
-                        href={item.href}
-                        className={cn(
-                          "flex w-20 flex-col items-center gap-1 rounded-2xl py-1.5 transition-colors",
-                          foraHero
-                            ? "text-brand-navy hover:bg-stone-100"
-                            : "text-white hover:bg-white/15",
-                          isActive(item.href) && "text-brand-orange",
-                        )}
-                      >
-                        <Icone className="h-5.5 w-5.5" strokeWidth={1.9} />
-                        <span className="text-[12px] font-semibold">
-                          {item.label}
-                        </span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </nav>
-
-            <div className="flex items-center gap-1 justify-self-end rounded-full bg-white/80 p-1 shadow-sm ring-1 ring-white/60 backdrop-blur-md">
-              <NavbarSearch variant="barra" />
-              <IconLink
-                href={ROUTES.LOJA_CARRINHO}
-                label={cartLabel}
-                badge={totalItens}
-                className="rounded-full hover:bg-slate-100"
-              >
-                <ShoppingBag className="h-4.5 w-4.5" strokeWidth={1.75} />
-              </IconLink>
-              {!loading && (
-                <IconLink
-                  href={contaHref}
-                  label={contaLabel}
-                  className="rounded-full hover:bg-slate-100"
-                >
-                  <UserRound className="h-4.5 w-4.5" strokeWidth={1.75} />
-                </IconLink>
-              )}
+            <div className="mt-1 flex items-center justify-center gap-4">
+              <CategoryNav isActive={isActive} />
+              <UtilityCluster
+                cartLabel={cartLabel}
+                totalItens={totalItens}
+                loading={loading}
+                contaHref={contaHref}
+                contaLabel={contaLabel}
+              />
             </div>
           </div>
         </div>

@@ -12,7 +12,7 @@
 
 @media (min-width: 1024px) {
   :root {
-    --navbar-height: 6.25rem;
+    --navbar-height: 7.25rem;
   }
 }
 
@@ -97,22 +97,26 @@ body {
   }
 }
 
-/* Barra de rolagem: alça laranja arredondada, sem trilho. Chrome/Edge/
+/* Barra de rolagem: alça neutra arredondada, sem trilho. Chrome/Edge/
    Safari usam ::-webkit-scrollbar; o Firefox só aceita cor e espessura. */
 html::-webkit-scrollbar {
-  width: 12px;
+  width: 8px;
 }
 html::-webkit-scrollbar-track {
   background: transparent;
 }
 html::-webkit-scrollbar-thumb {
-  background: var(--brand-orange);
+  background: #a8a29e;
   border-radius: 9999px;
+}
+html::-webkit-scrollbar-thumb:hover {
+  background: #78716c;
 }
 
 @supports not selector(::-webkit-scrollbar) {
   html {
-    scrollbar-color: var(--brand-orange) transparent;
+    scrollbar-width: thin;
+    scrollbar-color: #a8a29e transparent;
   }
 }
 

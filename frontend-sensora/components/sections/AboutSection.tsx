@@ -75,7 +75,7 @@ export default function AboutSection() {
               href={ROTAS_LEGAIS.quemSomos}
               className="group mt-8 inline-flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.16em] text-brand-navy transition-colors hover:text-brand-orange"
             >
-              Quem somos e CNPJ
+              Quem somos
               <ArrowRight
                 className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
                 strokeWidth={1.75}

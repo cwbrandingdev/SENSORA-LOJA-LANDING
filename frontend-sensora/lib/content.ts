@@ -175,9 +175,9 @@ export function getCategoryHref(slug: CategorySlug): string {
 const VELAS_4_ESTACOES: Collection = {
   slug: "4-estacoes",
   categorySlug: "velas",
-  name: "Velas 4 Estações",
-  tagline: "Primavera, Verão, Outono e Inverno em um kit.",
-  description: "Seus aromas favoritos, reunidos em combinações especiais",
+  name: "Velas",
+  tagline: "",
+  description: "Seu aroma favorito, escolhido para criar a sua atmosfera.",
   heroImageSrc: "/images/hero/velas.png",
   heroImageAlt:
     "Kit de velas aromáticas 4 Estações da Sensora, com as quatro velas lado a lado sobre uma bancada",
@@ -261,11 +261,12 @@ export const KIT_4_ESTACOES_SHOWCASE: KitShowcase = {
   lojaSlug: "kit-velas",
 };
 
-const SPRAYS_DE_AMBIENTE: Collection = {
+export const SPRAYS_DE_AMBIENTE: Collection = {
   slug: "sprays-de-ambiente",
   categorySlug: "sprays",
   name: "Sprays de Ambiente",
-  tagline: "Baunilha, Especiarias e Flor de Laranjeira em uma coleção.",
+  tagline:
+    "Baunilha, Especiarias, Flor de Laranjeira e Brisa de Inverno em uma coleção.",
   description:
     "Fragrâncias em spray para perfumar o ambiente na hora, com a assinatura Sensora.",
   heroImageSrc: "/images/collections/sprays-baunilha.jpg",
@@ -310,14 +311,30 @@ const SPRAYS_DE_AMBIENTE: Collection = {
       ctaHref: LOJA_URL,
       lojaSlug: "spray-flor-de-laranjeira",
     },
+    {
+      // 4º card da seção na home (ver LatestReleases): fragrância que já
+      // existe nas Velas 4 Estações, ainda sem cadastro na Loja — por isso
+      // sem `lojaSlug`. Quando o produto for cadastrado no Admin com este
+      // nome, o card editorial sai e entra o card real do catálogo.
+      slug: "brisa-de-inverno",
+      name: "Brisa de Inverno",
+      description:
+        "Brisa de Inverno é uma fragrância amadeirada, quente e acolhedora. Bergamota, pimenta rosa e eucalipto abrem o aroma, lavanda, cedro e canela aquecem o corpo, e o fundo de âmbar, almíscar e baunilha deixa o ambiente com calor e conforto nos dias mais frios.\n\nDetalhes: Frasco com rótulo de acabamento metalizado e válvula spray dourada. O home spray acompanha uma caixa personalizada Parafinesse, desenvolvida especialmente para a coleção e também com detalhes metalizados.\n\nEssência: Brisa de Inverno\nFamília Olfativa: Amadeirado Oriental\n\nNotas de Cabeça:\nBergamota, Pimenta Rosa e Eucalipto\nNotas de Corpo:\nLavanda, Cedro e Canela\nNotas de Fundo:\nÂmbar, Almíscar e Baunilha\n\nVolume: 250ml\nRendimento: Aproximadamente 2.000 borrifadas",
+      mood: "Calor e conforto em cada borrifada dos dias mais frios.",
+      imageSrc: "/images/categories/sprays-especiarias-ia.jpg",
+      imageAlt: "Spray de ambiente Brisa de Inverno da Sensora",
+      ctaLabel: "Conhecer spray",
+      ctaHref: LOJA_URL,
+    },
   ],
 };
 
-const DIFUSORES_DE_AROMA: Collection = {
+export const DIFUSORES_DE_AROMA: Collection = {
   slug: "difusores-de-aroma",
   categorySlug: "difusores",
   name: "Difusores de Aroma",
-  tagline: "Baunilha, Especiarias e Flor de Laranjeira em uma coleção.",
+  tagline:
+    "Baunilha, Especiarias, Flor de Laranjeira e Brisa de Inverno em uma coleção.",
   description:
     "Fragrância contínua e discreta para manter a atmosfera perfumada o dia inteiro.",
   heroImageSrc: "/images/collections/difusores-flor-de-laranjeira.jpg",
@@ -362,10 +379,29 @@ const DIFUSORES_DE_AROMA: Collection = {
       ctaHref: LOJA_URL,
       lojaSlug: "difusor-de-flor-de-laranjeira",
     },
+    {
+      // 4º card da seção na home (ver LatestReleases): fragrância que já
+      // existe nas Velas 4 Estações, ainda sem cadastro na Loja — por isso
+      // sem `lojaSlug`. Quando o produto for cadastrado no Admin com este
+      // nome, o card editorial sai e entra o card real do catálogo.
+      slug: "brisa-de-inverno",
+      name: "Brisa de Inverno",
+      description:
+        "Brisa de Inverno é uma fragrância amadeirada, quente e acolhedora. Bergamota, pimenta rosa e eucalipto abrem o aroma, lavanda, cedro e canela aquecem o corpo, e o fundo de âmbar, almíscar e baunilha perfuma o ambiente de forma contínua, com calor e conforto nos dias mais frios.\n\nDetalhes: Frasco com rótulo de acabamento metalizado, válvula dourada e palitos de fibra de algodão de alta performance, desenvolvidos para proporcionar excelente absorção e difusão da fragrância.\n\nEssência: Brisa de Inverno\nFamília Olfativa: Amadeirado Oriental\n\nNotas de Cabeça:\nBergamota, Pimenta Rosa e Eucalipto\nNotas de Corpo:\nLavanda, Cedro e Canela\nNotas de Fundo:\nÂmbar, Almíscar e Baunilha\n\nVolume: 250ml",
+      mood: "Calor e conforto, difundidos de forma contínua nos dias mais frios.",
+      imageSrc: "/images/categories/difusores-especiarias.jpg",
+      imageAlt: "Difusor de aroma Brisa de Inverno da Sensora",
+      ctaLabel: "Conhecer difusor",
+      ctaHref: LOJA_URL,
+    },
   ],
 };
 
-export const COLLECTIONS: Collection[] = [VELAS_4_ESTACOES];
+export const COLLECTIONS: Collection[] = [
+  VELAS_4_ESTACOES,
+  SPRAYS_DE_AMBIENTE,
+  DIFUSORES_DE_AROMA,
+];
 
 export function getCollectionsByCategory(categorySlug: string): Collection[] {
   return COLLECTIONS.filter(
@@ -451,13 +487,13 @@ export const HERO_SLIDES: HeroSlide[] = [
     ctaLabel: "Conhecer",
     ctaHref: getCollectionHref(VELAS_4_ESTACOES),
     imageAlt: VELAS_4_ESTACOES.heroImageAlt ?? "",
-    imageSrc: "/images/hero/colecao-4-estacoes-banner.png",
+    imageSrc: "/images/hero/4estacoes-hero-desktop.png",
     imageSrcMobile: "/mobile/kits.jpg.jpeg",
   },
   {
     id: "sprays-de-ambiente",
     title: "Sprays de Ambiente",
-    subtitle: "Uma borrifada para renovar a atmosfera do seu ambiente.",
+    subtitle: "Um toque para renovar a atmosfera do seu ambiente.",
     ctaLabel: "Conhecer",
     ctaHref: getCategoryHref("sprays"),
     imageAlt: "Sprays de ambiente Sensora",
@@ -466,7 +502,7 @@ export const HERO_SLIDES: HeroSlide[] = [
   },
   {
     id: "difusores-de-aroma",
-    title: "Difusores de Aroma",
+    title: "Difusores de Ambiente",
     subtitle:
       "Uma presença perfumada que transforma o ambiente em uma extensão do seu estilo.",
     ctaLabel: "Conhecer",
@@ -590,7 +626,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     id: "contato",
     question: "Como entro em contato com a Sensora?",
     answer:
-      "Se você tem conta, abra uma solicitação em Minha Conta → Suporte: a resposta chega por e-mail. Também atendemos por e-mail, em contato@sensorahome.com.br, e pelo Instagram @sensoramarketingsensorial. Razão social, CNPJ e endereço estão na página Quem somos.",
+      "Se você tem conta, abra uma solicitação em Minha Conta → Suporte: a resposta chega por e-mail. Também atendemos por e-mail, em contato@sensorahome.com.br, e pelo Instagram @sensoramarketingsensorial. Razão social, CNPJ e endereço estão no rodapé do site.",
   },
   {
     id: "arrependimento",

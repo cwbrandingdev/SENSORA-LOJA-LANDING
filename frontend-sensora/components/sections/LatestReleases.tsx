@@ -1,7 +1,13 @@
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import { listarProdutosPublicos, type ProdutoPublico } from "@/lib/api-publica";
 import { LOJA_PRODUTO_URL } from "@/lib/config";
-import { getCategory, getCategoryHref } from "@/lib/content";
+import {
+  DIFUSORES_DE_AROMA,
+  SPRAYS_DE_AMBIENTE,
+  getCategory,
+  getCategoryHref,
+  type Collection,
+} from "@/lib/content";
 import LatestReleasesGroups from "./LatestReleasesGroups";
 import type { ReleaseItem } from "./LatestReleaseCard";
 
@@ -20,6 +26,38 @@ const GRUPOS = [
   { id: "kits", prefixo: "kit", label: "Kits", href: "/colecoes" },
 ];
 
+// Cards editoriais que completam a fileira enquanto o produto ainda não
+// está no catálogo da Loja (hoje: "Brisa de Inverno", 4º card de Sprays e
+// de Difusores). Entram só se nenhum produto real tiver o mesmo nome —
+// quando o produto for cadastrado no Admin, o card real o substitui.
+const COLECOES_EDITORIAIS: Record<string, Collection> = {
+  sprays: SPRAYS_DE_AMBIENTE,
+  difusores: DIFUSORES_DE_AROMA,
+};
+
+function extrasEditoriais(
+  grupoId: string,
+  produtos: ReleaseItem[],
+  href: string,
+): ReleaseItem[] {
+  const colecao = COLECOES_EDITORIAIS[grupoId];
+  if (!colecao) return [];
+  const nomesNoCatalogo = new Set(
+    produtos.map((produto) => produto.nome.trim().toLowerCase()),
+  );
+  const precoDaLinha = produtos[0]?.preco;
+  return colecao.items
+    .filter((item) => !nomesNoCatalogo.has(item.name.trim().toLowerCase()))
+    .map((item) => ({
+      key: `editorial-${colecao.slug}-${item.slug}`,
+      nome: item.name,
+      href,
+      imagemUrl: item.imageSrc,
+      preco: precoDaLinha,
+      acaoLabel: "Conhecer",
+    }));
+}
+
 function fromApi(produto: ProdutoPublico): ReleaseItem {
   return {
     key: `api-${produto.id}`,
@@ -35,13 +73,18 @@ function fromApi(produto: ProdutoPublico): ReleaseItem {
 export default async function LatestReleases() {
   const produtosApi = await listarProdutosPublicos();
 
-  const grupos = GRUPOS.map(({ prefixo, ...grupo }) => ({
-    ...grupo,
-    produtos: produtosApi
+  const grupos = GRUPOS.map(({ prefixo, ...grupo }) => {
+    const doCatalogo = produtosApi
       .filter((produto) => produto.categoria?.slug.startsWith(prefixo))
-      .map(fromApi)
-      .slice(0, MAX_PRODUTOS_POR_GRUPO),
-  })).filter((grupo) => grupo.produtos.length > 0);
+      .map(fromApi);
+    return {
+      ...grupo,
+      produtos: [...doCatalogo, ...extrasEditoriais(grupo.id, doCatalogo, grupo.href)].slice(
+        0,
+        MAX_PRODUTOS_POR_GRUPO,
+      ),
+    };
+  }).filter((grupo) => grupo.produtos.length > 0);
 
   if (grupos.length === 0) {
     return null;

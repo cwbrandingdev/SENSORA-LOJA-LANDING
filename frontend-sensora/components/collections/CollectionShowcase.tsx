@@ -76,7 +76,9 @@ export default function CollectionShowcase({
                     label={item.name}
                     // Foto de produto do Admin já vem redimensionada pelo
                     // ImageKit (ver colecaoComProdutosDaLoja).
-                    unoptimized={item.imageSrc?.startsWith("https://ik.imagekit.io")}
+                    unoptimized={item.imageSrc?.startsWith(
+                      "https://ik.imagekit.io",
+                    )}
                     // Grid de 1/2/4 colunas dentro de um container max-w-6xl (1152px)
                     // com gap-x-6; acima de 1231px de viewport o grid já está no teto.
                     sizes="(max-width: 639px) calc(100vw - 48px), (max-width: 1023px) calc(50vw - 36px), (max-width: 1231px) calc(25vw - 38px), 270px"
@@ -84,15 +86,7 @@ export default function CollectionShowcase({
                   />
                 </ImageReveal>
               </div>
-              {item.seasonLabel && (
-                <div className="mt-5 flex items-center justify-center gap-2.5">
-                  <span aria-hidden className="h-px w-5 bg-brand-orange/40" />
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-orange">
-                    {item.seasonLabel}
-                  </p>
-                  <span aria-hidden className="h-px w-5 bg-brand-orange/40" />
-                </div>
-              )}
+
               <TituloItem className="mt-3 font-serif text-xl font-normal text-brand-navy transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5">
                 {item.name}
               </TituloItem>
@@ -121,12 +115,6 @@ export default function CollectionShowcase({
           );
         })}
       </div>
-
-      <RevealOnScroll className="mt-16 flex justify-center sm:mt-20">
-        <Button href={LOJA_URL} variant="primary">
-          {collection.ctaLabel ?? "Conhecer kit"} →
-        </Button>
-      </RevealOnScroll>
     </section>
   );
 }

@@ -18,6 +18,8 @@ export type ReleaseItem = {
   preco?: number;
   lancamento?: boolean;
   produto?: ProdutoPublico;
+  /** Rótulo da barra de ação quando não há produto da Loja (card editorial). */
+  acaoLabel?: string;
 };
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
@@ -112,7 +114,7 @@ export default function LatestReleaseCard({ produto }: { produto: ReleaseItem })
           </button>
         ) : (
           <Link href={produto.href} className={acaoClass}>
-            {acaoConteudo}
+            {produto.acaoLabel ?? acaoConteudo}
           </Link>
         )}
       </div>

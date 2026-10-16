@@ -229,10 +229,9 @@ export default function SuportePage() {
 
   return (
     <div className="pb-24 sm:pb-32">
-      {/* No desktop o espaço reservado à navbar (--navbar-height) é maior
-          que a barra (h-18): sobe a faixa essa diferença para não sobrar
-          uma tira clara entre a navbar e o azul. */}
-      <div className="bg-brand-navy px-6 pt-10 pb-40 text-white lg:-mt-[calc(var(--navbar-height)-4.5rem)] lg:px-10 lg:pt-[calc(var(--navbar-height)-4.5rem+2.5rem)]">
+      {/* A navbar centralizada ocupa exatamente --navbar-height, então a
+          faixa azul começa logo abaixo dela, sem tira clara no meio. */}
+      <div className="bg-brand-navy px-6 pt-10 pb-40 text-white lg:px-10">
         <div className="mx-auto max-w-6xl">
           <Link
             href={ROUTES.CONTA}
