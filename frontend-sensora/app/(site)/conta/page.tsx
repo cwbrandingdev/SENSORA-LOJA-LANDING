@@ -11,7 +11,14 @@
 // fallback já usado ali.
 import { useMemo } from "react";
 import Link from "next/link";
-import { Package, User, MapPin, ShieldCheck, LifeBuoy, ArrowRight } from "lucide-react";
+import {
+  Package,
+  User,
+  MapPin,
+  ShieldCheck,
+  LifeBuoy,
+  ArrowRight,
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { decodeToken } from "@/lib/jwt";
 import { getToken } from "@/lib/storage";
@@ -82,6 +89,16 @@ export default function ContaPage() {
         description="Aqui você vai poder acompanhar seus pedidos, gerenciar seus dados pessoais e endereços, e cuidar da segurança da sua conta. Estamos construindo essa área aos poucos — em breve, mais novidades por aqui."
       />
 
+      <div className="mt-12 border-t  border-slate-200 pt-8">
+        <Button
+          onClick={logout}
+          className="bg-red-600 hover:bg-red-700"
+          variant="navy"
+        >
+          Sair da conta
+        </Button>
+      </div>
+
       <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2">
         {CARDS.map((card, index) => {
           const Icon = card.icon;
@@ -139,14 +156,6 @@ export default function ContaPage() {
           );
         })}
       </div>
-
-      <RevealOnScroll delayMs={330}>
-        <div className="mt-12 border-t border-slate-200 pt-8">
-          <Button onClick={logout} variant="navy">
-            Sair da conta
-          </Button>
-        </div>
-      </RevealOnScroll>
     </div>
   );
 }
