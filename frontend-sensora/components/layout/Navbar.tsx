@@ -7,7 +7,6 @@ import { Menu, ShoppingBag, UserRound, X } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import NavbarSearch from "@/components/layout/NavbarSearch";
 import { NAV_CATEGORIES } from "@/lib/content";
-import { ROTAS_LEGAIS } from "@/lib/empresa";
 import { ROUTES } from "@/lib/routes";
 import { loginComRedirect } from "@/lib/auth-redirect";
 import { useAuth } from "@/context/AuthContext";
@@ -27,7 +26,6 @@ const CATEGORY_LINKS = [
     ...item,
     label: ROTULOS_CURTOS[item.href] ?? item.label,
   })),
-  { label: "Quem somos", href: ROTAS_LEGAIS.quemSomos },
 ];
 
 const DESKTOP_LINKS = [

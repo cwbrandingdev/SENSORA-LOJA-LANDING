@@ -6,7 +6,10 @@ import {
   type Collection,
   type ProductItem,
 } from "@/lib/content";
-import { imagemKitRedimensionada } from "@/lib/loja-imagens";
+import {
+  imagemKitRedimensionada,
+  segundaImagemDaGaleria,
+} from "@/lib/loja-imagens";
 
 // Junta a vitrine editorial da coleção (content.ts) com o catálogo do Admin:
 // - produto cadastrado na categoria da coleção e ainda sem card editorial
@@ -28,9 +31,24 @@ export function colecaoComProdutosDaLoja(
     KIT_4_ESTACOES_SHOWCASE.lojaSlug,
   ]);
 
-  const editoriais = collection.items.filter(
-    (item) => !item.lojaSlug || noCatalogo.has(item.lojaSlug),
-  );
+  const porSlug = new Map(produtos.map((produto) => [produto.slug, produto]));
+  const editoriais = collection.items
+    .filter((item) => !item.lojaSlug || noCatalogo.has(item.lojaSlug))
+    .map((item) => {
+      // Cartão editorial de um produto real ganha a 2ª foto da galeria dele
+      // para o hover (ver HoverSecondImage) e o preço do catálogo.
+      const produtoReal = item.lojaSlug ? porSlug.get(item.lojaSlug) : undefined;
+      const segunda = produtoReal
+        ? segundaImagemDaGaleria(produtoReal.imagens, produtoReal.imagemUrl)
+        : undefined;
+      return {
+        ...item,
+        ...(segunda
+          ? { imageHoverSrc: imagemKitRedimensionada(segunda, 600) }
+          : {}),
+        ...(produtoReal ? { preco: produtoReal.preco } : {}),
+      };
+    });
   const novos: ProductItem[] = produtos
     .filter(
       (produto) =>
@@ -43,11 +61,29 @@ export function colecaoComProdutosDaLoja(
       mood: produto.aroma,
       // Card de até ~270px: 600px cobre telas de alta densidade.
       imageSrc: imagemKitRedimensionada(produto.imagemUrl, 600),
+      imageHoverSrc: imagemKitRedimensionada(
+        segundaImagemDaGaleria(produto.imagens, produto.imagemUrl),
+        600,
+      ),
       imageAlt: produto.nome,
+      preco: produto.preco,
       ctaLabel: "Conhecer",
       ctaHref: LOJA_PRODUTO_URL(produto.slug),
       lojaSlug: produto.slug,
     }));
 
-  return { ...collection, items: [...editoriais, ...novos] };
+  // Item editorial ainda sem cadastro na Loja (ex.: "Brisa de Inverno")
+  // herda o preço da linha para a vitrine não ficar com um cartão sem preço
+  // no meio dos outros — quando o produto for cadastrado, o preço real o
+  // substitui (mesma regra do card editorial da home).
+  const precoDaLinha = produtos.find(
+    (produto) => produto.categoria?.slug === categoriaLoja,
+  )?.preco;
+  const items = [...editoriais, ...novos].map((item) =>
+    item.preco == null && precoDaLinha != null
+      ? { ...item, preco: precoDaLinha }
+      : item,
+  );
+
+  return { ...collection, items };
 }

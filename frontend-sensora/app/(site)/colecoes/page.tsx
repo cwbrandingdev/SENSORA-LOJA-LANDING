@@ -7,7 +7,11 @@ import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import EmptyState from "@/components/ui/EmptyState";
 import { listarProdutosPublicos } from "@/lib/api-publica";
 import { LOJA_PRODUTO_URL } from "@/lib/config";
-import { imagemKitRedimensionada } from "@/lib/loja-imagens";
+import {
+  imagemKitRedimensionada,
+  segundaImagemDaGaleria,
+} from "@/lib/loja-imagens";
+import HoverSecondImage from "@/components/ui/HoverSecondImage";
 
 export const metadata: Metadata = {
   title: "Kits",
@@ -83,6 +87,19 @@ export default async function ColecoesPage() {
                       className="transition-transform duration-1600 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
                     />
                   </ImageReveal>
+                  {/* 2ª foto da galeria por cima da capa no hover do cartão. */}
+                  <HoverSecondImage
+                    src={imagemKitRedimensionada(
+                      segundaImagemDaGaleria(kit.imagens, kit.imagemUrl),
+                      900,
+                    )}
+                    label={kit.nome}
+                    sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                    unoptimized={kit.imagemUrl?.startsWith(
+                      "https://ik.imagekit.io",
+                    )}
+                    className="transition-transform duration-1600 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
+                  />
                   <div
                     aria-hidden
                     className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent"

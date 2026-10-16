@@ -9,6 +9,7 @@ import {
   getCategoryHref,
   type Collection,
 } from "@/lib/content";
+import { segundaImagemDaGaleria } from "@/lib/loja-imagens";
 import LatestReleasesGroups from "./LatestReleasesGroups";
 import type { ReleaseItem } from "./LatestReleaseCard";
 
@@ -54,6 +55,7 @@ function extrasEditoriais(
       nome: item.name,
       href,
       imagemUrl: item.imageSrc,
+      imagemHoverUrl: item.imageHoverSrc,
       preco: precoDaLinha,
       acaoLabel: "Conhecer",
     }));
@@ -65,6 +67,8 @@ function fromApi(produto: ProdutoPublico): ReleaseItem {
     nome: produto.nome,
     href: LOJA_PRODUTO_URL(produto.slug),
     imagemUrl: produto.imagemUrl,
+    // 2ª foto da galeria, mostrada no hover do cartão.
+    imagemHoverUrl: segundaImagemDaGaleria(produto.imagens, produto.imagemUrl),
     preco: produto.preco,
     lancamento: produto.destaque,
     // Sem a ficha técnica (volume, queima, borrifadas…) nas descrições que

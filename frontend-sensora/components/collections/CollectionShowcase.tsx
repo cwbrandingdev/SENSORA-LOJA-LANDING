@@ -5,6 +5,12 @@ import PlaceholderImage from "@/components/ui/PlaceholderImage";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import TextReveal from "@/components/ui/TextReveal";
 import { LOJA_URL, LOJA_PRODUTO_URL } from "@/lib/config";
+import HoverSecondImage from "@/components/ui/HoverSecondImage";
+
+const formatPrice = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
 import type { Collection } from "@/lib/content";
 
 type CollectionShowcaseProps = {
@@ -25,6 +31,8 @@ export default function CollectionShowcase({
   const headingId = `${collection.slug}-heading`;
   const Titulo = principal ? "h1" : "h2";
   const TituloItem = principal ? "h2" : "h3";
+  // O cartão mostra o preço (nome, traço e valor, como nos cartões da
+  // home) em vez da frase de descrição do item — em todas as categorias.
 
   return (
     <section
@@ -85,15 +93,37 @@ export default function CollectionShowcase({
                     className="transition-transform duration-[1600ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.02]"
                   />
                 </ImageReveal>
+                {/* 2ª foto do produto por cima da capa enquanto o mouse está no cartão. */}
+                <HoverSecondImage
+                  src={item.imageHoverSrc}
+                  label={item.name}
+                  unoptimized={item.imageHoverSrc?.startsWith(
+                    "https://ik.imagekit.io",
+                  )}
+                  sizes="(max-width: 639px) calc(100vw - 48px), (max-width: 1023px) calc(50vw - 36px), (max-width: 1231px) calc(25vw - 38px), 270px"
+                  className="transition-transform duration-1600 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.02]"
+                />
               </div>
 
               <TituloItem className="mt-3 font-serif text-xl font-normal text-brand-navy transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5">
                 {item.name}
               </TituloItem>
-              {item.mood && (
-                <p className="mx-auto mt-2 max-w-[26ch] text-sm leading-relaxed text-slate-600">
-                  {item.mood}
-                </p>
+              {item.preco != null ? (
+                <>
+                  <span
+                    aria-hidden
+                    className="mx-auto my-2 block h-px w-6 bg-brand-orange/50"
+                  />
+                  <p className="text-[13px] font-medium tabular-nums tracking-wide text-brand-orange">
+                    {formatPrice.format(item.preco)}
+                  </p>
+                </>
+              ) : (
+                item.mood && (
+                  <p className="mx-auto mt-2 max-w-[26ch] text-sm leading-relaxed text-slate-600">
+                    {item.mood}
+                  </p>
+                )
               )}
             </>
           );

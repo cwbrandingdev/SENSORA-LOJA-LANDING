@@ -14,6 +14,16 @@ export function bannerParaCategoria(slug: string): string | null {
   return BANNER_POR_SLUG_CATEGORIA[slug] ?? null;
 }
 
+/** Segunda foto da galeria (a primeira depois da capa) — é a imagem que os
+ *  cartões de produto mostram no hover. `undefined` quando o produto só
+ *  tem a capa cadastrada. */
+export function segundaImagemDaGaleria(
+  imagens: string[] | undefined,
+  capa: string | undefined,
+): string | undefined {
+  return imagens?.find((url) => url && url !== capa);
+}
+
 // Fotos de produto vêm do ImageKit no tamanho original (~150–180 KB cada) e
 // são exibidas com `unoptimized`. O ImageKit redimensiona pela própria URL
 // (`?tr=w-<largura>`, já entregando WebP): passe o dobro da largura exibida

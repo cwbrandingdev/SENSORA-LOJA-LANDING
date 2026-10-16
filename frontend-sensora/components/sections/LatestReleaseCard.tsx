@@ -15,6 +15,8 @@ export type ReleaseItem = {
   nome: string;
   href: string;
   imagemUrl?: string;
+  /** Segunda foto do produto, revelada no hover do cartão. */
+  imagemHoverUrl?: string;
   preco?: number;
   lancamento?: boolean;
   produto?: ProdutoPublico;
@@ -32,6 +34,7 @@ export default function LatestReleaseCard({ produto }: { produto: ReleaseItem })
   const toast = useToast();
   const [adicionado, setAdicionado] = useState(false);
   const [imagemQuebrou, setImagemQuebrou] = useState(false);
+  const [imagemHoverQuebrou, setImagemHoverQuebrou] = useState(false);
   const lojaProduto = produto.produto;
   const esgotado = lojaProduto
     ? statusEstoque(lojaProduto.quantidade) === "ESGOTADO"
@@ -80,15 +83,31 @@ export default function LatestReleaseCard({ produto }: { produto: ReleaseItem })
         <Link href={produto.href} className="block">
           <div className="relative aspect-4/5 w-full">
             {mostrarImagem ? (
-              <Image
-                src={imagemKitRedimensionada(produto.imagemUrl as string, 700)}
-                alt={produto.nome}
-                fill
-                sizes="(max-width: 639px) 85vw, (max-width: 1023px) 50vw, (max-width: 1152px) 25vw, 270px"
-                className={`object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.05] ${esgotado ? "opacity-60" : ""}`}
-                unoptimized
-                onError={() => setImagemQuebrou(true)}
-              />
+              <>
+                <Image
+                  src={imagemKitRedimensionada(produto.imagemUrl as string, 700)}
+                  alt={produto.nome}
+                  fill
+                  sizes="(max-width: 639px) 85vw, (max-width: 1023px) 50vw, (max-width: 1152px) 25vw, 270px"
+                  className={`object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.05] ${esgotado ? "opacity-60" : ""}`}
+                  unoptimized
+                  onError={() => setImagemQuebrou(true)}
+                />
+                {/* 2ª foto da galeria por cima da capa enquanto o mouse está
+                    no cartão (só ponteiro fino — no toque não há hover). */}
+                {produto.imagemHoverUrl && !imagemHoverQuebrou && (
+                  <Image
+                    src={imagemKitRedimensionada(produto.imagemHoverUrl, 700)}
+                    alt=""
+                    aria-hidden
+                    fill
+                    sizes="(max-width: 639px) 85vw, (max-width: 1023px) 50vw, (max-width: 1152px) 25vw, 270px"
+                    className={`object-cover opacity-0 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.05] ${esgotado ? "pointer-fine:group-hover:opacity-60" : "pointer-fine:group-hover:opacity-100"}`}
+                    unoptimized
+                    onError={() => setImagemHoverQuebrou(true)}
+                  />
+                )}
+              </>
             ) : (
               <div className="flex h-full items-center justify-center px-4 text-center font-serif text-sm text-brand-navy/40">
                 {produto.nome}

@@ -5,7 +5,11 @@ import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import { LOJA_PRODUTO_URL } from "@/lib/config";
 import type { ProdutoPublico } from "@/lib/api-publica";
 import { mensagemEstoque, statusEstoque } from "@/lib/estoque";
-import { imagemKitRedimensionada } from "@/lib/loja-imagens";
+import {
+  imagemKitRedimensionada,
+  segundaImagemDaGaleria,
+} from "@/lib/loja-imagens";
+import HoverSecondImage from "@/components/ui/HoverSecondImage";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -64,6 +68,17 @@ export default function ProductCard({
               className={`transition-transform duration-[1600ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03] ${esgotado ? "opacity-60" : ""}`}
             />
           </ImageReveal>
+          {/* 2ª foto da galeria por cima da capa enquanto o mouse está no cartão. */}
+          <HoverSecondImage
+            src={imagemKitRedimensionada(
+              segundaImagemDaGaleria(produto.imagens, produto.imagemUrl),
+              700,
+            )}
+            label={produto.nome}
+            unoptimized={Boolean(produto.imagemUrl)}
+            sizes="(max-width: 639px) calc(100vw - 48px), (max-width: 1023px) calc(50vw - 36px), (max-width: 1231px) calc(25vw - 38px), 270px"
+            className={`transition-transform duration-1600 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03] ${esgotado ? "opacity-60" : ""}`}
+          />
         </div>
 
         <h3 className="mt-5 font-serif text-lg font-normal text-brand-navy transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-fine:group-hover:-translate-y-0.5">

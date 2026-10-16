@@ -58,7 +58,14 @@ export type ProductItem = {
   /** Sensação/atmosfera transmitida pelo produto. */
   mood?: string;
   imageSrc?: string;
+  /** Segunda foto, exibida no hover do cartão (ver CollectionShowcase).
+   *  Preenchida a partir da galeria do produto real em
+   *  colecaoComProdutosDaLoja — itens editoriais não precisam definir. */
+  imageHoverSrc?: string;
   imageAlt: string;
+  /** Preço do produto real na Loja — preenchido em colecaoComProdutosDaLoja
+   *  a partir do catálogo (nunca escrito à mão aqui). */
+  preco?: number;
   ctaLabel: string;
   ctaHref: string;
   /** Slug do produto real na Loja (`/public/produtos`) — mapeamento
@@ -264,8 +271,7 @@ export const SPRAYS_DE_AMBIENTE: Collection = {
   slug: "sprays-de-ambiente",
   categorySlug: "sprays",
   name: "Sprays de Ambiente",
-  tagline:
-    "Baunilha, Especiarias, Flor de Laranjeira e Brisa de Inverno em uma coleção.",
+  tagline: "",
   description:
     "Fragrâncias em spray para perfumar o ambiente na hora, com a assinatura Sensora.",
   heroImageSrc: "/images/collections/sprays-baunilha.jpg",
@@ -332,8 +338,7 @@ export const DIFUSORES_DE_AROMA: Collection = {
   slug: "difusores-de-aroma",
   categorySlug: "difusores",
   name: "Difusores de Ambiente",
-  tagline:
-    "Baunilha, Especiarias, Flor de Laranjeira e Brisa de Inverno em uma coleção.",
+  tagline: "",
   description:
     "Fragrância contínua e discreta para manter a atmosfera perfumada o dia inteiro.",
   heroImageSrc: "/images/collections/difusores-flor-de-laranjeira.jpg",
