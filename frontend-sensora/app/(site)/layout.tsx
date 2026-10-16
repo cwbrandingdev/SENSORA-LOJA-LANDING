@@ -60,7 +60,7 @@ export const metadata: Metadata = {
     template: "%s | Sensora",
   },
   description:
-    "Velas aromáticas veganas de cera de coco, sprays de ambiente, difusores de aroma e kits da Sensora. Fragrâncias para transformar a atmosfera da sua casa.",
+    "Velas aromáticas veganas de cera de coco, sprays de ambiente, difusores de ambiente e kits da Sensora. Fragrâncias para transformar a atmosfera da sua casa.",
   openGraph: OPEN_GRAPH_PADRAO,
 };
 

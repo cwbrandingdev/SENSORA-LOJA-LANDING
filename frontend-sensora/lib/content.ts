@@ -93,7 +93,7 @@ export type KitShowcase = {
   name: string;
   eyebrow?: string;
   tagline?: string;
-  /** Rótulo curto de especificação (ex.: "4 × 220ml"). Só renderizado quando definido. */
+  /** Rótulo curto de especificação (ex.: "Edição limitada"). Só renderizado quando definido. */
   specs?: string;
   /** Estações/aromas mostrados discretamente abaixo do texto principal. */
   seasons?: string[];
@@ -187,7 +187,7 @@ const VELAS_4_ESTACOES: Collection = {
       name: "Frescor de Primavera",
       seasonLabel: "Primavera",
       description:
-        "Composição: Vela vegana, feita com cera de coco 100% vegetal, livre de parafina.\n\nDetalhes: Rótulo com acabamento metalizado e tampa de metal, desenvolvidos especialmente para a coleção 4 Estações.\n\nEssência: Frescor de Primavera\nFamília Olfativa: Floral Fresco\n\nNotas de Cabeça:\nPera, Folha de Figo e Bergamota\nNotas de Corpo:\nPeônia, Flor de Laranjeira e Chá Branco\nNotas de Fundo:\nAlmíscar, Cedro e Musgo\n\nVolume: 220ml\nTempo de queima: Aproximadamente 40 a 50 horas",
+        "Composição: Vela vegana, feita com cera de coco 100% vegetal, livre de parafina.\n\nDetalhes: Rótulo com acabamento metalizado e tampa de metal, desenvolvidos especialmente para a coleção 4 Estações.\n\nEssência: Frescor de Primavera\nFamília Olfativa: Floral Fresco\n\nNotas de Cabeça:\nPera, Folha de Figo e Bergamota\nNotas de Corpo:\nPeônia, Flor de Laranjeira e Chá Branco\nNotas de Fundo:\nAlmíscar, Cedro e Musgo",
       mood: "Notas frescas que despertam os sentidos e renovam o ambiente.",
       imageSrc: "/images/collections/velas-4-estacoes/primavera.jpg",
       imageAlt: "Vela aromática Frescor de Primavera da Sensora",
@@ -200,7 +200,7 @@ const VELAS_4_ESTACOES: Collection = {
       name: "Luz de Verão",
       seasonLabel: "Verão",
       description:
-        "Composição: Vela vegana, feita com cera de coco 100% vegetal, livre de parafina.\n\nDetalhes: Rótulo com acabamento metalizado e tampa de metal, desenvolvidos especialmente para a coleção 4 Estações.\n\nEssência: Luz de Verão\nFamília Olfativa: Cítrico Floral\n\nNotas de Cabeça:\nBergamota, Limão Siciliano e Mandarina\nNotas de Corpo:\nFlor de Laranjeira, Jasmim e Pêssego\nNotas de Fundo:\nAlmíscar, Âmbar e Madeira Clara\n\nVolume: 220ml\nTempo de queima: Aproximadamente 40 a 50 horas",
+        "Composição: Vela vegana, feita com cera de coco 100% vegetal, livre de parafina.\n\nDetalhes: Rótulo com acabamento metalizado e tampa de metal, desenvolvidos especialmente para a coleção 4 Estações.\n\nEssência: Luz de Verão\nFamília Olfativa: Cítrico Floral\n\nNotas de Cabeça:\nBergamota, Limão Siciliano e Mandarina\nNotas de Corpo:\nFlor de Laranjeira, Jasmim e Pêssego\nNotas de Fundo:\nAlmíscar, Âmbar e Madeira Clara",
       mood: "Uma brisa cítrica e luminosa para dias longos e leves.",
       imageSrc: "/images/collections/velas-4-estacoes/verao.jpg",
       imageAlt: "Vela aromática Luz de Verão da Sensora",
@@ -213,7 +213,7 @@ const VELAS_4_ESTACOES: Collection = {
       name: "Manhã de Outono",
       seasonLabel: "Outono",
       description:
-        "Composição: Vela vegana, feita com cera de coco 100% vegetal, livre de parafina.\n\nDetalhes: Rótulo com acabamento metalizado e tampa de metal, desenvolvidos especialmente para a coleção 4 Estações.\n\nEssência: Manhã de Outono\nFamília Olfativa: Oriental Especiado\n\nNotas de Cabeça:\nLaranja, Canela e Maçã\nNotas de Corpo:\nCravo, Noz-moscada e Flor de Baunilha\nNotas de Fundo:\nÂmbar, Sândalo e Baunilha\n\nVolume: 220ml\nTempo de queima: Aproximadamente 40 a 50 horas",
+        "Composição: Vela vegana, feita com cera de coco 100% vegetal, livre de parafina.\n\nDetalhes: Rótulo com acabamento metalizado e tampa de metal, desenvolvidos especialmente para a coleção 4 Estações.\n\nEssência: Manhã de Outono\nFamília Olfativa: Oriental Especiado\n\nNotas de Cabeça:\nLaranja, Canela e Maçã\nNotas de Corpo:\nCravo, Noz-moscada e Flor de Baunilha\nNotas de Fundo:\nÂmbar, Sândalo e Baunilha",
       mood: "Aromas quentes que convidam ao aconchego das manhãs mais lentas.",
       imageSrc: "/images/collections/velas-4-estacoes/outono.jpg",
       imageAlt: "Vela aromática Manhã de Outono da Sensora",
@@ -226,7 +226,7 @@ const VELAS_4_ESTACOES: Collection = {
       name: "Brisa de Inverno",
       seasonLabel: "Inverno",
       description:
-        "Composição: Vela vegana, feita com cera de coco 100% vegetal, livre de parafina.\n\nDetalhes: Rótulo com acabamento metalizado e tampa de metal, desenvolvidos especialmente para a coleção 4 Estações.\n\nEssência: Brisa de Inverno\nFamília Olfativa: Amadeirado Oriental\n\nNotas de Cabeça:\nBergamota, Pimenta Rosa e Eucalipto\nNotas de Corpo:\nLavanda, Cedro e Canela\nNotas de Fundo:\nÂmbar, Almíscar e Baunilha\n\nVolume: 220ml\nTempo de queima: Aproximadamente 40 a 50 horas",
+        "Composição: Vela vegana, feita com cera de coco 100% vegetal, livre de parafina.\n\nDetalhes: Rótulo com acabamento metalizado e tampa de metal, desenvolvidos especialmente para a coleção 4 Estações.\n\nEssência: Brisa de Inverno\nFamília Olfativa: Amadeirado Oriental\n\nNotas de Cabeça:\nBergamota, Pimenta Rosa e Eucalipto\nNotas de Corpo:\nLavanda, Cedro e Canela\nNotas de Fundo:\nÂmbar, Almíscar e Baunilha",
       mood: "Calor e conforto em cada respiro dos dias mais frios.",
       imageSrc: "/images/collections/velas-4-estacoes/inverno.jpg",
       imageAlt: "Vela aromática Brisa de Inverno da Sensora",
@@ -253,7 +253,6 @@ export const KIT_4_ESTACOES_SHOWCASE: KitShowcase = {
   name: "As Quatro Estações",
   eyebrow: "Kit de Velas Aromáticas",
   tagline: "Quatro fragrâncias para acompanhar todos os momentos do ano.",
-  specs: "4 × 220ml",
   seasons: ["Primavera", "Verão", "Outono", "Inverno"],
   imageSrc:
     "https://ik.imagekit.io/phof1v4q8/sensora/products/kit-velas-1789408972184_kPMp7Nbik.png",
@@ -279,7 +278,7 @@ export const SPRAYS_DE_AMBIENTE: Collection = {
       slug: "baunilha",
       name: "Baunilha",
       description:
-        "Baunilha é uma fragrância doce, cremosa e envolvente. A flor de baunilha se encontra com pera e leite, e o toque de mel e caramelo deixa o ambiente quente, aconchegante e acolhedor.\n\nDetalhes: Frasco com rótulo de acabamento metalizado e válvula spray dourada. O home spray acompanha uma caixa personalizada Parafinesse, desenvolvida especialmente para a coleção e também com detalhes metalizados.\n\nEssência: Baunilha\nFamília Olfativa: Gourmand\n\nNotas de Cabeça:\nBaunilha, Pera e Leite\nNotas de Corpo:\nFlor de Baunilha, Mel e Tonka\nNotas de Fundo:\nCaramelo, Almíscar e Âmbar\n\nVolume: 250ml\nRendimento: Aproximadamente 2.000 borrifadas",
+        "Baunilha é uma fragrância doce, cremosa e envolvente. A flor de baunilha se encontra com pera e leite, e o toque de mel e caramelo deixa o ambiente quente, aconchegante e acolhedor.\n\nDetalhes: Frasco com rótulo de acabamento metalizado e válvula spray dourada. O home spray acompanha uma caixa personalizada Parafinesse, desenvolvida especialmente para a coleção e também com detalhes metalizados.\n\nEssência: Baunilha\nFamília Olfativa: Gourmand\n\nNotas de Cabeça:\nBaunilha, Pera e Leite\nNotas de Corpo:\nFlor de Baunilha, Mel e Tonka\nNotas de Fundo:\nCaramelo, Almíscar e Âmbar",
       mood: "Um aroma doce e envolvente que aquece o ambiente na hora.",
       imageSrc: "/images/products/sprays/baunilha.jpg",
       imageAlt: "Spray de ambiente Baunilha da Sensora",
@@ -291,7 +290,7 @@ export const SPRAYS_DE_AMBIENTE: Collection = {
       slug: "especiarias",
       name: "Especiarias",
       description:
-        "Especiarias é uma fragrância quente, especiada e marcante. Canela, cravo e noz-moscada ganham um fundo ambarado, criando uma atmosfera intensa e aconchegante para perfumar os ambientes.\n\nDetalhes: Frasco com rótulo de acabamento metalizado e válvula spray dourada. O home spray acompanha uma caixa personalizada Parafinesse, desenvolvida especialmente para a coleção e também com detalhes metalizados.\n\nEssência: Especiarias\nFamília Olfativa: Oriental Especiado\n\nNotas de Cabeça:\nLaranja, Canela e Pimenta Rosa\nNotas de Corpo:\nCravo, Noz-moscada e Cardamomo\nNotas de Fundo:\nÂmbar, Sândalo e Baunilha\n\nVolume: 250ml\nRendimento: Aproximadamente 2.000 borrifadas",
+        "Especiarias é uma fragrância quente, especiada e marcante. Canela, cravo e noz-moscada ganham um fundo ambarado, criando uma atmosfera intensa e aconchegante para perfumar os ambientes.\n\nDetalhes: Frasco com rótulo de acabamento metalizado e válvula spray dourada. O home spray acompanha uma caixa personalizada Parafinesse, desenvolvida especialmente para a coleção e também com detalhes metalizados.\n\nEssência: Especiarias\nFamília Olfativa: Oriental Especiado\n\nNotas de Cabeça:\nLaranja, Canela e Pimenta Rosa\nNotas de Corpo:\nCravo, Noz-moscada e Cardamomo\nNotas de Fundo:\nÂmbar, Sândalo e Baunilha",
       mood: "Notas quentes e marcantes que trazem aconchego para a casa.",
       imageSrc: "/images/products/sprays/especiarias.jpg",
       imageAlt: "Spray de ambiente Especiarias da Sensora",
@@ -303,7 +302,7 @@ export const SPRAYS_DE_AMBIENTE: Collection = {
       slug: "flor-de-laranjeira",
       name: "Flor de Laranjeira",
       description:
-        "Flor de Laranjeira é uma fragrância floral, cítrica e luminosa. Neroli e flor de laranjeira se encontram com jasmim e pêssego, deixando o ambiente fresco, delicado e arejado.\n\nDetalhes: Frasco com rótulo de acabamento metalizado e válvula spray dourada. O home spray acompanha uma caixa personalizada Parafinesse, desenvolvida especialmente para a coleção e também com detalhes metalizados.\n\nEssência: Flor de Laranjeira\nFamília Olfativa: Floral Cítrico\n\nNotas de Cabeça:\nNeroli, Bergamota e Petitgrain\nNotas de Corpo:\nFlor de Laranjeira, Jasmim e Pêssego\nNotas de Fundo:\nAlmíscar, Cedro e Âmbar\n\nVolume: 250ml\nRendimento: Aproximadamente 2.000 borrifadas",
+        "Flor de Laranjeira é uma fragrância floral, cítrica e luminosa. Neroli e flor de laranjeira se encontram com jasmim e pêssego, deixando o ambiente fresco, delicado e arejado.\n\nDetalhes: Frasco com rótulo de acabamento metalizado e válvula spray dourada. O home spray acompanha uma caixa personalizada Parafinesse, desenvolvida especialmente para a coleção e também com detalhes metalizados.\n\nEssência: Flor de Laranjeira\nFamília Olfativa: Floral Cítrico\n\nNotas de Cabeça:\nNeroli, Bergamota e Petitgrain\nNotas de Corpo:\nFlor de Laranjeira, Jasmim e Pêssego\nNotas de Fundo:\nAlmíscar, Cedro e Âmbar",
       mood: "Um toque floral e cítrico que renova o ar do ambiente.",
       imageSrc: "/images/products/sprays/flor-de-laranjeira.jpg",
       imageAlt: "Spray de ambiente Flor de Laranjeira da Sensora",
@@ -319,7 +318,7 @@ export const SPRAYS_DE_AMBIENTE: Collection = {
       slug: "brisa-de-inverno",
       name: "Brisa de Inverno",
       description:
-        "Brisa de Inverno é uma fragrância amadeirada, quente e acolhedora. Bergamota, pimenta rosa e eucalipto abrem o aroma, lavanda, cedro e canela aquecem o corpo, e o fundo de âmbar, almíscar e baunilha deixa o ambiente com calor e conforto nos dias mais frios.\n\nDetalhes: Frasco com rótulo de acabamento metalizado e válvula spray dourada. O home spray acompanha uma caixa personalizada Parafinesse, desenvolvida especialmente para a coleção e também com detalhes metalizados.\n\nEssência: Brisa de Inverno\nFamília Olfativa: Amadeirado Oriental\n\nNotas de Cabeça:\nBergamota, Pimenta Rosa e Eucalipto\nNotas de Corpo:\nLavanda, Cedro e Canela\nNotas de Fundo:\nÂmbar, Almíscar e Baunilha\n\nVolume: 250ml\nRendimento: Aproximadamente 2.000 borrifadas",
+        "Brisa de Inverno é uma fragrância amadeirada, quente e acolhedora. Bergamota, pimenta rosa e eucalipto abrem o aroma, lavanda, cedro e canela aquecem o corpo, e o fundo de âmbar, almíscar e baunilha deixa o ambiente com calor e conforto nos dias mais frios.\n\nDetalhes: Frasco com rótulo de acabamento metalizado e válvula spray dourada. O home spray acompanha uma caixa personalizada Parafinesse, desenvolvida especialmente para a coleção e também com detalhes metalizados.\n\nEssência: Brisa de Inverno\nFamília Olfativa: Amadeirado Oriental\n\nNotas de Cabeça:\nBergamota, Pimenta Rosa e Eucalipto\nNotas de Corpo:\nLavanda, Cedro e Canela\nNotas de Fundo:\nÂmbar, Almíscar e Baunilha",
       mood: "Calor e conforto em cada borrifada dos dias mais frios.",
       imageSrc: "/images/categories/sprays-especiarias-ia.jpg",
       imageAlt: "Spray de ambiente Brisa de Inverno da Sensora",
@@ -332,14 +331,14 @@ export const SPRAYS_DE_AMBIENTE: Collection = {
 export const DIFUSORES_DE_AROMA: Collection = {
   slug: "difusores-de-aroma",
   categorySlug: "difusores",
-  name: "Difusores de Aroma",
+  name: "Difusores de Ambiente",
   tagline:
     "Baunilha, Especiarias, Flor de Laranjeira e Brisa de Inverno em uma coleção.",
   description:
     "Fragrância contínua e discreta para manter a atmosfera perfumada o dia inteiro.",
   heroImageSrc: "/images/collections/difusores-flor-de-laranjeira.jpg",
   heroImageAlt:
-    "Difusor de aroma Sensora Flor de Laranjeira sobre uma pedra clara, com ramos de flor de laranjeira e fundo verde",
+    "Difusor de ambiente Sensora Flor de Laranjeira sobre uma pedra clara, com ramos de flor de laranjeira e fundo verde",
   eyebrow: "Produtos",
   ctaLabel: "Conhecer difusores",
   items: [
@@ -347,7 +346,7 @@ export const DIFUSORES_DE_AROMA: Collection = {
       slug: "baunilha",
       name: "Baunilha",
       description:
-        "Baunilha é uma fragrância doce, cremosa e acolhedora. A flor de baunilha se encontra com pera e leite, enquanto mel e caramelo envolvem o aroma. Ao fundo, almíscar e âmbar perfumam o ambiente de forma contínua, criando uma atmosfera quente e aconchegante.\n\nDetalhes: Frasco com rótulo de acabamento metalizado, válvula dourada e palitos de fibra de algodão de alta performance, desenvolvidos para proporcionar excelente absorção e difusão da fragrância.\n\nEssência: Baunilha\nFamília Olfativa: Gourmand\n\nNotas de Cabeça:\nBaunilha, Pera e Leite\nNotas de Corpo:\nFlor de Baunilha, Mel e Tonka\nNotas de Fundo:\nCaramelo, Almíscar e Âmbar\n\nVolume: 250ml",
+        "Baunilha é uma fragrância doce, cremosa e acolhedora. A flor de baunilha se encontra com pera e leite, enquanto mel e caramelo envolvem o aroma. Ao fundo, almíscar e âmbar perfumam o ambiente de forma contínua, criando uma atmosfera quente e aconchegante.\n\nDetalhes: Frasco com rótulo de acabamento metalizado, válvula dourada e palitos de fibra de algodão de alta performance, desenvolvidos para proporcionar excelente absorção e difusão da fragrância.\n\nEssência: Baunilha\nFamília Olfativa: Gourmand\n\nNotas de Cabeça:\nBaunilha, Pera e Leite\nNotas de Corpo:\nFlor de Baunilha, Mel e Tonka\nNotas de Fundo:\nCaramelo, Almíscar e Âmbar",
       mood: "Perfume doce e envolvente, presente no ambiente o dia inteiro.",
       imageSrc: "/images/products/difusores/baunilha.jpg",
       imageAlt: "Difusor de aroma Baunilha da Sensora",
@@ -359,7 +358,7 @@ export const DIFUSORES_DE_AROMA: Collection = {
       slug: "especiarias",
       name: "Especiarias",
       description:
-        "Especiarias é uma fragrância quente, especiada e marcante. Canela, cravo e noz-moscada trazem intensidade, enquanto laranja e pimenta rosa abrem o aroma. Ao fundo, âmbar, sândalo e baunilha envolvem a fragrância, perfumando o ambiente de forma contínua e criando uma atmosfera intensa e acolhedora.\n\nDetalhes: Frasco com rótulo de acabamento metalizado, válvula dourada e palitos de fibra de algodão de alta performance, desenvolvidos para proporcionar excelente absorção e difusão da fragrância.\n\nEssência: Especiarias\nFamília Olfativa: Oriental Especiado\n\nNotas de Cabeça:\nLaranja, Canela e Pimenta Rosa\nNotas de Corpo:\nCravo, Noz-moscada e Cardamomo\nNotas de Fundo:\nÂmbar, Sândalo e Baunilha\n\nVolume: 250ml",
+        "Especiarias é uma fragrância quente, especiada e marcante. Canela, cravo e noz-moscada trazem intensidade, enquanto laranja e pimenta rosa abrem o aroma. Ao fundo, âmbar, sândalo e baunilha envolvem a fragrância, perfumando o ambiente de forma contínua e criando uma atmosfera intensa e acolhedora.\n\nDetalhes: Frasco com rótulo de acabamento metalizado, válvula dourada e palitos de fibra de algodão de alta performance, desenvolvidos para proporcionar excelente absorção e difusão da fragrância.\n\nEssência: Especiarias\nFamília Olfativa: Oriental Especiado\n\nNotas de Cabeça:\nLaranja, Canela e Pimenta Rosa\nNotas de Corpo:\nCravo, Noz-moscada e Cardamomo\nNotas de Fundo:\nÂmbar, Sândalo e Baunilha",
       mood: "Notas quentes e marcantes, difundidas de forma contínua e discreta.",
       imageSrc: "/images/products/difusores/especiarias.jpg",
       imageAlt: "Difusor de aroma Especiarias da Sensora",
@@ -371,7 +370,7 @@ export const DIFUSORES_DE_AROMA: Collection = {
       slug: "flor-de-laranjeira",
       name: "Flor de Laranjeira",
       description:
-        "Flor de Laranjeira é uma fragrância floral, cítrica e luminosa. Neroli e flor de laranjeira se encontram com jasmim e pêssego, enquanto almíscar, cedro e âmbar sustentam o aroma. A difusão contínua deixa o ambiente fresco, delicado e arejado.\n\nDetalhes: Frasco com rótulo de acabamento metalizado, válvula dourada e palitos de fibra de algodão de alta performance, desenvolvidos para proporcionar excelente absorção e difusão da fragrância.\n\nEssência: Flor de Laranjeira\nFamília Olfativa: Floral Cítrico\n\nNotas de Cabeça:\nNeroli, Bergamota e Petitgrain\nNotas de Corpo:\nFlor de Laranjeira, Jasmim e Pêssego\nNotas de Fundo:\nAlmíscar, Cedro e Âmbar\n\nVolume: 250ml",
+        "Flor de Laranjeira é uma fragrância floral, cítrica e luminosa. Neroli e flor de laranjeira se encontram com jasmim e pêssego, enquanto almíscar, cedro e âmbar sustentam o aroma. A difusão contínua deixa o ambiente fresco, delicado e arejado.\n\nDetalhes: Frasco com rótulo de acabamento metalizado, válvula dourada e palitos de fibra de algodão de alta performance, desenvolvidos para proporcionar excelente absorção e difusão da fragrância.\n\nEssência: Flor de Laranjeira\nFamília Olfativa: Floral Cítrico\n\nNotas de Cabeça:\nNeroli, Bergamota e Petitgrain\nNotas de Corpo:\nFlor de Laranjeira, Jasmim e Pêssego\nNotas de Fundo:\nAlmíscar, Cedro e Âmbar",
       mood: "Um toque floral e cítrico que perfuma o ambiente sem pressa.",
       imageSrc: "/images/products/difusores/flor-de-laranjeira.jpg",
       imageAlt: "Difusor de aroma Flor de Laranjeira da Sensora",
@@ -387,7 +386,7 @@ export const DIFUSORES_DE_AROMA: Collection = {
       slug: "brisa-de-inverno",
       name: "Brisa de Inverno",
       description:
-        "Brisa de Inverno é uma fragrância amadeirada, quente e acolhedora. Bergamota, pimenta rosa e eucalipto abrem o aroma, lavanda, cedro e canela aquecem o corpo, e o fundo de âmbar, almíscar e baunilha perfuma o ambiente de forma contínua, com calor e conforto nos dias mais frios.\n\nDetalhes: Frasco com rótulo de acabamento metalizado, válvula dourada e palitos de fibra de algodão de alta performance, desenvolvidos para proporcionar excelente absorção e difusão da fragrância.\n\nEssência: Brisa de Inverno\nFamília Olfativa: Amadeirado Oriental\n\nNotas de Cabeça:\nBergamota, Pimenta Rosa e Eucalipto\nNotas de Corpo:\nLavanda, Cedro e Canela\nNotas de Fundo:\nÂmbar, Almíscar e Baunilha\n\nVolume: 250ml",
+        "Brisa de Inverno é uma fragrância amadeirada, quente e acolhedora. Bergamota, pimenta rosa e eucalipto abrem o aroma, lavanda, cedro e canela aquecem o corpo, e o fundo de âmbar, almíscar e baunilha perfuma o ambiente de forma contínua, com calor e conforto nos dias mais frios.\n\nDetalhes: Frasco com rótulo de acabamento metalizado, válvula dourada e palitos de fibra de algodão de alta performance, desenvolvidos para proporcionar excelente absorção e difusão da fragrância.\n\nEssência: Brisa de Inverno\nFamília Olfativa: Amadeirado Oriental\n\nNotas de Cabeça:\nBergamota, Pimenta Rosa e Eucalipto\nNotas de Corpo:\nLavanda, Cedro e Canela\nNotas de Fundo:\nÂmbar, Almíscar e Baunilha",
       mood: "Calor e conforto, difundidos de forma contínua nos dias mais frios.",
       imageSrc: "/images/categories/difusores-especiarias.jpg",
       imageAlt: "Difusor de aroma Brisa de Inverno da Sensora",
@@ -507,7 +506,7 @@ export const HERO_SLIDES: HeroSlide[] = [
       "Uma presença perfumada que transforma o ambiente em uma extensão do seu estilo.",
     ctaLabel: "Conhecer",
     ctaHref: getCategoryHref("difusores"),
-    imageAlt: "Difusores de aroma Sensora",
+    imageAlt: "Difusores de Ambiente Sensora",
     imageSrc: "/images/hero/difusores-de-aroma-banner.jpg",
     imageSrcMobile: "/mobile/difusores.jpg.jpeg",
   },
@@ -560,13 +559,13 @@ export const FAQ_ITEMS: FaqItem[] = [
     id: "produtos",
     question: "Quais tipos de produtos a Sensora oferece?",
     answer:
-      "Trabalhamos com velas aromáticas, sprays de ambiente e difusores de aroma — produtos de SensoraHome pensados para perfumar e transformar a atmosfera de qualquer espaço.",
+      "Trabalhamos com velas aromáticas, sprays de ambiente e difusores de ambiente — produtos de SensoraHome pensados para perfumar e transformar a atmosfera de qualquer espaço.",
   },
   {
     id: "colecoes",
     question: "Quais coleções estão disponíveis?",
     answer:
-      "Hoje temos três coleções: as Velas 4 Estações, os Sprays de Ambiente e os Difusores de Aroma. Você encontra todas elas na página de Coleções.",
+      "Hoje temos três coleções: as Velas 4 Estações, os Sprays de Ambiente e os Difusores de Ambiente. Você encontra todas elas na página de Coleções.",
   },
   {
     id: "4-estacoes",
@@ -581,16 +580,10 @@ export const FAQ_ITEMS: FaqItem[] = [
       "O kit reúne quatro velas: Frescor de Primavera, Luz de Verão, Manhã de Outono e Brisa de Inverno.",
   },
   {
-    id: "peso-velas",
-    question: "Qual é o volume das velas da coleção 4 Estações?",
-    answer:
-      "Cada vela da coleção 4 Estações vem com 220ml e queima por aproximadamente 40 a 50 horas. O kit completo reúne 4 × 220ml.",
-  },
-  {
     id: "aromas",
     question: "Quais aromas estão disponíveis nos sprays e difusores?",
     answer:
-      "Os sprays de ambiente e os difusores de aroma estão disponíveis nos aromas Baunilha, Especiarias e Flor de Laranjeira.",
+      "Os sprays de ambiente e os difusores de ambiente estão disponíveis nos aromas Baunilha, Especiarias e Flor de Laranjeira.",
   },
   {
     id: "como-comprar",

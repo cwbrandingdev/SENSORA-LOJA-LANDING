@@ -14,6 +14,7 @@ import AvisosProduto from "@/components/loja/AvisosProduto";
 import GaleriaProduto from "@/components/loja/GaleriaProduto";
 import ProdutosRelacionados from "@/components/loja/ProdutosRelacionados";
 import { imagemKitRedimensionada } from "@/lib/loja-imagens";
+import { descricaoSemFichaTecnica } from "@/lib/descricao-produto";
 import JsonLd from "@/components/seo/JsonLd";
 import { OPEN_GRAPH_PADRAO, breadcrumbJsonLd, resumir, urlAbsoluta } from "@/lib/seo";
 
@@ -44,7 +45,8 @@ export async function generateMetadata({
       return { title: "Produto não encontrado" };
     }
     const description = resumir(
-      produto.descricao || `${produto.nome}${produto.aroma ? ` — ${produto.aroma}` : ""}, da Sensora.`,
+      (produto.descricao && descricaoSemFichaTecnica(produto.descricao)) ||
+        `${produto.nome}${produto.aroma ? ` — ${produto.aroma}` : ""}, da Sensora.`,
     );
     return {
       title: produto.nome,
@@ -108,13 +110,19 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
       ? [produto.imagemUrl]
       : [];
 
+  // Descrição sem a ficha técnica do fim do cadastro (volume, peso, tempo
+  // de queima, borrifadas…) — ver lib/descricao-produto.ts.
+  const descricao = produto.descricao
+    ? descricaoSemFichaTecnica(produto.descricao)
+    : "";
+
   // Preço, fotos e disponibilidade nos resultados do Google e para as IAs.
   const produtoJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: produto.nome,
     sku: String(produto.id),
-    ...(produto.descricao && { description: produto.descricao }),
+    ...(descricao && { description: descricao }),
     ...(imagens.length > 0 && { image: imagens.map((url) => urlAbsoluta(url)) }),
     ...(produto.categoria?.nome && { category: produto.categoria.nome }),
     brand: { "@type": "Brand", name: "Sensora" },
@@ -200,13 +208,13 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
             ))}
           </ul>
 
-          {produto.descricao && (
+          {descricao && (
             <div className="mt-10">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-navy">
                 Sobre o produto
               </p>
               <p className="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-slate-600">
-                {produto.descricao}
+                {descricao}
               </p>
             </div>
           )}

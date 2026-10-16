@@ -1,6 +1,7 @@
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import { listarProdutosPublicos, type ProdutoPublico } from "@/lib/api-publica";
 import { LOJA_PRODUTO_URL } from "@/lib/config";
+import { descricaoSemFichaTecnica } from "@/lib/descricao-produto";
 import {
   DIFUSORES_DE_AROMA,
   SPRAYS_DE_AMBIENTE,
@@ -66,7 +67,11 @@ function fromApi(produto: ProdutoPublico): ReleaseItem {
     imagemUrl: produto.imagemUrl,
     preco: produto.preco,
     lancamento: produto.destaque,
-    produto,
+    // Sem a ficha técnica (volume, queima, borrifadas…) nas descrições que
+    // os cards exibem — ver lib/descricao-produto.ts.
+    produto: produto.descricao
+      ? { ...produto, descricao: descricaoSemFichaTecnica(produto.descricao) }
+      : produto,
   };
 }
 

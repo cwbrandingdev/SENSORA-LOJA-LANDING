@@ -13,6 +13,7 @@ import { useToast } from "@/context/ToastContext";
 import { statusEstoque } from "@/lib/estoque";
 import type { ReleaseItem } from "./LatestReleaseCard";
 import { imagemKitRedimensionada } from "@/lib/loja-imagens";
+import { descricaoSemFichaTecnica } from "@/lib/descricao-produto";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -65,7 +66,9 @@ export default function KitSeloCircular({ item }: { item: ReleaseItem }) {
   const idCirculo = useId();
   const [imagemQuebrou, setImagemQuebrou] = useState(false);
   const textoSelo = `Kit exclusivo · ${item.nome} · Sensora · `.toUpperCase();
-  const descricao = item.produto?.descricao?.trim();
+  const descricao = item.produto?.descricao
+    ? descricaoSemFichaTecnica(item.produto.descricao)
+    : undefined;
 
   return (
     <div className="mx-auto grid max-w-5xl items-center gap-12 md:grid-cols-2">

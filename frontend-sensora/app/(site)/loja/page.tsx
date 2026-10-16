@@ -22,7 +22,7 @@ import Button from "@/components/ui/Button";
 export const metadata: Metadata = {
   title: "Loja",
   description:
-    "Loja oficial Sensora: compre velas aromáticas, sprays de ambiente, difusores de aroma e kits.",
+    "Loja oficial Sensora: compre velas aromáticas, sprays de ambiente, difusores de ambiente e kits.",
   alternates: { canonical: "/loja" },
 };
 

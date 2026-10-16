@@ -1,12 +1,12 @@
 # Sensora
 
-> Sensora (SensoraHome) é uma marca brasileira de aromatização de ambientes, de Curitiba/PR. Vende online velas aromáticas veganas, sprays de ambiente, difusores de aroma e kits. Empresa: Cazarim & Souza Ltda, CNPJ 48.942.001/0001-81.
+> Sensora (SensoraHome) é uma marca brasileira de aromatização de ambientes, de Curitiba/PR. Vende online velas aromáticas veganas, sprays de ambiente, difusores de ambiente e kits. Empresa: Cazarim & Souza Ltda, CNPJ 48.942.001/0001-81.
 
 ## Produtos
 
-- Velas aromáticas — coleção 4 Estações: Frescor de Primavera, Luz de Verão, Manhã de Outono e Brisa de Inverno. Velas veganas de cera de coco 100% vegetal, sem parafina. Vendidas avulsas ou no Kit As Quatro Estações. Notas olfativas, volume e tempo de queima estão na página de cada produto.
+- Velas aromáticas — coleção 4 Estações: Frescor de Primavera, Luz de Verão, Manhã de Outono e Brisa de Inverno. Velas veganas de cera de coco 100% vegetal, sem parafina. Vendidas avulsas ou no Kit As Quatro Estações. Notas olfativas estão na página de cada produto.
 - Sprays de ambiente — aromas Baunilha, Especiarias e Flor de Laranjeira.
-- Difusores de aroma — aromas Baunilha, Especiarias e Flor de Laranjeira.
+- Difusores de ambiente — aromas Baunilha, Especiarias e Flor de Laranjeira.
 
 ## Páginas principais
 

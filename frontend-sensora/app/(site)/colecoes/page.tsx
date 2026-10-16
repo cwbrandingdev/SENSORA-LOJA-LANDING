@@ -4,22 +4,10 @@ import { ArrowRight } from "lucide-react";
 import ImageReveal from "@/components/ui/ImageReveal";
 import PlaceholderImage from "@/components/ui/PlaceholderImage";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
-import { COLLECTIONS, getCollectionHref, type Collection } from "@/lib/content";
-
-// Ponto de foco de cada banner: as fotos são panorâmicas e os produtos não
-// ficam no meio. Sem isso, o corte em retrato dos cartões (object-cover,
-// centro 50%) deixa os produtos de lado. Valores medidos nas próprias
-// imagens — ao trocar a foto de uma coleção, conferir de novo.
-const FOCO: Record<string, string> = {
-  "4-estacoes": "object-[31%_50%]",
-  "sprays-de-ambiente": "object-[51%_50%]",
-  "difusores-de-aroma": "object-[35%_50%]",
-};
-
-function rotuloAromas(collection: Collection) {
-  const total = collection.items.length;
-  return `${collection.eyebrow ?? "Kit"} · ${total} ${total === 1 ? "aroma" : "aromas"}`;
-}
+import EmptyState from "@/components/ui/EmptyState";
+import { listarProdutosPublicos } from "@/lib/api-publica";
+import { LOJA_PRODUTO_URL } from "@/lib/config";
+import { imagemKitRedimensionada } from "@/lib/loja-imagens";
 
 export const metadata: Metadata = {
   title: "Kits",
@@ -28,7 +16,21 @@ export const metadata: Metadata = {
   alternates: { canonical: "/colecoes" },
 };
 
-export default function ColecoesPage() {
+const formatPrice = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+// Só entra kit cadastrado no Admin: produto real cuja categoria é a de kits
+// (slug "kits", tolerando variações de sufixo — mesmo critério do grupo
+// Kits da home em LatestReleases). Coleções editoriais de lib/content.ts
+// (Velas 4 Estações, Sprays, Difusores) não aparecem aqui.
+export default async function ColecoesPage() {
+  const produtos = await listarProdutosPublicos();
+  const kits = produtos.filter((produto) =>
+    produto.categoria?.slug.startsWith("kit"),
+  );
+
   return (
     <>
       <section className="relative mx-auto max-w-3xl overflow-hidden px-6 py-8 text-center lg:px-10">
@@ -45,66 +47,72 @@ export default function ColecoesPage() {
         </RevealOnScroll>
       </section>
 
-      {/* Grade: as coleções lado a lado em cartões altos, texto sobre a foto.
-          Os aromas ficam sempre visíveis no toque; no desktop sobem no hover. */}
       <div className="mx-auto max-w-7xl px-6 pb-24 sm:pb-32 lg:px-10 lg:pb-40">
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-          {COLLECTIONS.map((collection, index) => (
-            <RevealOnScroll key={collection.slug} delayMs={index * 120}>
-              <Link
-                href={getCollectionHref(collection)}
-                className="group relative block aspect-3/4 w-full overflow-hidden rounded-sm bg-white shadow-lg shadow-brand-navy/10"
+        {kits.length === 0 ? (
+          <EmptyState
+            title="Novidades a caminho"
+            message="Em breve, novos kits por aqui."
+          />
+        ) : (
+          /* Cartões altos com texto sobre a foto, centralizados como grupo
+             quando há menos kits do que colunas. */
+          <div className="flex flex-wrap justify-center gap-5">
+            {kits.map((kit, index) => (
+              <RevealOnScroll
+                key={kit.id}
+                delayMs={index * 120}
+                className="w-full sm:w-[calc(50%-0.625rem)] lg:w-[calc((100%-2.5rem)/3)]"
               >
-                <ImageReveal>
-                  <PlaceholderImage
-                    src={collection.heroImageSrc}
-                    alt={collection.heroImageAlt ?? collection.name}
-                    label={collection.name}
-                    sizes="(min-width: 768px) 33vw, 100vw"
-                    className={`transition-transform duration-[1600ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04] ${FOCO[collection.slug] ?? ""}`}
-                  />
-                </ImageReveal>
-                <div
-                  aria-hidden
-                  className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent"
-                />
-                <div className="absolute inset-x-0 bottom-0 flex flex-col items-start p-6 text-left sm:p-8">
-                  <span className="font-serif text-sm text-brand-orange-light">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <h2 className="mt-2 font-serif text-2xl font-normal text-white sm:text-3xl">
-                    {collection.name}
-                  </h2>
-                  {collection.tagline && (
-                    <p className="mt-2 text-sm text-white/75">
-                      {collection.tagline}
-                    </p>
-                  )}
-                  <ul
-                    aria-label={rotuloAromas(collection)}
-                    className="mt-4 flex flex-wrap gap-1.5 transition-all duration-500 pointer-fine:max-h-0 pointer-fine:opacity-0 pointer-fine:group-hover:max-h-40 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-visible:max-h-40 pointer-fine:group-focus-visible:opacity-100"
-                  >
-                    {collection.items.map((item) => (
-                      <li
-                        key={item.slug}
-                        className="rounded-full border border-white/40 px-3 py-1 text-[11px] text-white/90"
-                      >
-                        {item.seasonLabel ?? item.name}
-                      </li>
-                    ))}
-                  </ul>
-                  <span className="mt-5 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-orange-light">
-                    {collection.ctaLabel ?? "Conhecer kit"}
-                    <ArrowRight
-                      className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
-                      strokeWidth={1.75}
+                <Link
+                  href={LOJA_PRODUTO_URL(kit.slug)}
+                  className="group relative block aspect-3/4 w-full overflow-hidden rounded-sm bg-white shadow-lg shadow-brand-navy/10"
+                >
+                  <ImageReveal>
+                    <PlaceholderImage
+                      src={
+                        kit.imagemUrl
+                          ? imagemKitRedimensionada(kit.imagemUrl, 900)
+                          : undefined
+                      }
+                      alt={kit.nome}
+                      label={kit.nome}
+                      sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                      unoptimized={kit.imagemUrl?.startsWith(
+                        "https://ik.imagekit.io",
+                      )}
+                      className="transition-transform duration-1600 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
                     />
-                  </span>
-                </div>
-              </Link>
-            </RevealOnScroll>
-          ))}
-        </div>
+                  </ImageReveal>
+                  <div
+                    aria-hidden
+                    className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 flex flex-col items-start p-6 text-left sm:p-8">
+                    <span className="font-serif text-sm text-brand-orange-light">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <h2 className="mt-2 font-serif text-2xl font-normal text-white sm:text-3xl">
+                      {kit.nome}
+                    </h2>
+                    {kit.aroma && kit.aroma !== kit.nome && (
+                      <p className="mt-2 text-sm text-white/75">{kit.aroma}</p>
+                    )}
+                    <p className="mt-3 text-base font-medium tabular-nums text-white">
+                      {formatPrice.format(kit.preco)}
+                    </p>
+                    <span className="mt-5 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-orange-light">
+                      Conhecer kit
+                      <ArrowRight
+                        className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+                        strokeWidth={1.75}
+                      />
+                    </span>
+                  </div>
+                </Link>
+              </RevealOnScroll>
+            ))}
+          </div>
+        )}
       </div>
     </>
   );
