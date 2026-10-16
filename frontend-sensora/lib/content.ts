@@ -365,11 +365,7 @@ const DIFUSORES_DE_AROMA: Collection = {
   ],
 };
 
-export const COLLECTIONS: Collection[] = [
-  VELAS_4_ESTACOES,
-  SPRAYS_DE_AMBIENTE,
-  DIFUSORES_DE_AROMA,
-];
+export const COLLECTIONS: Collection[] = [VELAS_4_ESTACOES];
 
 export function getCollectionsByCategory(categorySlug: string): Collection[] {
   return COLLECTIONS.filter(
