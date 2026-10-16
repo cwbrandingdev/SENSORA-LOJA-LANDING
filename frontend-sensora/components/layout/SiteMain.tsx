@@ -1,12 +1,8 @@
-// O respiro do topo (altura da navbar fixa) é decidido por CSS, não por
-// usePathname(): na Vercel, a regeneração ISR da home renderiza com pathname
-// "/index" (não "/"), e o HTML servido saía com o padding — a "barra branca"
-// acima do hero. Seções full-bleed que ficam por baixo da navbar marcam-se
-// com `data-full-bleed` e zeram o padding via :has().
+// A navbar é fixa e sólida (branca, centralizada), então nenhuma seção
+// fica por baixo dela — nem o hero da home. O respiro do topo é sempre a
+// altura da navbar, decidida em CSS (--navbar-height). Decidir por CSS e
+// não por usePathname() evita o problema da regeneração ISR da home na
+// Vercel, que renderiza com pathname "/index" (e não "/").
 export default function SiteMain({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="flex-1 pt-[var(--navbar-height)] has-[>[data-full-bleed]:first-child]:pt-0">
-      {children}
-    </main>
-  );
+  return <main className="flex-1 pt-[var(--navbar-height)]">{children}</main>;
 }

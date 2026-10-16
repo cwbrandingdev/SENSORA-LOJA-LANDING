@@ -55,13 +55,14 @@ export default function HeroCarousel() {
   return (
     <section
       aria-label="Destaques Sensora"
-      data-full-bleed
       className="relative w-full overflow-hidden bg-brand-navy"
     >
       {/* Título principal da home para buscadores, agentes e leitores de
-          tela. Fica aqui dentro (e não antes do carrossel na página) porque
-          o SiteMain só tira o respiro do topo quando o hero é o 1º filho. */}
-      <h1 className="sr-only">Sensora: velas aromáticas, sprays e difusores de ambiente</h1>
+          tela. Fica aqui dentro (e não antes do carrossel na página) para
+          não criar um bloco visível acima do hero. */}
+      <h1 className="sr-only">
+        Sensora: velas aromáticas, sprays e difusores de ambiente
+      </h1>
       <Carousel
         setApi={setApi}
         opts={{ loop: true }}
@@ -71,16 +72,15 @@ export default function HeroCarousel() {
             stopOnInteraction: false,
           }),
         ]}
-        className="h-screen w-full"
+        className="h-[calc(100vh-var(--navbar-height))] w-full"
       >
-        <CarouselContent className="ml-0 h-screen max-sm:touch-pan-y max-sm:touch-pinch-zoom">
+        <CarouselContent className="ml-0 h-[calc(100vh-var(--navbar-height))] max-sm:touch-pan-y max-sm:touch-pinch-zoom">
           {HERO_SLIDES.map((slide, slideIndex) => (
-            <CarouselItem key={slide.id} className="h-screen pl-0">
-              <Link
-                href={slide.ctaHref}
-                aria-label={`${slide.title} — ${slide.ctaLabel}`}
-                className="group/cta relative block h-full w-full overflow-hidden"
-              >
+            <CarouselItem
+              key={slide.id}
+              className="h-[calc(100vh-var(--navbar-height))] pl-0"
+            >
+              <div className="relative block h-full w-full overflow-hidden">
                 <div
                   className={`relative h-full w-full motion-reduce:!scale-100 motion-reduce:!duration-0 sm:transition-transform sm:ease-linear ${
                     slideIndex === index
@@ -88,7 +88,8 @@ export default function HeroCarousel() {
                       : "sm:duration-0 sm:scale-100"
                   }`}
                 >
-                  {slideIndex > 0 && !carregarDemais ? null : slide.imageSrcMobile ? (
+                  {slideIndex > 0 &&
+                  !carregarDemais ? null : slide.imageSrcMobile ? (
                     <>
                       <div className="absolute inset-0 lg:hidden">
                         <PlaceholderImage
@@ -127,7 +128,7 @@ export default function HeroCarousel() {
                   className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/75 via-black/25 to-transparent"
                 />
                 <div
-                  className={`absolute inset-x-0 bottom-0 flex flex-col items-center px-6 text-center text-white ${
+                  className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center text-center text-white ${
                     slide.id === "velas-4-estacoes"
                       ? "pb-8 sm:pb-20"
                       : "pb-16 sm:pb-20"
@@ -159,8 +160,10 @@ export default function HeroCarousel() {
                       {slide.subtitle}
                     </p>
                   )}
-                  <span
-                    className={`inline-flex items-center gap-3 border border-white/70 px-9 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-white transition-[color,background-color,border-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover/cta:border-brand-orange group-hover/cta:bg-brand-orange group-focus-visible/cta:outline-none group-focus-visible/cta:ring-1 group-focus-visible/cta:ring-white/80 group-focus-visible/cta:ring-offset-2 group-focus-visible/cta:ring-offset-brand-navy motion-reduce:transition-colors ${
+                  <Link
+                    href={slide.ctaHref}
+                    aria-label={`${slide.title} — ${slide.ctaLabel}`}
+                    className={`group/cta pointer-events-auto inline-flex items-center gap-3 border border-white/70 px-9 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-white transition-[color,background-color,border-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-brand-orange hover:bg-brand-orange focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy motion-reduce:transition-colors ${
                       slide.id === "velas-4-estacoes" ? "mt-5 sm:mt-8" : "mt-8"
                     }`}
                   >
@@ -171,9 +174,9 @@ export default function HeroCarousel() {
                     >
                       →
                     </span>
-                  </span>
+                  </Link>
                 </div>
-              </Link>
+              </div>
             </CarouselItem>
           ))}
         </CarouselContent>

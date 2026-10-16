@@ -203,7 +203,7 @@ export default function Navbar() {
       >
         <div className="pointer-events-auto lg:hidden">
           <div className="border-b border-stone-200/80 bg-background">
-            <div className="grid h-14 grid-cols-3 items-center px-4">
+            <div className="grid h-[calc(var(--navbar-height)-1px)] grid-cols-3 items-center px-4">
               <button
                 type="button"
                 onClick={toggleMenu}
@@ -329,7 +329,7 @@ export default function Navbar() {
         </div>
 
         <div className="pointer-events-auto hidden border-b border-stone-200/80 bg-white lg:block">
-          <div className="mx-auto flex h-[var(--navbar-height)] max-w-384 flex-col items-center justify-center px-8">
+          <div className="mx-auto flex h-[calc(var(--navbar-height)-1px)] max-w-384 flex-col items-center justify-center px-8">
             <Link
               href="/"
               aria-label="Sensora, ir para o início"
