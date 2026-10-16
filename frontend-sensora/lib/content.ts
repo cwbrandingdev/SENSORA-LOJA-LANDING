@@ -146,7 +146,7 @@ export const CATEGORIES: Category[] = [
     label: "Velas Aromáticas",
     description:
       "Uma combinação de aromas e luz para acompanhar momentos especiais.",
-    imageSrc: "/images/categories/velas-aromaticas.jpg",
+    imageSrc: "/images/categories/velas-aromaticas.webp",
   },
   {
     slug: "sprays",
@@ -647,7 +647,6 @@ export const FAQ_ITEMS: FaqItem[] = [
 ];
 
 export const FOOTER_CONTENT = {
-  tagline: "Onde marcas sentidas, em cada detalhe.",
   contact: {
     email: "contato@sensorahome.com.br",
     phone: "",

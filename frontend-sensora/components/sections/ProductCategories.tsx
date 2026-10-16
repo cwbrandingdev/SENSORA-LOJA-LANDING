@@ -50,9 +50,7 @@ export default function ProductCategories() {
             id="produtos-heading"
             className="mt-4 font-serif text-3xl font-normal text-brand-navy sm:text-4xl"
           >
-            <TextReveal>
-              Uma experiência sensorial para cada ambiente
-            </TextReveal>
+            <TextReveal>Uma experiência para cada ambiente</TextReveal>
           </h2>
         </RevealOnScroll>
 

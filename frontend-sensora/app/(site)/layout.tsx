@@ -56,7 +56,7 @@ const nunito = Nunito({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Sensora | Velas aromáticas, sprays e difusores de ambiente",
+    default: "Sensora Home | Velas aromáticas, sprays e difusores de ambiente",
     template: "%s | Sensora",
   },
   description:

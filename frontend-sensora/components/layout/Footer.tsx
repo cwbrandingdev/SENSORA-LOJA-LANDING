@@ -18,31 +18,6 @@ export default function Footer() {
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 px-6 py-20 sm:grid-cols-2 lg:grid-cols-5 lg:px-10">
         <div className="sm:col-span-2 lg:col-span-2">
           <Logo className="items-start text-left" />
-          <p className="mt-4 max-w-xs text-sm text-white/70">
-            {FOOTER_CONTENT.tagline}
-          </p>
-        </div>
-
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-brand-orange">
-            Navegação
-          </h2>
-          <ul className="mt-4 space-y-2 text-sm text-white/80">
-            {NAV_CATEGORIES.map((item) => (
-              <li key={item.label}>
-                <Link
-                  href={item.href}
-                  className="group relative inline-block transition-colors duration-300 hover:text-white"
-                >
-                  {item.label}
-                  <span
-                    aria-hidden
-                    className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-brand-orange transition-transform duration-300 ease-out group-hover:scale-x-100 motion-reduce:transition-none"
-                  />
-                </Link>
-              </li>
-            ))}
-          </ul>
         </div>
 
         <div>
@@ -164,7 +139,9 @@ export default function Footer() {
             rel="noopener noreferrer"
             className="group inline-flex items-baseline gap-2"
           >
-            <span className="text-[10px] uppercase tracking-[0.25em] text-white/40">feito por</span>
+            <span className="text-[10px] uppercase tracking-[0.25em] text-white/40">
+              feito por
+            </span>
             <span className="bg-[linear-gradient(110deg,rgba(255,255,255,0.7)_40%,#d97f5c_50%,rgba(255,255,255,0.7)_60%)] bg-[length:250%_100%] bg-clip-text bg-[position:100%_0] font-serif text-xl italic text-transparent transition-[background-position] duration-1000 ease-out group-hover:bg-[position:0%_0]">
               CWBranding
             </span>
