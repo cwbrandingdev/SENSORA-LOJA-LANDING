@@ -10,17 +10,20 @@ export const metadata: Metadata = {
     "Condições de uso da loja Sensora, operada pela Cazarim & Souza Ltda: compra, entrega, pagamento, arrependimento e garantia.",
 };
 
+const linkClass = "text-brand-navy underline underline-offset-4";
+
 export default function TermosDeUsoPage() {
   return (
     <LegalPage
       title="Termos de Uso"
-      intro={`Estas são as condições da loja online da ${EMPRESA.razaoSocial}. Atualizado em ${EMPRESA.atualizadoEm}. O que limita direito do consumidor está nesta página e na de trocas, em destaque.`}
+      intro={`Estas são as condições da loja online da ${EMPRESA.razaoSocial}, marca ${EMPRESA.nomeFantasia}. Ao criar uma conta ou concluir uma compra, você contrata com essa empresa. O que limita direito do consumidor está nesta página e na de trocas, em destaque. Atualizado em ${EMPRESA.atualizadoEm}.`}
     >
       <Secao title="Quem vende">
         <IdentificacaoFornecedor />
         <p>
-          Ao criar uma conta ou concluir uma compra, você contrata com essa
-          empresa, que usa a marca {EMPRESA.nomeFantasia}.
+          A loja opera só pela internet. Não há ponto de venda físico da
+          marca. Dúvidas institucionais: {EMPRESA.email}. Pós-venda, nota
+          fiscal e dados pessoais: {EMPRESA.emailSuporte}.
         </p>
       </Secao>
 
@@ -29,17 +32,25 @@ export default function TermosDeUsoPage() {
           Velas aromáticas, sprays de ambiente, difusores de aroma e kits
           desses produtos. Eles perfumam o ambiente. Não são cosmético, não
           são saneante e não têm efeito terapêutico, medicinal ou de
-          desinfecção. Características, preço e disponibilidade de cada item
-          estão na página do produto. Riscos de uso (fogo, ingestão, crianças
-          e animais) também.
+          desinfecção. Características, preço, estoque e riscos de uso (fogo,
+          ingestão, crianças e animais) estão na página de cada item.
+        </p>
+        <p>
+          Promoções valem pelo prazo indicado ou enquanto durar o estoque.
+          Preço e disponibilidade podem mudar até o pagamento ser confirmado.
         </p>
       </Secao>
 
       <Secao title="Conta">
         <p>
-          A compra pede uma conta com nome, e-mail, senha e CPF. Você é
-          responsável por manter a senha e por dados verdadeiros. O CPF é o
-          dado usado na nota fiscal. Telefone é opcional.
+          A compra pede uma conta com nome, e-mail, senha e, para a nota,
+          CPF no cadastro. Você é responsável por manter a senha e por dados
+          verdadeiros. Telefone é pedido no checkout porque a transportadora
+          usa o número na etiqueta. O tratamento desses dados está na{" "}
+          <Link href={ROTAS_LEGAIS.privacidade} className={linkClass}>
+            Política de Privacidade
+          </Link>
+          .
         </p>
       </Secao>
 
@@ -47,53 +58,63 @@ export default function TermosDeUsoPage() {
         <p>
           O preço do produto aparece em reais na página. O frete, com valor e
           prazo em dias úteis, é calculado no checkout a partir do endereço
-          escolhido, antes do pagamento. O total é a soma dos itens e do frete
-          selecionado. Não há taxa escondida nesta etapa.
+          escolhido, antes do pagamento. O total é a soma dos itens e do
+          frete selecionado. Não há taxa escondida nesta etapa.
         </p>
         <p>
-          O pagamento é concluído no ambiente seguro do Asaas. A Sensora não
-          recebe o número do cartão. O pedido só segue depois da confirmação
-          do pagamento.
+          O pagamento é Pix ou cartão de crédito, no ambiente seguro do
+          Asaas. A Sensora não recebe o número do cartão. O pedido só segue
+          depois da confirmação do pagamento. Não há boleto, vale-troca nem
+          cartão-presente neste site.
         </p>
       </Secao>
 
-      <Secao title="Entrega">
+      <Secao title="Área de entrega">
         <p>
-          A entrega é feita pela transportadora escolhida no checkout, no
-          endereço informado. O prazo mostrado é estimativa da transportadora
-          em dias úteis e começa a contar após a postagem. O risco do produto
-          permanece com a loja até a entrega efetiva a você.
+          Por enquanto a loja entrega em um raio de 100 km a partir de
+          Curitiba (região metropolitana). Se o CEP estiver fora dessa área,
+          o checkout avisa e a compra não segue. O prazo mostrado é
+          estimativa da transportadora em dias úteis e começa a contar após a
+          postagem.
+        </p>
+        <p>
+          A entrega é no endereço informado, pela opção escolhida no
+          checkout. O risco do produto permanece com a loja até a entrega
+          efetiva a você. Pedido pago e ainda não enviado pode ter o endereço
+          alterado para outro no mesmo CEP, em Meus Pedidos.
         </p>
       </Secao>
 
       <Secao title="Nota fiscal">
         <p>
-          A {EMPRESA.razaoSocial} é optante pelo Simples Nacional e emite nota
-          fiscal eletrônica da venda de mercadoria. O documento sai no CPF
-          cadastrado e é enviado ao e-mail da compra ou mediante pedido para{" "}
-          <a
-            href={`mailto:${EMPRESA.email}`}
-            className="text-brand-navy underline underline-offset-4"
-          >
-            {EMPRESA.email}
+          A {EMPRESA.razaoSocial} é optante pelo Simples Nacional e emite
+          nota fiscal eletrônica da venda de mercadoria. O documento sai no
+          CPF cadastrado e é enviado ao e-mail da compra ou mediante pedido
+          para{" "}
+          <a href={`mailto:${EMPRESA.emailSuporte}`} className={linkClass}>
+            {EMPRESA.emailSuporte}
           </a>
-          .
+          . Se o CPF estiver em branco, pedimos antes de emitir.
         </p>
       </Secao>
 
-      <Secao title="Arrependimento e defeito">
+      <Secao title="Cancelamento, arrependimento e defeito">
         <p>
-          Compra feita por este site pode ser desfeita em 7 dias contados do
-          recebimento, sem necessidade de defeito e sem justificativa. Defeito
-          do produto segue a garantia legal de 30 dias, por serem produtos de
-          consumo. Não há troca por preferência de aroma, cor ou presente fora
-          desses dois direitos.
+          Pedido pago que ainda não foi enviado pode ser desfeito em Meus
+          Pedidos, por <strong>Solicitar reembolso</strong>.
         </p>
         <p>
-          O passo a passo, inclusive o que é devolvido em dinheiro e quem paga
-          o frete de volta, está em{" "}
-          <Link href={ROTAS_LEGAIS.trocas} className="text-brand-navy underline underline-offset-4">
-            Trocas, devoluções e arrependimento
+          Depois do recebimento, a compra feita por este site pode ser
+          desfeita em 7 dias, sem necessidade de defeito e sem justificativa.
+          Defeito do produto segue a garantia legal de 30 dias, por serem
+          produtos de consumo. Não há troca por preferência de aroma, cor ou
+          presente fora desses dois direitos.
+        </p>
+        <p>
+          O passo a passo, inclusive código de postagem, quem paga o frete de
+          volta e os prazos de estorno no Pix e no cartão, está em{" "}
+          <Link href={ROTAS_LEGAIS.trocas} className={linkClass}>
+            Trocas e devoluções
           </Link>
           .
         </p>
@@ -101,28 +122,34 @@ export default function TermosDeUsoPage() {
 
       <Secao title="Atendimento">
         <p>
-          Dúvida, reclamação, informação sobre pedido e cancelamento entram
-          pelo e-mail {EMPRESA.email}. O recebimento da mensagem é confirmado
-          por resposta nesse mesmo e-mail. Pedidos pagos também aparecem em
-          Minha Conta → Meus Pedidos.
+          Com conta, abra uma solicitação em Minha Conta → Suporte: a
+          resposta chega por e-mail. Também atendemos em {EMPRESA.email} e{" "}
+          {EMPRESA.emailSuporte}, e pelo Instagram {EMPRESA.instagram}. Pedidos
+          pagos aparecem em Minha Conta → Meus Pedidos.
         </p>
       </Secao>
 
       <Secao title="Uso do site">
         <p>
           O conteúdo da loja (textos, fotos e a marca) pertence à empresa ou
-          é usado com licença. Não é permitido usar o site para fraude, ataque
-          ou coleta de dados de outras pessoas.
+          é usado com licença. Não é permitido usar o site para fraude,
+          ataque ou coleta de dados de outras pessoas.
         </p>
         <p>
-          O tratamento de dados pessoais está na{" "}
-          <Link
-            href={ROTAS_LEGAIS.privacidade}
-            className="text-brand-navy underline underline-offset-4"
-          >
-            Política de Privacidade
+          Cookies essenciais e opcionais estão descritos na{" "}
+          <Link href={ROTAS_LEGAIS.cookies} className={linkClass}>
+            Política de Cookies
           </Link>
           .
+        </p>
+      </Secao>
+
+      <Secao title="Alterações destes termos">
+        <p>
+          A versão vigente é a publicada nesta página, com a data no início.
+          Mudança que afete a compra vale para pedidos feitos depois da
+          publicação. Direito já nascido na compra (arrependimento, garantia,
+          nota) continua o da data do pedido.
         </p>
       </Secao>
 

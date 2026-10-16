@@ -600,13 +600,13 @@ export const FAQ_ITEMS: FaqItem[] = [
     id: "arrependimento",
     question: "Posso devolver a compra?",
     answer:
-      "Sim. Em compra feita pelo site, você tem 7 dias contados do recebimento para solicitar a devolução, sem precisar justificar. O pedido é feito por e-mail (suporte@sensorahome.com.br), com o número do pedido. O valor pago, inclusive o frete da ida, é devolvido, e o frete da volta fica por conta da loja. O passo a passo está em Trocas e devoluções.",
+      "Sim. Em compra feita pelo site, você tem 7 dias contados do recebimento para solicitar a devolução, sem precisar justificar. O pedido é feito em Minha Conta → Meus Pedidos, no botão Solicitar devolução. Se não conseguir usar o formulário, escreva para suporte@sensorahome.com.br com o número do pedido. No arrependimento da compra inteira o valor pago, inclusive o frete da ida, é devolvido, e o frete da volta fica por conta da loja. O passo a passo está em Trocas e devoluções.",
   },
   {
     id: "defeito",
     question: "E se o produto chegar com defeito?",
     answer:
-      "Vela, spray e difusor têm garantia legal de 30 dias após o recebimento. Escreva para suporte@sensorahome.com.br descrevendo o problema. Se não for resolvido em 30 dias, você escolhe troca, abatimento do preço ou dinheiro de volta. Não há troca só porque o aroma ou a cor não agradou, fora do prazo de arrependimento.",
+      "Vela, spray e difusor têm garantia legal de 30 dias após o recebimento. Use Solicitar devolução em Meus Pedidos ou escreva para suporte@sensorahome.com.br descrevendo o problema. Se não for resolvido em 30 dias, você escolhe troca, abatimento do preço ou dinheiro de volta. Não há troca só porque o aroma ou a cor não agradou, fora do prazo de arrependimento.",
   },
   {
     id: "nota-fiscal",

@@ -19,7 +19,7 @@ export const EMPRESA = {
   emailSuporte: "suporte@sensorahome.com.br",
   instagram: "@sensoramarketingsensorial",
   instagramUrl: "https://www.instagram.com/sensoramarketingsensorial/",
-  atualizadoEm: "22 de setembro de 2026",
+  atualizadoEm: "16 de outubro de 2026",
 } as const;
 
 export const ENDERECO_LINHA = `${EMPRESA.endereco}, ${EMPRESA.bairro}, ${EMPRESA.cidade}/${EMPRESA.uf}, CEP ${EMPRESA.cep}`;
