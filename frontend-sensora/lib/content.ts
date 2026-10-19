@@ -474,7 +474,7 @@ export const PRODUCT_CATEGORIES: ProductCategory[] = [
     id: "colecoes",
     label: "Kits",
     href: "/colecoes",
-    imageSrc: "/images/categories/kits.png",
+    imageSrc: "/images/categories/kits-4-estacoes.jpg",
   },
 ];
 

@@ -790,7 +790,9 @@ export default function CheckoutPage() {
                     <input
                       type="checkbox"
                       checked={aceiteTermos}
-                      onChange={(event) => setAceiteTermos(event.target.checked)}
+                      onChange={(event) =>
+                        setAceiteTermos(event.target.checked)
+                      }
                       className="mt-1 h-4 w-4 shrink-0 accent-brand-navy"
                     />
                     <span>
@@ -813,8 +815,8 @@ export default function CheckoutPage() {
                   </label>
                   <p className="mt-3 text-xs leading-relaxed text-slate-500">
                     A nota fiscal sai no CPF cadastrado em Dados pessoais. Se
-                    estiver em branco, pedimos por e-mail ({EMPRESA.emailSuporte})
-                    antes de emitir.
+                    estiver em branco, pedimos por e-mail (
+                    {EMPRESA.emailSuporte}) antes de emitir.
                   </p>
 
                   <div className="mt-6 flex flex-col gap-3">
