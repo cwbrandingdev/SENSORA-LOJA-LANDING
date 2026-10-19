@@ -65,6 +65,25 @@ export function cepMetropolitanoProvavel(cep: string): boolean {
   return prefixo >= 83000 && prefixo <= 83899;
 }
 
+// Cidades fora do raio de 100 km de Curitiba, mas com entrega habilitada
+// (faixas oficiais dos Correios por município).
+const FAIXAS_CEP_CIDADES_ATENDIDAS: ReadonlyArray<{
+  min: number;
+  max: number;
+}> = [
+  { min: 13000, max: 13139 }, // Campinas/SP
+  { min: 86000, max: 86099 }, // Londrina/PR
+  { min: 86990, max: 86999 }, // Marialva/PR
+  { min: 60000, max: 60999 }, // Fortaleza/CE
+];
+
+export function cepEmCidadeAtendida(cep: string): boolean {
+  const prefixo = Number(normalizarCep(cep).slice(0, 5));
+  return FAIXAS_CEP_CIDADES_ATENDIDAS.some(
+    ({ min, max }) => prefixo >= min && prefixo <= max,
+  );
+}
+
 export function distanciaKm(origem: Coordenadas, destino: Coordenadas): number {
   const raioTerraKm = 6371;
   const dLat = paraRadiano(destino.lat - origem.lat);
@@ -96,6 +115,10 @@ export async function garantirCepNaAreaDeEntrega(
   }
 
   if (cepDeCuritiba(cepDigitos)) {
+    return;
+  }
+
+  if (cepEmCidadeAtendida(cepDigitos)) {
     return;
   }
 

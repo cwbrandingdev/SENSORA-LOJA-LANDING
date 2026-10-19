@@ -6,6 +6,7 @@ import {
   ORIGEM_ENTREGA,
   RAIO_ENTREGA_KM,
   cepDeCuritiba,
+  cepEmCidadeAtendida,
   cepMetropolitanoProvavel,
   distanciaKm,
   garantirCepNaAreaDeEntrega,
@@ -43,6 +44,14 @@ describe('area-entrega', () => {
       expect(cepMetropolitanoProvavel('83200-000')).toBe(true);
       expect(cepMetropolitanoProvavel('84000-000')).toBe(false);
     });
+
+    it('Campinas, Londrina, Marialva e Fortaleza entram pelas faixas de CEP', () => {
+      expect(cepEmCidadeAtendida('13010-001')).toBe(true);
+      expect(cepEmCidadeAtendida('86010-000')).toBe(true);
+      expect(cepEmCidadeAtendida('86990-000')).toBe(true);
+      expect(cepEmCidadeAtendida('60110-000')).toBe(true);
+      expect(cepEmCidadeAtendida('01310-100')).toBe(false);
+    });
   });
 
   describe('distanciaKm', () => {
@@ -73,6 +82,14 @@ describe('area-entrega', () => {
       const fetchFn = jest.fn();
       await expect(
         garantirCepNaAreaDeEntrega('80410-240', { fetchFn }),
+      ).resolves.toBeUndefined();
+      expect(fetchFn).not.toHaveBeenCalled();
+    });
+
+    it('CEP de Campinas é aceito sem geocodificar', async () => {
+      const fetchFn = jest.fn();
+      await expect(
+        garantirCepNaAreaDeEntrega('13010-001', { fetchFn }),
       ).resolves.toBeUndefined();
       expect(fetchFn).not.toHaveBeenCalled();
     });
