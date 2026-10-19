@@ -1,10 +1,18 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  DefaultValuePipe,
+  Get,
+  ParseIntPipe,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ADMIN_ONLY_ROLES } from '../common/constants/roles.constants';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { DashboardService } from './dashboard.service';
 import { DashboardResumo } from './entities/dashboard-resumo.entity';
+import { DashboardResumoMensal } from './entities/dashboard-resumo-mensal.entity';
 
 // Vistoria do Dashboard operacional (Admin) — @Roles(...ADMIN_ONLY_ROLES) é
 // deliberado (decisão explícita do pedido: "endpoint protegido para ADMIN"),
@@ -22,5 +30,32 @@ export class DashboardController {
   @Get('resumo')
   obterResumo(): Promise<DashboardResumo> {
     return this.dashboardService.obterResumo();
+  }
+
+  @Get('resumo-mensal')
+  obterResumoMensal(
+    @Query('ano', new DefaultValuePipe(undefined), new ParseIntPipe({ optional: true }))
+    ano?: number,
+    @Query('mes', new DefaultValuePipe(undefined), new ParseIntPipe({ optional: true }))
+    mes?: number,
+    @Query(
+      'compararAno',
+      new DefaultValuePipe(undefined),
+      new ParseIntPipe({ optional: true }),
+    )
+    compararAno?: number,
+    @Query(
+      'compararMes',
+      new DefaultValuePipe(undefined),
+      new ParseIntPipe({ optional: true }),
+    )
+    compararMes?: number,
+  ): Promise<DashboardResumoMensal> {
+    return this.dashboardService.obterResumoMensal(
+      ano,
+      mes,
+      compararAno,
+      compararMes,
+    );
   }
 }

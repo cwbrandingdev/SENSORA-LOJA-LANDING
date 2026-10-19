@@ -711,6 +711,45 @@ export type DashboardResumo = {
   clientes: ResumoClientesDashboard;
 };
 
+export type ResumoDiaFaturamento = {
+  dia: string;
+  faturamento: number;
+  pedidosPagos: number;
+};
+
+export type TopProdutoMes = {
+  produtoId: number;
+  nome: string;
+  quantidade: number;
+  faturamento: number;
+};
+
+export type ResumoMesPeriodo = {
+  ano: number;
+  mes: number;
+  label: string;
+  faturamento: number;
+  frete: number;
+  pedidos: ResumoPedidosDashboard;
+  ticketMedio: number;
+  clientesUnicos: number;
+  valorReembolsado: number;
+  porDia: ResumoDiaFaturamento[];
+  topProdutos: TopProdutoMes[];
+};
+
+export type VariacaoResumoMensal = {
+  faturamento: number | null;
+  pedidosPagos: number | null;
+  ticketMedio: number | null;
+};
+
+export type DashboardResumoMensal = {
+  periodo: ResumoMesPeriodo;
+  comparacao: ResumoMesPeriodo;
+  variacao: VariacaoResumoMensal;
+};
+
 // Vistoria de Alertas Operacionais (Admin) — espelha
 // backend/src/alertas/entities/alerta.entity.ts (GET /alertas). Lista
 // SEMPRE só os problemas realmente em aberto (backend nunca inclui um item

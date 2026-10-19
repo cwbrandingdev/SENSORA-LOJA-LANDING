@@ -31,8 +31,11 @@ import {
   Undo2,
   LifeBuoy,
   Activity,
+  FileText,
+  Palette,
   Home,
   Search,
+  BarChart3,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -88,17 +91,23 @@ export function useAdminNav() {
             ...vendas,
             links: [
               ...vendas.links,
+              { href: ROUTES.RESUMO, label: "Resumo", icon: BarChart3 },
               { href: ROUTES.DEVOLUCOES, label: "Devoluções", icon: Undo2 },
               // Suporte também é ADMIN-only (backend: admin/suporte).
               { href: ROUTES.SUPORTE, label: "Suporte", icon: LifeBuoy },
             ],
           },
+
           {
             label: "Sistema",
             links: [
               { href: ROUTES.USUARIOS, label: "Usuários", icon: UserCog },
               { href: ROUTES.INTEGRACOES, label: "Integrações", icon: Plug },
-              { href: ROUTES.OCORRENCIAS, label: "Ocorrências", icon: Activity },
+              {
+                href: ROUTES.OCORRENCIAS,
+                label: "Ocorrências",
+                icon: Activity,
+              },
             ],
           },
         ]
@@ -118,7 +127,11 @@ type SidebarProps = {
   onClose?: () => void;
 };
 
-const DASHBOARD_LINK: SidebarLink = { href: ROUTES.DASHBOARD, label: "Dashboard", icon: LayoutDashboard };
+const DASHBOARD_LINK: SidebarLink = {
+  href: ROUTES.DASHBOARD,
+  label: "Dashboard",
+  icon: LayoutDashboard,
+};
 
 export default function Sidebar({ open = false, onClose }: SidebarProps) {
   const { groups, isActive, logout, pathname } = useAdminNav();
@@ -150,7 +163,10 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
     function handleKeyDown(event: KeyboardEvent) {
       const alvo = event.target as HTMLElement | null;
       const digitando =
-        alvo && (alvo.tagName === "INPUT" || alvo.tagName === "TEXTAREA" || alvo.isContentEditable);
+        alvo &&
+        (alvo.tagName === "INPUT" ||
+          alvo.tagName === "TEXTAREA" ||
+          alvo.isContentEditable);
       if (event.key === "/" && !digitando) {
         event.preventDefault();
         campoBusca.current?.focus();
@@ -164,7 +180,8 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
   // abre a primeira encontrada (destacada na lista). Só navegação — as
   // mesmas páginas/permissões de useAdminNav, nenhuma rota nova.
   const busca = termo.trim().toLowerCase();
-  const casa = (link: SidebarLink) => !busca || link.label.toLowerCase().includes(busca);
+  const casa = (link: SidebarLink) =>
+    !busca || link.label.toLowerCase().includes(busca);
   const secoes = [{ label: "", links: [DASHBOARD_LINK] }, ...groups]
     .map((secao) => ({ ...secao, links: secao.links.filter(casa) }))
     .filter((secao) => secao.links.length > 0);
@@ -218,10 +235,15 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
           </form>
 
           {secoes.length === 0 ? (
-            <p className="px-3 text-sm text-white/50">Nenhuma página encontrada.</p>
+            <p className="px-3 text-sm text-white/50">
+              Nenhuma página encontrada.
+            </p>
           ) : (
             secoes.map((secao) => (
-              <div key={secao.label || "inicio"} className="flex flex-col gap-1">
+              <div
+                key={secao.label || "inicio"}
+                className="flex flex-col gap-1"
+              >
                 {secao.label && (
                   <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/40">
                     {secao.label}
@@ -251,13 +273,17 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
                           <Icon className="h-4 w-4 shrink-0" aria-hidden />
                           {link.label}
                           {destaque ? (
-                            <span className="ml-auto text-[10px] text-white/50">Enter ↵</span>
+                            <span className="ml-auto text-[10px] text-white/50">
+                              Enter ↵
+                            </span>
                           ) : (
                             pendentes > 0 && (
                               <span
                                 aria-label={`${pendentes} pendentes`}
                                 className={`ml-auto rounded-full px-1.5 text-[10px] font-semibold leading-4 ${
-                                  active ? "bg-white text-brand-orange" : "bg-brand-orange text-white"
+                                  active
+                                    ? "bg-white text-brand-orange"
+                                    : "bg-brand-orange text-white"
                                 }`}
                               >
                                 {pendentes}

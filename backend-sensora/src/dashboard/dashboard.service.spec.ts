@@ -10,13 +10,25 @@ import { DashboardService } from './dashboard.service';
 // isolado, sem depender de ordem de chamada.
 function criarPrismaMock(overrides: {
   pedidoGroupBy?: jest.Mock;
+  pedidoFindMany?: jest.Mock;
+  pedidoAggregate?: jest.Mock;
+  itemPedidoGroupBy?: jest.Mock;
   produtoCount?: jest.Mock;
+  produtoFindMany?: jest.Mock;
   categoriaCount?: jest.Mock;
   usuarioCount?: jest.Mock;
 }) {
   return {
-    pedido: { groupBy: overrides.pedidoGroupBy ?? jest.fn() },
-    produto: { count: overrides.produtoCount ?? jest.fn() },
+    pedido: {
+      groupBy: overrides.pedidoGroupBy ?? jest.fn(),
+      findMany: overrides.pedidoFindMany ?? jest.fn(),
+      aggregate: overrides.pedidoAggregate ?? jest.fn(),
+    },
+    itemPedido: { groupBy: overrides.itemPedidoGroupBy ?? jest.fn() },
+    produto: {
+      count: overrides.produtoCount ?? jest.fn(),
+      findMany: overrides.produtoFindMany ?? jest.fn(),
+    },
     categoria: { count: overrides.categoriaCount ?? jest.fn() },
     usuario: { count: overrides.usuarioCount ?? jest.fn() },
   };
@@ -112,5 +124,65 @@ describe('DashboardService — obterResumo', () => {
       _count: { _all: true },
       _sum: { total: true },
     });
+  });
+});
+
+describe('DashboardService — obterResumoMensal', () => {
+  it('agrega faturamento só de PAGO e calcula variação entre meses', async () => {
+    const pedidoGroupBy = jest.fn().mockResolvedValue([
+      { status: StatusPedido.PAGO, _count: { _all: 2 }, _sum: { total: 200 } },
+    ]);
+    const pedidoFindMany = jest.fn().mockResolvedValue([
+      {
+        data: new Date('2026-10-05T12:00:00Z'),
+        total: 120,
+        usuarioId: 1,
+        clienteEmail: 'a@test.com',
+      },
+      {
+        data: new Date('2026-10-06T12:00:00Z'),
+        total: 80,
+        usuarioId: 2,
+        clienteEmail: 'b@test.com',
+      },
+    ]);
+    const pedidoAggregate = jest
+      .fn()
+      .mockResolvedValueOnce({ _sum: { freteValor: 30 } })
+      .mockResolvedValueOnce({ _sum: { total: 0 } })
+      .mockResolvedValueOnce({ _sum: { freteValor: 10 } })
+      .mockResolvedValueOnce({ _sum: { total: 0 } });
+    const itemPedidoGroupBy = jest.fn().mockResolvedValue([
+      {
+        produtoId: 5,
+        _sum: { quantidade: 3, subtotal: 150 },
+      },
+    ]);
+    const produtoFindMany = jest
+      .fn()
+      .mockResolvedValue([{ id: 5, nome: 'Vela Baunilha' }]);
+
+    const prisma = criarPrismaMock({
+      pedidoGroupBy,
+      pedidoFindMany,
+      pedidoAggregate,
+      itemPedidoGroupBy,
+      produtoFindMany,
+    });
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [DashboardService, { provide: PrismaService, useValue: prisma }],
+    }).compile();
+    const service = module.get(DashboardService);
+
+    const resumo = await service.obterResumoMensal(2026, 10, 2026, 9);
+
+    expect(resumo.periodo.faturamento).toBe(200);
+    expect(resumo.periodo.frete).toBe(30);
+    expect(resumo.periodo.pedidos.pagos).toBe(2);
+    expect(resumo.periodo.clientesUnicos).toBe(2);
+    expect(resumo.periodo.topProdutos[0]?.nome).toBe('Vela Baunilha');
+    expect(resumo.variacao.faturamento).not.toBeNull();
+    expect(pedidoGroupBy).toHaveBeenCalled();
   });
 });

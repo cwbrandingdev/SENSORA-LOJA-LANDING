@@ -40,12 +40,14 @@ function transportadoraExigeNfe(transportadora: string | null | undefined): bool
 // desconhecidos são ignorados.
 function filtrosDaUrl(params: URLSearchParams): PedidosFiltrosValue {
   const status = params.get("status");
+  const dataDe = params.get("dataDe");
   const dataAte = params.get("dataAte");
   return {
     ...PEDIDOS_FILTROS_VAZIO,
     ...(status && (Object.values(StatusPedido) as string[]).includes(status)
       ? { status: status as StatusPedido }
       : {}),
+    ...(dataDe && /^\d{4}-\d{2}-\d{2}$/.test(dataDe) ? { dataDe } : {}),
     ...(dataAte && /^\d{4}-\d{2}-\d{2}$/.test(dataAte) ? { dataAte } : {}),
   };
 }

@@ -27,6 +27,8 @@ export const ROUTES = {
   CATEGORIAS: `${ADMIN_ROUTE}/categorias`,
   CLIENTES: `${ADMIN_ROUTE}/clientes`,
   PEDIDOS: `${ADMIN_ROUTE}/pedidos`,
+  /** Resumo mensal de vendas (faturamento, comparação entre meses) — ADMIN-only. */
+  RESUMO: `${ADMIN_ROUTE}/resumo`,
   USUARIOS: `${ADMIN_ROUTE}/usuarios`,
   // Central de Integrações (Admin) — ADMIN-only (ver Sidebar.tsx e
   // app/workspace-x/integracoes/page.tsx), mesmo padrão de USUARIOS acima.
@@ -35,6 +37,9 @@ export const ROUTES = {
   DEVOLUCOES: `${ADMIN_ROUTE}/devolucoes`,
   // Ocorrências de negócio (reembolso, devolução...) — ADMIN-only.
   OCORRENCIAS: `${ADMIN_ROUTE}/ocorrencias`,
+  // CMS do site (páginas/blocos + aparência) — ADMIN-only, mesmo padrão.
+  SITE_PAGINAS: `${ADMIN_ROUTE}/site/paginas`,
+  SITE_APARENCIA: `${ADMIN_ROUTE}/site/aparencia`,
   // Solicitações de suporte abertas pelos clientes — ADMIN-only. O detalhe
   // (/suporte/:id) é o link do e-mail de aviso aos admins (backend:
   // CAMINHO_ADMIN_SUPORTE em suporte.service.ts).
