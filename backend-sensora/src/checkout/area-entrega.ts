@@ -16,7 +16,7 @@ export const ORIGEM_ENTREGA = {
 export const CODIGO_ERRO_AREA_ENTREGA = 'AREA_ENTREGA_FORA_DO_RAIO';
 
 export const MENSAGEM_FORA_DA_AREA =
-  'Por enquanto a loja não está entregando nessa área. Atendemos um raio de 100 km a partir de Curitiba.';
+  'Por enquanto entregamos apenas em Curitiba e região.';
 
 export class AreaEntregaForaDoRaioError extends BadRequestException {
   constructor() {

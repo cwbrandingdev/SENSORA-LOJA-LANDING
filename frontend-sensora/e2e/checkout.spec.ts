@@ -1616,7 +1616,7 @@ test.describe("Checkout — Etapa 6.5: frete", () => {
     await mockFreteCotacaoErroSeguro(
       page,
       400,
-      "Por enquanto a loja não está entregando nessa área. Atendemos um raio de 100 km a partir de Curitiba.",
+      "Por enquanto entregamos apenas em Curitiba e região.",
       "AREA_ENTREGA_FORA_DO_RAIO",
     );
     const sessionRequests = captureCheckoutSessionRequests(page);
@@ -1625,7 +1625,7 @@ test.describe("Checkout — Etapa 6.5: frete", () => {
 
     await expect(
       page.getByText(
-        "Por enquanto a loja não está entregando nessa área. Atendemos um raio de 100 km a partir de Curitiba.",
+        "Por enquanto entregamos apenas em Curitiba e região.",
       ),
     ).toBeVisible();
     await expect(
