@@ -110,6 +110,10 @@ const ENDERECO_SECUNDARIO = {
   padrao: false,
 };
 
+function comboboxEndereco(page: Page) {
+  return page.getByRole("combobox", { name: "Selecione um endereço" });
+}
+
 async function mockMeuPerfil(page: Page, telefone: string | null = "41999999999") {
   await page.route("**/usuarios/me", async (route) => {
     if (route.request().method() !== "GET") {
@@ -511,7 +515,7 @@ test.describe("Checkout — endereços", () => {
 
     await page.goto(CHECKOUT_URL);
     await expect(page.locator('[aria-busy="true"]')).toBeVisible();
-    await expect(page.getByRole("radiogroup", { name: "Selecione um endereço" })).toBeVisible();
+    await expect(comboboxEndereco(page)).toBeVisible();
   });
 
   test("nenhum endereço cadastrado mostra estado vazio com CTA", async ({ page }) => {
@@ -532,14 +536,9 @@ test.describe("Checkout — endereços", () => {
 
     await page.goto(CHECKOUT_URL);
 
-    // Etapa 6.5 (Frete) — escopado ao radiogroup de endereço: a página
-    // agora também renderiza um radiogroup de frete (mesmo role="radio"),
-    // então `page.getByRole("radio")` sem escopo bateria nos dois juntos.
-    const radiogroupEndereco = page.getByRole("radiogroup", { name: "Selecione um endereço" });
-    await expect(radiogroupEndereco.getByRole("radio")).toHaveCount(2);
-    await expect(
-      radiogroupEndereco.getByRole("radio").filter({ hasText: "Rua das Flores" }),
-    ).toHaveAttribute("aria-checked", "true");
+    const select = comboboxEndereco(page);
+    await expect(select.locator("option")).toHaveCount(2);
+    await expect(select).toHaveValue(String(ENDERECO_PADRAO.id));
   });
 
   test("sem endereço padrão, seleciona o primeiro da lista", async ({ page }) => {
@@ -550,40 +549,35 @@ test.describe("Checkout — endereços", () => {
 
     await page.goto(CHECKOUT_URL);
 
-    await expect(
-      page.getByRole("radiogroup", { name: "Selecione um endereço" }).getByRole("radio").first(),
-    ).toHaveAttribute("aria-checked", "true");
+    await expect(comboboxEndereco(page)).toHaveValue(String(semPadrao.id));
   });
 
-  test("clicar em outro endereço troca a seleção", async ({ page }) => {
+  test("trocar o endereço no select atualiza a seleção", async ({ page }) => {
     await seedSession(page);
     await seedCart(page, [CART_ITEM]);
     await mockEnderecos(page, [ENDERECO_PADRAO, ENDERECO_SECUNDARIO]);
 
     await page.goto(CHECKOUT_URL);
 
-    const segundo = page.getByRole("radio").filter({ hasText: "Avenida Brasil" });
-    await segundo.click();
+    const select = comboboxEndereco(page);
+    await select.selectOption(String(ENDERECO_SECUNDARIO.id));
 
-    await expect(segundo).toHaveAttribute("aria-checked", "true");
-    await expect(page.getByRole("radio").filter({ hasText: "Rua das Flores" })).toHaveAttribute(
-      "aria-checked",
-      "false",
-    );
+    await expect(select).toHaveValue(String(ENDERECO_SECUNDARIO.id));
   });
 
-  test("navegação por teclado seleciona um endereço", async ({ page }) => {
+  test("navegação por teclado no select troca o endereço", async ({ page }) => {
     await seedSession(page);
     await seedCart(page, [CART_ITEM]);
     await mockEnderecos(page, [ENDERECO_PADRAO, ENDERECO_SECUNDARIO]);
 
     await page.goto(CHECKOUT_URL);
 
-    const segundo = page.getByRole("radio").filter({ hasText: "Avenida Brasil" });
-    await segundo.focus();
+    const select = comboboxEndereco(page);
+    await select.focus();
+    await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
 
-    await expect(segundo).toHaveAttribute("aria-checked", "true");
+    await expect(select).toHaveValue(String(ENDERECO_SECUNDARIO.id));
   });
 
   test("erro ao carregar mostra mensagem amigável com Tentar novamente", async ({ page }) => {
@@ -603,7 +597,7 @@ test.describe("Checkout — endereços", () => {
     await mockEnderecos(page, [ENDERECO_PADRAO]);
     await retry.click();
 
-    await expect(page.getByRole("radiogroup", { name: "Selecione um endereço" })).toBeVisible();
+    await expect(comboboxEndereco(page)).toBeVisible();
   });
 
   test("cadastra novo endereço, ele aparece na lista e é selecionado", async ({ page }) => {
@@ -643,11 +637,10 @@ test.describe("Checkout — endereços", () => {
 
     await expect(page.getByText("Endereço cadastrado com sucesso.")).toBeVisible();
 
-    const radiogroupEndereco = page.getByRole("radiogroup", { name: "Selecione um endereço" });
-    await expect(radiogroupEndereco.getByRole("radio")).toHaveCount(2);
-    const novoCard = radiogroupEndereco.getByRole("radio").filter({ hasText: "Rua Nova" });
-    await expect(novoCard).toBeVisible();
-    await expect(novoCard).toHaveAttribute("aria-checked", "true");
+    const select = comboboxEndereco(page);
+    await expect(select.locator("option")).toHaveCount(2);
+    await expect(select).toHaveValue(String(novoEndereco.id));
+    await expect(page.getByText("Rua Nova, 10")).toBeVisible();
   });
 });
 
@@ -781,7 +774,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
     });
 
     await page.goto(CHECKOUT_URL);
-    await page.getByRole("radio").filter({ hasText: "Avenida Brasil" }).click();
+    await comboboxEndereco(page).selectOption(String(ENDERECO_SECUNDARIO.id));
     await aceitarTermosDeCompra(page);
     await page.locator("aside").getByRole("button").click();
     await page.waitForURL(URL_PAGAMENTO);
@@ -849,7 +842,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
     const sessionRequests = captureCheckoutSessionRequests(page);
 
     await page.goto(CHECKOUT_URL);
-    await page.getByRole("radiogroup", { name: "Selecione um endereço" }).waitFor();
+    await comboboxEndereco(page).waitFor();
 
     // Simula a sessão sendo limpa depois que a página já carregou (ex.:
     // logout em outra aba) — igual a removeToken() (lib/storage.ts):
@@ -1004,7 +997,7 @@ test.describe("Checkout — console e responsividade", () => {
       await mockEnderecos(page, [ENDERECO_PADRAO, ENDERECO_SECUNDARIO]);
 
       await page.goto(CHECKOUT_URL);
-      await page.getByRole("radiogroup", { name: "Selecione um endereço" }).waitFor();
+      await comboboxEndereco(page).waitFor();
 
       expect(await hasHorizontalOverflow(page)).toBe(false);
 
@@ -1100,7 +1093,7 @@ test.describe("Checkout — Task 16: tratamento de erros", () => {
     const asaasCalls = trackAsaasCalls(page);
 
     await page.goto(CHECKOUT_URL);
-    await page.getByRole("radiogroup", { name: "Selecione um endereço" }).waitFor();
+    await comboboxEndereco(page).waitFor();
     const chamadasAntes = enderecosGetCalls.count;
 
     const button = page.getByRole("button", { name: "Continuar para pagamento →" });
@@ -1695,7 +1688,7 @@ test.describe("Checkout — Etapa 6.5: frete", () => {
       .waitFor();
     const cotacoesAntes = cotacoes.length;
 
-    await page.getByRole("radio").filter({ hasText: "Avenida Brasil" }).click();
+    await comboboxEndereco(page).selectOption(String(ENDERECO_SECUNDARIO.id));
 
     await expect
       .poll(() => cotacoes.length)

@@ -14,8 +14,8 @@ import { isAxiosError } from "axios";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
-import EnderecoCard from "@/components/loja/EnderecoCard";
-import EnderecoCardSkeleton from "@/components/loja/EnderecoCardSkeleton";
+import EnderecoSelect from "@/components/loja/EnderecoSelect";
+import EnderecoSelectSkeleton from "@/components/loja/EnderecoSelectSkeleton";
 import EnderecoForm, {
   type EnderecoFormValues,
 } from "@/components/loja/EnderecoForm";
@@ -577,13 +577,8 @@ export default function CheckoutPage() {
 
                   <div className="mt-6">
                     {carregando ? (
-                      <div
-                        className="flex flex-col gap-3"
-                        aria-busy="true"
-                        aria-live="polite"
-                      >
-                        <EnderecoCardSkeleton />
-                        <EnderecoCardSkeleton />
+                      <div aria-live="polite">
+                        <EnderecoSelectSkeleton />
                       </div>
                     ) : erro ? (
                       <div className="flex flex-col items-center gap-4 rounded-sm border border-red-200 bg-red-50 px-6 py-10 text-center">
@@ -614,26 +609,13 @@ export default function CheckoutPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex flex-col gap-6">
-                        {enderecos.length > 0 && (
-                          <div
-                            className="flex flex-col gap-3"
-                            role="radiogroup"
-                            aria-label="Selecione um endereço"
-                          >
-                            {enderecos.map((endereco) => (
-                              <EnderecoCard
-                                key={endereco.id}
-                                endereco={endereco}
-                                selecionado={
-                                  endereco.id === enderecoSelecionadoId
-                                }
-                                onSelecionar={() =>
-                                  setEnderecoSelecionadoId(endereco.id)
-                                }
-                              />
-                            ))}
-                          </div>
+                      <div className="flex flex-col gap-4">
+                        {enderecos.length > 0 && !mostrarFormulario && (
+                          <EnderecoSelect
+                            enderecos={enderecos}
+                            selecionadoId={enderecoSelecionadoId}
+                            onSelecionar={setEnderecoSelecionadoId}
+                          />
                         )}
 
                         {mostrarFormulario ? (
