@@ -22,6 +22,7 @@ import { BackLink } from "@/components/conta/AccountPageHeader";
 import StatusPedidoBadge from "@/components/conta/StatusPedidoBadge";
 import AcompanhamentoPedido from "@/components/conta/AcompanhamentoPedido";
 import HistoricoDevolucoes from "@/components/conta/HistoricoDevolucoes";
+import AvaliacoesPedido from "@/components/conta/AvaliacoesPedido";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import {
@@ -516,6 +517,8 @@ export default function MeuPedidoDetalhePage() {
               />
             </div>
           </div>
+
+          <AvaliacoesPedido pedido={dados.pedido} itens={dados.itens} />
 
           <div className="mt-10">
             <h2 className="font-serif text-xl font-normal text-brand-navy">

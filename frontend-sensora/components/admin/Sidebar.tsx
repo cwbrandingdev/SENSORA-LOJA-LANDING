@@ -30,6 +30,7 @@ import {
   Plug,
   Undo2,
   LifeBuoy,
+  Star,
   Activity,
   FileText,
   Palette,
@@ -95,6 +96,7 @@ export function useAdminNav() {
               { href: ROUTES.DEVOLUCOES, label: "Devoluções", icon: Undo2 },
               // Suporte também é ADMIN-only (backend: admin/suporte).
               { href: ROUTES.SUPORTE, label: "Suporte", icon: LifeBuoy },
+              { href: ROUTES.AVALIACOES, label: "Avaliações", icon: Star },
             ],
           },
 

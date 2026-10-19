@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ShieldCheck, Truck, Undo2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import {
+  buscarAvaliacoesDoProduto,
   buscarProdutoPublicoPorSlug,
   ApiPublicaIndisponivelError,
 } from "@/lib/api-publica";
@@ -13,6 +14,8 @@ import AddToCartControls from "@/components/loja/AddToCartControls";
 import AvisosProduto from "@/components/loja/AvisosProduto";
 import GaleriaProduto from "@/components/loja/GaleriaProduto";
 import ProdutosRelacionados from "@/components/loja/ProdutosRelacionados";
+import AvaliacoesProduto from "@/components/loja/AvaliacoesProduto";
+import Estrelas from "@/components/loja/Estrelas";
 import { imagemKitRedimensionada } from "@/lib/loja-imagens";
 import { descricaoSemFichaTecnica } from "@/lib/descricao-produto";
 import JsonLd from "@/components/seo/JsonLd";
@@ -116,7 +119,12 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
     ? descricaoSemFichaTecnica(produto.descricao)
     : "";
 
-  // Preço, fotos e disponibilidade nos resultados do Google e para as IAs.
+  // Avaliações aprovadas; se a API falhar, a seção só não aparece.
+  const avaliacoes = await buscarAvaliacoesDoProduto(produto.slug);
+  const comAvaliacoes = avaliacoes !== null && avaliacoes.total > 0 && avaliacoes.media !== null;
+
+  // Preço, fotos, disponibilidade e avaliações nos resultados do Google e
+  // para as IAs.
   const produtoJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -135,6 +143,22 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
       availability:
         produto.quantidade > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
     },
+    ...(comAvaliacoes && {
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: avaliacoes.media,
+        reviewCount: avaliacoes.total,
+        bestRating: 5,
+        worstRating: 1,
+      },
+      review: avaliacoes.avaliacoes.slice(0, 10).map((a) => ({
+        "@type": "Review",
+        author: { "@type": "Person", name: a.nomeExibicao },
+        datePublished: a.criadaEm.slice(0, 10),
+        reviewRating: { "@type": "Rating", ratingValue: a.nota, bestRating: 5, worstRating: 1 },
+        ...(a.comentario && { reviewBody: a.comentario }),
+      })),
+    }),
   };
 
   return (
@@ -180,6 +204,16 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
             <p className="mt-3 text-[15px] italic text-slate-600">
               {produto.aroma}
             </p>
+          )}
+
+          {comAvaliacoes && (
+            <a href="#avaliacoes" className="mt-3 inline-flex w-fit items-center gap-2 text-sm text-slate-600 hover:text-brand-navy">
+              <Estrelas valor={avaliacoes.media!} tamanho="sm" />
+              <span>
+                {avaliacoes.media!.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ·{" "}
+                {avaliacoes.total} {avaliacoes.total === 1 ? "avaliação" : "avaliações"}
+              </span>
+            </a>
           )}
 
           <p className="mt-6 text-3xl font-semibold tracking-tight tabular-nums text-brand-navy">
@@ -241,6 +275,8 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
           </div>
         </RevealOnScroll>
       </div>
+
+      {avaliacoes && <AvaliacoesProduto resumo={avaliacoes} />}
 
       <ProdutosRelacionados atual={produto} />
     </div>

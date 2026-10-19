@@ -79,6 +79,7 @@ model Usuario {
   ocorrencias             Ocorrencia[]
   // Solicitações de suporte abertas pelo próprio usuário (cliente).
   solicitacoesSuporte     SolicitacaoSuporte[]
+  avaliacoes              Avaliacao[]
 }
 
 // Task 8 (Carrinho/Checkout) — endereços de entrega do próprio usuário
@@ -152,6 +153,7 @@ model Produto {
   categoriaId Int?
   itensPedido ItemPedido[]
   categoria   Categoria?   @relation(fields: [categoriaId], references: [id])
+  avaliacoes  Avaliacao[]
 }
 
 model Pedido {
@@ -218,13 +220,16 @@ model Pedido {
   // PedidosService.marcarComoEnviado — nunca escrito em nenhum outro lugar
   // (create/update genérico não aceitam este campo, ver CreatePedidoDto/
   // UpdatePedidoDto), então não há como um pedido nascer "ENVIADO".
-  statusEnvio StatusEnvio @default(NAO_ENVIADO)
-  enviadoEm   DateTime?
+  statusEnvio         StatusEnvio @default(NAO_ENVIADO)
+  enviadoEm           DateTime?
+  // Lembrete por e-mail para avaliar já enviado (um só por pedido; ver
+  // AvaliacoesService.enviarLembretes).
+  lembreteAvaliacaoEm DateTime?
   // Código de rastreio da ida, colado pelo admin ao marcar como enviado
   // (ou atualizado depois). Não vem do Melhor Envio nesta etapa — a compra
   // de etiqueta de ida continua fora do sistema; isto só guarda o código
   // para o cliente ver em Meus Pedidos (Decreto 7.962/2013, art. 2º, V).
-  codigoRastreio String?
+  codigoRastreio      String?
 
   // Etiqueta de ida gerada pelo admin no Melhor Envio (PedidoEtiquetaService).
   // `etiquetaIdExterno` é gravado logo após criar o envio no carrinho, para
@@ -253,6 +258,8 @@ model Pedido {
 
   // Ocorrências de negócio deste pedido (ver Ocorrencia).
   ocorrencias Ocorrencia[]
+
+  avaliacoes Avaliacao[]
 
   // Vistoria do Dashboard operacional (Admin) — DashboardService agora
   // agrega Pedido por status (contagem/soma de total) e ordena/filtra por
@@ -730,4 +737,35 @@ enum CategoriaSuporte {
   PAGAMENTO
   CONTA
   OUTRO
+}
+
+// Avaliação de um produto por quem o comprou (uma por produto em cada
+// pedido). Só aparece na loja depois de aprovada no Admin; editar volta
+// para PENDENTE. `nomeExibicao` ("Ana S.") é gravado na criação para a loja
+// nunca expor o nome completo.
+model Avaliacao {
+  id           Int             @id @default(autoincrement())
+  produtoId    Int
+  pedidoId     Int
+  usuarioId    Int?
+  nomeExibicao String
+  nota         Int
+  comentario   String?
+  status       StatusAvaliacao @default(PENDENTE)
+  criadaEm     DateTime        @default(now())
+  atualizadaEm DateTime        @updatedAt
+
+  produto Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  pedido  Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@unique([pedidoId, produtoId])
+  @@index([produtoId, status])
+  @@index([status, criadaEm(sort: Desc)])
+}
+
+enum StatusAvaliacao {
+  PENDENTE
+  APROVADA
+  RECUSADA
 }

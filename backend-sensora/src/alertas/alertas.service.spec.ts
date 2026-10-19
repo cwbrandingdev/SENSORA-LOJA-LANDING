@@ -21,6 +21,8 @@ function criarPrismaMock(overrides: {
   suporteCount?: jest.Mock;
 }) {
   return {
+    // Por padrão nenhuma avaliação pendente.
+    avaliacao: { count: jest.fn().mockResolvedValue(0) },
     // Por padrão nenhum chamado de suporte aberto.
     solicitacaoSuporte: {
       count: overrides.suporteCount ?? jest.fn().mockResolvedValue(0),
