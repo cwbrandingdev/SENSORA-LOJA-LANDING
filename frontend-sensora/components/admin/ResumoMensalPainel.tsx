@@ -237,7 +237,7 @@ export default function ResumoMensalPainel({
       </div>
 
       {erro && !loading && (
-        <InlineErrorState mensagem={erro} onRetry={() => void carregar()} />
+        <InlineErrorState message={erro} onRetry={() => void carregar()} />
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
