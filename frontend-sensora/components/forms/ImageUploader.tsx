@@ -5,9 +5,10 @@
 // /imagekit/auth passam por lá), um arquivo de cada vez, sem processamento
 // (sem canvas, sem resize, sem recompressão). A ordem da lista é a ordem da
 // loja e a 1ª foto é a capa: as setas reordenam e "Capa" leva a foto para o
-// começo. O backend repete a regra (imagemUrl = imagens[0]).
+// começo. O backend repete a regra (imagemUrl = imagens[0]). A 2ª foto é a
+// que os cartões da loja mostram no hover (ver segundaImagemDaGaleria).
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, Plus, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, MousePointer2, Plus, Star, Trash2 } from "lucide-react";
 import { obterAutenticacaoImageKit } from "@/services/imagekit";
 
 const IMAGEKIT_UPLOAD_URL = "https://upload.imagekit.io/api/v1/files/upload";
@@ -78,6 +79,9 @@ function mover(lista: string[], de: number, para: number): string[] {
 const botaoIcone =
   "flex h-7 w-7 items-center justify-center rounded bg-white/90 text-slate-700 shadow-sm hover:bg-white hover:text-brand-navy disabled:cursor-not-allowed disabled:opacity-30";
 
+const botaoPapel =
+  "inline-flex items-center justify-center gap-1 rounded border px-1 py-1 text-[10px] font-semibold uppercase tracking-wider disabled:cursor-default";
+
 export default function ImageUploader({ value, onChange, nomeProduto }: ImageUploaderProps) {
   const [enviando, setEnviando] = useState("");
   const [erro, setErro] = useState("");
@@ -133,53 +137,59 @@ export default function ImageUploader({ value, onChange, nomeProduto }: ImageUpl
     <div className="flex flex-col gap-2">
       <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
         {value.map((url, indice) => (
-          <li
-            key={`${url}-${indice}`}
-            className="relative aspect-square overflow-hidden rounded-md border border-slate-200 bg-slate-50"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={`Foto ${indice + 1} do produto`} className="h-full w-full object-cover" />
-            {indice === 0 ? (
-              <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
-                <Star className="h-3 w-3 fill-current" aria-hidden />
-                Capa
-              </span>
-            ) : (
+          <li key={`${url}-${indice}`} className="flex flex-col gap-1.5">
+            <div className="relative aspect-square overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt={`Foto ${indice + 1} do produto`} className="h-full w-full object-cover" />
+              <div className="absolute inset-x-1 bottom-1 flex justify-between gap-1">
+                <button
+                  type="button"
+                  className={botaoIcone}
+                  disabled={indice === 0}
+                  onClick={() => onChange(mover(value, indice, indice - 1))}
+                  aria-label={`Mover foto ${indice + 1} para a esquerda`}
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  className={botaoIcone}
+                  onClick={() => onChange(value.filter((_, i) => i !== indice))}
+                  aria-label={`Remover foto ${indice + 1}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  className={botaoIcone}
+                  disabled={indice === value.length - 1}
+                  onClick={() => onChange(mover(value, indice, indice + 1))}
+                  aria-label={`Mover foto ${indice + 1} para a direita`}
+                >
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+            {/* Abaixo da foto: a opção ativa fica preenchida. A capa não pode
+                ser também a foto do hover. */}
+            <div className="grid grid-cols-2 gap-1">
               <button
                 type="button"
-                onClick={() => onChange(mover(value, indice, 0))}
-                className="absolute left-1 top-1 inline-flex items-center gap-1 rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-navy shadow-sm hover:bg-brand-navy hover:text-white"
-              >
-                <Star className="h-3 w-3" aria-hidden />
-                Tornar capa
-              </button>
-            )}
-            <div className="absolute inset-x-1 bottom-1 flex justify-between gap-1">
-              <button
-                type="button"
-                className={botaoIcone}
                 disabled={indice === 0}
-                onClick={() => onChange(mover(value, indice, indice - 1))}
-                aria-label={`Mover foto ${indice + 1} para a esquerda`}
+                onClick={() => onChange(mover(value, indice, 0))}
+                className={`${botaoPapel} ${indice === 0 ? "border-brand-navy bg-brand-navy text-white" : "border-slate-200 text-slate-500 hover:border-brand-navy hover:text-brand-navy"}`}
               >
-                <ArrowLeft className="h-3.5 w-3.5" />
+                <Star className={`h-3 w-3 ${indice === 0 ? "fill-current" : ""}`} aria-hidden />
+                Capa
               </button>
               <button
                 type="button"
-                className={botaoIcone}
-                onClick={() => onChange(value.filter((_, i) => i !== indice))}
-                aria-label={`Remover foto ${indice + 1}`}
+                disabled={indice <= 1}
+                onClick={() => onChange(mover(value, indice, 1))}
+                className={`${botaoPapel} ${indice === 1 ? "border-brand-orange bg-brand-orange text-white" : "border-slate-200 text-slate-500 enabled:hover:border-brand-orange enabled:hover:text-brand-orange disabled:opacity-30"}`}
               >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                className={botaoIcone}
-                disabled={indice === value.length - 1}
-                onClick={() => onChange(mover(value, indice, indice + 1))}
-                aria-label={`Mover foto ${indice + 1} para a direita`}
-              >
-                <ArrowRight className="h-3.5 w-3.5" />
+                <MousePointer2 className={`h-3 w-3 ${indice === 1 ? "fill-current" : ""}`} aria-hidden />
+                Hover
               </button>
             </div>
           </li>
@@ -207,7 +217,7 @@ export default function ImageUploader({ value, onChange, nomeProduto }: ImageUpl
 
       <p className="text-xs text-slate-500">
         {enviando ||
-          `A 1ª foto é a capa: clique em "Tornar capa" para trocar. Use as setas para ordenar (até ${MAXIMO_IMAGENS} fotos).`}
+          `Escolha abaixo de cada foto qual é a capa e qual aparece ao passar o mouse no cartão (Hover). Use as setas para ordenar (até ${MAXIMO_IMAGENS} fotos).`}
       </p>
       {erro && <p className="text-xs text-red-600">{erro}</p>}
 
