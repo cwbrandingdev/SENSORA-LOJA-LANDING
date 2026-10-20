@@ -35,14 +35,18 @@ export function colecaoComProdutosDaLoja(
   const editoriais = collection.items
     .filter((item) => !item.lojaSlug || noCatalogo.has(item.lojaSlug))
     .map((item) => {
-      // Cartão editorial de um produto real ganha a 2ª foto da galeria dele
-      // para o hover (ver HoverSecondImage) e o preço do catálogo.
+      // Cartão editorial de um produto real usa a capa escolhida no Admin,
+      // a 2ª foto da galeria para o hover (ver HoverSecondImage) e o preço
+      // do catálogo.
       const produtoReal = item.lojaSlug ? porSlug.get(item.lojaSlug) : undefined;
       const segunda = produtoReal
         ? segundaImagemDaGaleria(produtoReal.imagens, produtoReal.imagemUrl)
         : undefined;
       return {
         ...item,
+        ...(produtoReal?.imagemUrl
+          ? { imageSrc: imagemKitRedimensionada(produtoReal.imagemUrl, 600) }
+          : {}),
         ...(segunda
           ? { imageHoverSrc: imagemKitRedimensionada(segunda, 600) }
           : {}),
