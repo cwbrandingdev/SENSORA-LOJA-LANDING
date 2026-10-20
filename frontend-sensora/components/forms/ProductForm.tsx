@@ -15,6 +15,9 @@ import type { Categoria, Produto } from "@/lib/types/loja";
 
 const productSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
+  // Família olfativa / aroma, mostrado em itálico abaixo do nome na loja
+  // (ex.: "Cítrico Floral"). Mesmo limite do backend (CreateProdutoDto).
+  aroma: z.string().trim().max(100, "Use até 100 caracteres").optional(),
   descricao: z.string().optional(),
   preco: z.coerce
     .number({ error: "Preço é obrigatório" })
@@ -43,6 +46,7 @@ export type ProductFormValues = z.output<typeof productSchema>;
 function toDefaultValues(produto?: Produto): ProductFormInput {
   return {
     nome: produto?.nome ?? "",
+    aroma: produto?.aroma ?? "",
     descricao: produto?.descricao ?? "",
     preco: produto?.preco ?? "",
     quantidade: produto?.quantidade ?? ("" as unknown as number),
@@ -116,6 +120,24 @@ export default function ProductForm({
         <input id="nome" type="text" spellCheck lang="pt-BR" className={inputClass} {...register("nome")} />
         {errors.nome && <p className={errorClass}>{errors.nome.message}</p>}
         <RevisorTexto texto={nome} onCorrigir={corrigir("nome")} />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="aroma" className={labelClass}>
+          Aroma / família olfativa <span className="font-normal text-slate-400">(opcional)</span>
+        </label>
+        <input
+          id="aroma"
+          type="text"
+          maxLength={100}
+          spellCheck
+          lang="pt-BR"
+          placeholder="Ex.: Cítrico Floral"
+          className={inputClass}
+          {...register("aroma")}
+        />
+        <p className="text-xs text-slate-500">Aparece em itálico logo abaixo do nome, na página do produto.</p>
+        {errors.aroma && <p className={errorClass}>{errors.aroma.message}</p>}
       </div>
 
       <div className="flex flex-col gap-1">

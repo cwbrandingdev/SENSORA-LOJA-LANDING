@@ -17,7 +17,7 @@ import ProdutosRelacionados from "@/components/loja/ProdutosRelacionados";
 import AvaliacoesProduto from "@/components/loja/AvaliacoesProduto";
 import Estrelas from "@/components/loja/Estrelas";
 import { imagemKitRedimensionada } from "@/lib/loja-imagens";
-import { descricaoSemFichaTecnica } from "@/lib/descricao-produto";
+import { descricaoSemFichaTecnica, fichaTecnica } from "@/lib/descricao-produto";
 import JsonLd from "@/components/seo/JsonLd";
 import { OPEN_GRAPH_PADRAO, breadcrumbJsonLd, resumir, urlAbsoluta } from "@/lib/seo";
 
@@ -118,6 +118,8 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
   const descricao = produto.descricao
     ? descricaoSemFichaTecnica(produto.descricao)
     : "";
+  // E a ficha técnica que saiu da descrição vira um bloco próprio.
+  const ficha = produto.descricao ? fichaTecnica(produto.descricao) : [];
 
   // Avaliações aprovadas; se a API falhar, a seção só não aparece.
   const avaliacoes = await buscarAvaliacoesDoProduto(produto.slug);
@@ -250,6 +252,22 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
               <p className="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-slate-600">
                 {descricao}
               </p>
+            </div>
+          )}
+
+          {ficha.length > 0 && (
+            <div className="mt-10">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-navy">
+                Ficha técnica
+              </p>
+              <dl className="mt-4 divide-y divide-slate-200 border-y border-slate-200 text-[15px]">
+                {ficha.map((item) => (
+                  <div key={item.rotulo} className="flex justify-between gap-6 py-2.5">
+                    <dt className="text-slate-500">{item.rotulo}</dt>
+                    <dd className="text-right font-medium text-brand-navy">{item.valor}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           )}
 

@@ -21,3 +21,16 @@ export function descricaoSemFichaTecnica(descricao: string): string {
     .join("\n")
     .trim();
 }
+
+// As mesmas linhas que descricaoSemFichaTecnica tira, como pares para a
+// "Ficha técnica" da página do produto ("Peso líquido: 200 g." ->
+// { rotulo: "Peso líquido", valor: "200 g" }).
+export function fichaTecnica(descricao: string): { rotulo: string; valor: string }[] {
+  return [...descricao.matchAll(TRECHO_FICHA)]
+    .map(([trecho]) => {
+      const [rotulo, ...resto] = trecho.split(":");
+      return { rotulo: rotulo.trim(), valor: resto.join(":").trim().replace(/\.$/, "") };
+    })
+    .filter((item) => item.valor !== "")
+    .map((item) => ({ ...item, rotulo: item.rotulo.charAt(0).toUpperCase() + item.rotulo.slice(1) }));
+}
