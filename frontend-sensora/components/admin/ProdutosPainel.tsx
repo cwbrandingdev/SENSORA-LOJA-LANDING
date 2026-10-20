@@ -182,7 +182,9 @@ export default function ProdutosPainel({
 }: Props) {
   return (
     <>
-      {loading ? (
+      {/* Esqueleto só no 1º carregamento: recarregar depois de salvar não
+          desmonta a lista, então categoria/busca/situação continuam. */}
+      {loading && produtos.length === 0 ? (
         <TableSkeleton rows={4} columns={6} />
       ) : erro ? (
         <InlineErrorState message={erro} onRetry={onRetry} />
