@@ -316,21 +316,6 @@ export const SPRAYS_DE_AMBIENTE: Collection = {
       ctaHref: LOJA_URL,
       lojaSlug: "spray-flor-de-laranjeira",
     },
-    {
-      // 4º card da seção na home (ver LatestReleases): fragrância que já
-      // existe nas Velas 4 Estações, ainda sem cadastro na Loja — por isso
-      // sem `lojaSlug`. Quando o produto for cadastrado no Admin com este
-      // nome, o card editorial sai e entra o card real do catálogo.
-      slug: "brisa-de-inverno",
-      name: "Brisa de Inverno",
-      description:
-        "Brisa de Inverno é uma fragrância amadeirada, quente e acolhedora. Bergamota, pimenta rosa e eucalipto abrem o aroma, lavanda, cedro e canela aquecem o corpo, e o fundo de âmbar, almíscar e baunilha deixa o ambiente com calor e conforto nos dias mais frios.\n\nDetalhes: Frasco com rótulo de acabamento metalizado e válvula spray dourada. O home spray acompanha uma caixa personalizada Parafinesse, desenvolvida especialmente para a coleção e também com detalhes metalizados.\n\nEssência: Brisa de Inverno\nFamília Olfativa: Amadeirado Oriental\n\nNotas de Cabeça:\nBergamota, Pimenta Rosa e Eucalipto\nNotas de Corpo:\nLavanda, Cedro e Canela\nNotas de Fundo:\nÂmbar, Almíscar e Baunilha",
-      mood: "Calor e conforto em cada borrifada dos dias mais frios.",
-      imageSrc: "/images/categories/sprays-especiarias-ia.jpg",
-      imageAlt: "Spray de ambiente Brisa de Inverno da Sensora",
-      ctaLabel: "Conhecer spray",
-      ctaHref: LOJA_URL,
-    },
   ],
 };
 
@@ -382,21 +367,6 @@ export const DIFUSORES_DE_AROMA: Collection = {
       ctaLabel: "Conhecer difusor",
       ctaHref: LOJA_URL,
       lojaSlug: "difusor-de-flor-de-laranjeira",
-    },
-    {
-      // 4º card da seção na home (ver LatestReleases): fragrância que já
-      // existe nas Velas 4 Estações, ainda sem cadastro na Loja — por isso
-      // sem `lojaSlug`. Quando o produto for cadastrado no Admin com este
-      // nome, o card editorial sai e entra o card real do catálogo.
-      slug: "brisa-de-inverno",
-      name: "Brisa de Inverno",
-      description:
-        "Brisa de Inverno é uma fragrância amadeirada, quente e acolhedora. Bergamota, pimenta rosa e eucalipto abrem o aroma, lavanda, cedro e canela aquecem o corpo, e o fundo de âmbar, almíscar e baunilha perfuma o ambiente de forma contínua, com calor e conforto nos dias mais frios.\n\nDetalhes: Frasco com rótulo de acabamento metalizado, válvula dourada e palitos de fibra de algodão de alta performance, desenvolvidos para proporcionar excelente absorção e difusão da fragrância.\n\nEssência: Brisa de Inverno\nFamília Olfativa: Amadeirado Oriental\n\nNotas de Cabeça:\nBergamota, Pimenta Rosa e Eucalipto\nNotas de Corpo:\nLavanda, Cedro e Canela\nNotas de Fundo:\nÂmbar, Almíscar e Baunilha",
-      mood: "Calor e conforto, difundidos de forma contínua nos dias mais frios.",
-      imageSrc: "/images/categories/difusores-especiarias.jpg",
-      imageAlt: "Difusor de aroma Brisa de Inverno da Sensora",
-      ctaLabel: "Conhecer difusor",
-      ctaHref: LOJA_URL,
     },
   ],
 };
