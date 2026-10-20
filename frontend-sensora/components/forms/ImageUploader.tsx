@@ -7,8 +7,9 @@
 // loja e a 1ª foto é a capa: as setas reordenam e "Capa" leva a foto para o
 // começo. O backend repete a regra (imagemUrl = imagens[0]). A 2ª foto é a
 // que os cartões da loja mostram no hover (ver segundaImagemDaGaleria).
-import { useState } from "react";
-import { ArrowLeft, ArrowRight, MousePointer2, Plus, Star, Trash2 } from "lucide-react";
+// Clicar numa miniatura abre a foto ampliada (PreviewFoto).
+import { useEffect, useState } from "react";
+import { ArrowLeft, ArrowRight, MousePointer2, Plus, Star, Trash2, X } from "lucide-react";
 import { obterAutenticacaoImageKit } from "@/services/imagekit";
 
 const IMAGEKIT_UPLOAD_URL = "https://upload.imagekit.io/api/v1/files/upload";
@@ -82,7 +83,99 @@ const botaoIcone =
 const botaoPapel =
   "inline-flex items-center justify-center gap-1 rounded border px-1 py-1 text-[10px] font-semibold uppercase tracking-wider disabled:cursor-default";
 
+const botaoPreview =
+  "flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 disabled:opacity-30";
+
+// Foto ampliada por cima de tudo. Fecha no X, clicando fora ou com Esc; as
+// setas (na tela e no teclado) passam entre as fotos.
+function PreviewFoto({
+  fotos,
+  indice,
+  onIndice,
+  onFechar,
+}: {
+  fotos: string[];
+  indice: number;
+  onIndice: (indice: number) => void;
+  onFechar: () => void;
+}) {
+  const anterior = indice > 0 ? indice - 1 : null;
+  const proxima = indice < fotos.length - 1 ? indice + 1 : null;
+
+  useEffect(() => {
+    function aoTeclar(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        // Captura + stopImmediatePropagation: o Esc fecha só o preview, não
+        // o painel do formulário (que também escuta Esc na window).
+        e.stopImmediatePropagation();
+        onFechar();
+      }
+      if (e.key === "ArrowLeft" && anterior !== null) onIndice(anterior);
+      if (e.key === "ArrowRight" && proxima !== null) onIndice(proxima);
+    }
+    window.addEventListener("keydown", aoTeclar, true);
+    return () => window.removeEventListener("keydown", aoTeclar, true);
+  }, [anterior, proxima, onIndice, onFechar]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Foto ${indice + 1} de ${fotos.length}`}
+      className="fixed inset-0 z-60 flex items-center justify-center gap-3 bg-slate-950/85 p-4"
+      onClick={onFechar}
+    >
+      <button
+        type="button"
+        onClick={onFechar}
+        aria-label="Fechar"
+        className="absolute right-4 top-4 rounded-full p-2 text-white hover:bg-white/10"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      <button
+        type="button"
+        className={botaoPreview}
+        disabled={anterior === null}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (anterior !== null) onIndice(anterior);
+        }}
+        aria-label="Foto anterior"
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </button>
+      <figure className="flex min-w-0 flex-col items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={fotos[indice]}
+          alt={`Foto ${indice + 1} do produto`}
+          className="max-h-[80vh] max-w-full rounded-md object-contain"
+        />
+        <figcaption className="text-xs text-white/70">
+          {indice + 1} de {fotos.length}
+          {indice === 0 && " · Capa"}
+          {indice === 1 && " · Hover"}
+        </figcaption>
+      </figure>
+      <button
+        type="button"
+        className={botaoPreview}
+        disabled={proxima === null}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (proxima !== null) onIndice(proxima);
+        }}
+        aria-label="Próxima foto"
+      >
+        <ArrowRight className="h-5 w-5" />
+      </button>
+    </div>
+  );
+}
+
 export default function ImageUploader({ value, onChange, nomeProduto }: ImageUploaderProps) {
+  const [ampliada, setAmpliada] = useState<number | null>(null);
   const [enviando, setEnviando] = useState("");
   const [erro, setErro] = useState("");
   const [manualMode, setManualMode] = useState(false);
@@ -139,8 +232,15 @@ export default function ImageUploader({ value, onChange, nomeProduto }: ImageUpl
         {value.map((url, indice) => (
           <li key={`${url}-${indice}`} className="flex flex-col gap-1.5">
             <div className="relative aspect-square overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`Foto ${indice + 1} do produto`} className="h-full w-full object-cover" />
+              <button
+                type="button"
+                onClick={() => setAmpliada(indice)}
+                aria-label={`Ampliar foto ${indice + 1}`}
+                className="block h-full w-full cursor-zoom-in"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt={`Foto ${indice + 1} do produto`} className="h-full w-full object-cover" />
+              </button>
               <div className="absolute inset-x-1 bottom-1 flex justify-between gap-1">
                 <button
                   type="button"
@@ -217,7 +317,7 @@ export default function ImageUploader({ value, onChange, nomeProduto }: ImageUpl
 
       <p className="text-xs text-slate-500">
         {enviando ||
-          `Escolha abaixo de cada foto qual é a capa e qual aparece ao passar o mouse no cartão (Hover). Use as setas para ordenar (até ${MAXIMO_IMAGENS} fotos).`}
+          `Clique numa foto para ampliar. Escolha abaixo de cada foto qual é a capa e qual aparece ao passar o mouse no cartão (Hover). Use as setas para ordenar (até ${MAXIMO_IMAGENS} fotos).`}
       </p>
       {erro && <p className="text-xs text-red-600">{erro}</p>}
 
@@ -248,6 +348,15 @@ export default function ImageUploader({ value, onChange, nomeProduto }: ImageUpl
             Adicionar
           </button>
         </div>
+      )}
+
+      {ampliada !== null && value[ampliada] && (
+        <PreviewFoto
+          fotos={value}
+          indice={ampliada}
+          onIndice={setAmpliada}
+          onFechar={() => setAmpliada(null)}
+        />
       )}
     </div>
   );
