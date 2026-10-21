@@ -1541,6 +1541,8 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
     expect(criarCheckout).toHaveBeenCalledWith(
       expect.objectContaining({
         externalReference: '42',
+        chargeTypes: ['DETACHED', 'INSTALLMENT'],
+        installment: { maxInstallmentCount: 6 },
         items: [
           { name: 'Vela de Lavanda', quantity: 2, value: 39.9 },
           { name: 'Frete - Correios PAC', quantity: 1, value: 23.5 },

@@ -81,6 +81,8 @@ export class CheckoutService {
   private readonly logger = new Logger(CheckoutService.name);
   private readonly gateway: CheckoutGateway;
   private readonly frontendUrl: string;
+  /** Limite de parcelas no cartão (Asaas Checkout), 1–21 — ver ASAAS_MAX_INSTALLMENT_COUNT. */
+  private readonly asaasMaxParcelas: number;
   // Legado (Task 21) — só instanciado no modo de rollback
   // (CHECKOUT_GATEWAY="stripe"). Preservado exatamente como na integração
   // original (Task 15): é o caminho que garante que voltar para o Stripe
@@ -115,6 +117,8 @@ export class CheckoutService {
         CheckoutGateway | undefined) ?? 'asaas';
     this.frontendUrl =
       this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
+    this.asaasMaxParcelas =
+      this.configService.get<number>('ASAAS_MAX_INSTALLMENT_COUNT') ?? 6;
 
     if (this.gateway === 'stripe') {
       const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
@@ -428,7 +432,8 @@ export class CheckoutService {
   ): Promise<CheckoutSessionResponse> {
     const checkout = await this.asaasService.criarCheckout({
       billingTypes: ['PIX', 'CREDIT_CARD'],
-      chargeTypes: ['DETACHED'],
+      chargeTypes: ['DETACHED', 'INSTALLMENT'],
+      installment: { maxInstallmentCount: this.asaasMaxParcelas },
       items: itens.map((item) => ({
         name: item.nome,
         quantity: item.quantidade,
