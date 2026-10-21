@@ -66,8 +66,10 @@ export default function KitSeloCircular({ item }: { item: ReleaseItem }) {
   const idCirculo = useId();
   const [imagemQuebrou, setImagemQuebrou] = useState(false);
   const textoSelo = `Kit exclusivo · ${item.nome} · Sensora · `.toUpperCase();
+  // Só o primeiro parágrafo (a apresentação do kit), inteiro e sem
+  // reticências; composição e ficha técnica ficam na página do produto.
   const descricao = item.produto?.descricao
-    ? descricaoSemFichaTecnica(item.produto.descricao)
+    ? descricaoSemFichaTecnica(item.produto.descricao).split(/\n\s*\n/)[0]
     : undefined;
 
   return (
@@ -105,7 +107,7 @@ export default function KitSeloCircular({ item }: { item: ReleaseItem }) {
       <div className="flex flex-col items-start gap-4">
         <h4 className="font-serif text-4xl font-normal tracking-tight text-brand-navy sm:text-5xl">{item.nome}</h4>
         {descricao && (
-          <p className="line-clamp-4 max-w-md whitespace-pre-line text-[15px] leading-relaxed text-slate-600">
+          <p className="max-w-lg whitespace-pre-line text-[15px] leading-relaxed text-slate-600">
             {descricao}
           </p>
         )}
