@@ -1702,9 +1702,11 @@ describe('MelhorEnvioService — logística reversa (Etapa 8)', () => {
       pago: true,
       gerado: false,
       postado: false,
+      entregue: false,
       pagoEm: new Date('2026-09-30T13:00:00Z'),
       geradoEm: null,
       postadoEm: null,
+      entregueEm: null,
       codigoDevolucao: null,
       codigoRastreio: null,
     });
@@ -1734,12 +1736,30 @@ describe('MelhorEnvioService — logística reversa (Etapa 8)', () => {
       pago: true,
       gerado: true,
       postado: true,
+      entregue: false,
       pagoEm: new Date('2026-09-30T13:00:00Z'),
       geradoEm: new Date('2026-09-30T13:01:00Z'),
       postadoEm: new Date('2026-10-01T12:00:00Z'),
+      entregueEm: null,
       codigoDevolucao: '2022032920',
       codigoRastreio: 'ME220021P96BR',
     });
+  });
+
+  it('consultarEnvio: status delivered marca entregue', async () => {
+    const { service } = await conectado();
+    global.fetch = jest.fn().mockResolvedValue(
+      resposta(200, {
+        status: 'delivered',
+        delivered_at: '2026-10-05 15:00:00',
+        tracking: 'AA123456789BR',
+      }),
+    );
+
+    const situacao = await service.consultarEnvio('ord-9');
+
+    expect(situacao.entregue).toBe(true);
+    expect(situacao.entregueEm).toEqual(new Date('2026-10-05T18:00:00Z'));
   });
 
   it('consultarEnvio: gerado sem código ainda (authorization_code null) fica null, nunca inventado', async () => {

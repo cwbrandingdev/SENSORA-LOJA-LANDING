@@ -144,7 +144,7 @@ export default function CarrinhoPage() {
                     variant="primary"
                     className="w-full"
                   >
-                    Ir para o checkout →
+                    Ir para o pagamento →
                   </Button>
                   <Link
                     href={ROUTES.LOJA_PRODUTOS}

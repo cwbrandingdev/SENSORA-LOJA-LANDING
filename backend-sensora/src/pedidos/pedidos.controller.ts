@@ -20,6 +20,7 @@ import { STAFF_ROLES, TODOS_OS_PERFIS } from '../common/constants/roles.constant
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UpdatePedidoDto } from './dto/update-pedido.dto';
 import { MarcarEnviadoDto } from './dto/marcar-enviado.dto';
+import { AtualizarCodigoRastreioDto } from './dto/atualizar-codigo-rastreio.dto';
 import { AtualizarEnderecoPedidoDto } from './dto/atualizar-endereco-pedido.dto';
 import { PedidoComItens } from './entities/pedido-com-itens.entity';
 import { PedidoComItensDetalhado } from './entities/pedido-com-itens-detalhado.entity';
@@ -163,6 +164,19 @@ export class PedidosController {
     @CurrentUser() user: UsuarioAutenticado,
   ): Promise<Pedido> {
     return this.pedidosService.marcarComoEnviado(
+      id,
+      user,
+      dto?.codigoRastreio,
+    );
+  }
+
+  @Patch(':id/codigo-rastreio')
+  atualizarCodigoRastreio(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AtualizarCodigoRastreioDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ): Promise<Pedido> {
+    return this.pedidosService.atualizarCodigoRastreio(
       id,
       user,
       dto?.codigoRastreio,

@@ -150,7 +150,7 @@ export default function HeroCarousel() {
                       className={
                         slide.hideOverlayHeading
                           ? "sr-only"
-                          : `text-sm font-light text-white/80 sm:text-base ${
+                          : `text-sm font-light text-white sm:text-[18px] ${
                               slide.id === "velas-4-estacoes"
                                 ? "mt-2 max-w-lg sm:mt-4 lg:max-w-2xl"
                                 : "mt-4 max-w-md"

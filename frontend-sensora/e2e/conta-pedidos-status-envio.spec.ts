@@ -161,8 +161,12 @@ test.describe("Minha Conta / Pedidos — timeline no detalhe", () => {
 
     await page.goto(`/conta/pedidos/${pedido.id}`);
 
-    await expect(page.getByText("Código de rastreio:")).toBeVisible();
+    await expect(page.getByText("Código de rastreio")).toBeVisible();
     await expect(page.getByText("AA123456789BR")).toBeVisible();
+    await expect(page.getByRole("link", { name: /Melhor Rastreio/i })).toHaveAttribute(
+      "href",
+      "https://www.melhorrastreio.com.br/meu-rastreio/AA123456789BR",
+    );
   });
 
   test("PENDENTE continua funcionando sem menção a envio (regressão)", async ({ page }) => {

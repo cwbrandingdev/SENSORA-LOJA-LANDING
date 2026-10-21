@@ -42,6 +42,7 @@ import { PedidoComItensDetalhado } from './entities/pedido-com-itens-detalhado.e
 import { Pedido } from './entities/pedido.entity';
 import { StatusEnvio } from './enums/status-envio.enum';
 import { StatusPedido } from './enums/status-pedido.enum';
+import { PedidosRecebimentoService } from './pedidos-recebimento.service';
 
 // Etapa 9.1 — devoluções que impedem o reembolso integral do pedido: as que
 // ainda estão em andamento e as que já reembolsaram algum valor.
@@ -88,6 +89,7 @@ export class PedidosService {
     private readonly ocorrenciasService: OcorrenciasService,
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
+    private readonly pedidosRecebimentoService: PedidosRecebimentoService,
   ) {}
 
   // Etapa 10 / Task 5 (achado A6): ADMIN continua vendo/editando qualquer
@@ -126,6 +128,9 @@ export class PedidosService {
     user: UsuarioAutenticado,
     opts?: { ordenarPorDataDesc?: boolean },
   ): Promise<Pedido[]> {
+    if (user.perfil !== PerfilUsuario.ADMIN) {
+      await this.pedidosRecebimentoService.aplicarRecebimentoPorPrazoNaListagem();
+    }
     const where =
       user.perfil === PerfilUsuario.ADMIN ? {} : { usuarioId: user.id };
     const pedidos = await this.prisma.pedido.findMany({
@@ -720,6 +725,27 @@ export class PedidosService {
     return enviado;
   }
 
+  // Atualização administrativa do rastreio (etiqueta externa ou correção),
+  // sem alterar statusEnvio/enviadoEm — independente de marcarComoEnviado.
+  async atualizarCodigoRastreio(
+    id: number,
+    user: UsuarioAutenticado,
+    codigoRastreio?: string,
+  ): Promise<Pedido> {
+    const pedidoAtual = await this.findOne(id, user);
+    if (pedidoAtual.status !== StatusPedido.PAGO) {
+      throw new ConflictException(
+        'Só é possível alterar o código de rastreio de pedidos pagos.',
+      );
+    }
+    const codigo = codigoRastreio?.trim() || null;
+    await this.prisma.pedido.update({
+      where: { id },
+      data: { codigoRastreio: codigo },
+    });
+    return this.findOne(id, user);
+  }
+
   // "Recebi meu pedido" — o próprio cliente confirma a entrega de um pedido
   // PAGO e já ENVIADO. Só grava `recebidoEm` uma vez (updateMany com
   // recebidoEm: null): clique duplo devolve o pedido sem mudar a data.
@@ -941,6 +967,8 @@ export class PedidosService {
     pedidoId: number,
     user: UsuarioAutenticado,
   ): Promise<PedidoComItensDetalhado> {
+    await this.pedidosRecebimentoService.sincronizarPedido(pedidoId);
+
     const { pedido, itens, total } = await this.buscarPedidoComItens(
       pedidoId,
       user,

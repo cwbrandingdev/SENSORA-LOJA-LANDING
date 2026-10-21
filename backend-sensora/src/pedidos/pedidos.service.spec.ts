@@ -28,7 +28,13 @@ import { UpdatePedidoDto } from './dto/update-pedido.dto';
 import { StatusEnvio } from './enums/status-envio.enum';
 import { StatusPedido } from './enums/status-pedido.enum';
 import { PedidosController } from './pedidos.controller';
+import { PedidosRecebimentoService } from './pedidos-recebimento.service';
 import { CODIGO_ERRO_REEMBOLSO_ASAAS, PedidosService } from './pedidos.service';
+
+const pedidosRecebimentoServiceMock = {
+  sincronizarPedido: jest.fn(),
+  aplicarRecebimentoPorPrazoNaListagem: jest.fn(),
+};
 
 // Etapa 5B.4 — testa só a regra de negócio de PedidosService.solicitarReembolso
 // com Prisma e AsaasService MOCKADOS (nenhuma chamada real ao Asaas, nenhum
@@ -186,6 +192,10 @@ describe('PedidosService — solicitarReembolso (Etapa 5B.4)', () => {
                 LOJA_NOME: 'Sensora',
               })[key],
           },
+        },
+        {
+          provide: PedidosRecebimentoService,
+          useValue: pedidosRecebimentoServiceMock,
         },
       ],
     }).compile();
@@ -853,6 +863,10 @@ describe('PedidosService — create/update (Etapa 8.1, fechamento do HIGH-01 + e
               })[key],
           },
         },
+        {
+          provide: PedidosRecebimentoService,
+          useValue: pedidosRecebimentoServiceMock,
+        },
       ],
     }).compile();
 
@@ -1060,6 +1074,10 @@ describe('PedidosService — remove (Etapa 8.2, fechamento do HIGH-02)', () => {
               })[key],
           },
         },
+        {
+          provide: PedidosRecebimentoService,
+          useValue: pedidosRecebimentoServiceMock,
+        },
       ],
     }).compile();
 
@@ -1199,6 +1217,10 @@ describe('PedidosService — findAll (ordenação da listagem do Admin)', () => 
                 LOJA_NOME: 'Sensora',
               })[key],
           },
+        },
+        {
+          provide: PedidosRecebimentoService,
+          useValue: pedidosRecebimentoServiceMock,
         },
       ],
     }).compile();
@@ -1355,6 +1377,10 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
               })[key],
           },
         },
+        {
+          provide: PedidosRecebimentoService,
+          useValue: pedidosRecebimentoServiceMock,
+        },
       ],
     }).compile();
 
@@ -1496,6 +1522,32 @@ describe('PedidosService — marcarComoEnviado (Etapa 6.6)', () => {
     expect(prisma.pedido.updateMany).not.toHaveBeenCalled();
     expect(prisma.pedido.update).toHaveBeenCalled();
   });
+
+  it('L: atualizarCodigoRastreio grava em pedido PAGO sem alterar enviadoEm', async () => {
+    const dataOriginal = new Date('2026-09-01T12:00:00.000Z');
+    pedidoFake.statusEnvio = StatusEnvio.ENVIADO;
+    pedidoFake.enviadoEm = dataOriginal;
+
+    const resultado = await service.atualizarCodigoRastreio(
+      1,
+      ADMIN,
+      ' AA123456789BR ',
+    );
+
+    expect(resultado.codigoRastreio).toBe('AA123456789BR');
+    expect(resultado.enviadoEm).toEqual(dataOriginal);
+    expect(prisma.pedido.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { codigoRastreio: 'AA123456789BR' },
+    });
+  });
+
+  it('M: atualizarCodigoRastreio rejeita pedido que não está PAGO', async () => {
+    pedidoFake.status = StatusPedido.PENDENTE;
+    await expect(
+      service.atualizarCodigoRastreio(1, ADMIN, 'X'),
+    ).rejects.toThrow(ConflictException);
+  });
 });
 
 describe('PedidosService — atualizarEnderecoEntrega', () => {
@@ -1621,6 +1673,10 @@ describe('PedidosService — atualizarEnderecoEntrega', () => {
                 LOJA_NOME: 'Sensora',
               })[key],
           },
+        },
+        {
+          provide: PedidosRecebimentoService,
+          useValue: pedidosRecebimentoServiceMock,
         },
       ],
     }).compile();

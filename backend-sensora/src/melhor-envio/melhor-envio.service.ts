@@ -73,9 +73,11 @@ export interface MelhorEnvioSituacao {
   pago: boolean;
   gerado: boolean;
   postado: boolean;
+  entregue: boolean;
   pagoEm: Date | null;
   geradoEm: Date | null;
   postadoEm: Date | null;
+  entregueEm: Date | null;
   codigoDevolucao: string | null;
   codigoRastreio: string | null;
 }
@@ -172,6 +174,7 @@ const ESCOPO_PADRAO = [
 const STATUS_PAGOS = ['paid', 'released', 'generated', 'posted', 'delivered'];
 const STATUS_GERADOS = ['generated', 'posted', 'delivered'];
 const STATUS_POSTADOS = ['posted', 'delivered'];
+const STATUS_ENTREGUES = ['delivered'];
 
 // A logística reversa do Melhor Envio só aceita Correios PAC (1) e SEDEX (2).
 const SERVICOS_LOGISTICA_REVERSA = [1, 2];
@@ -1145,6 +1148,39 @@ export class MelhorEnvioService {
     return this.paraSituacao(resposta.corpo);
   }
 
+  // Pesquisa por código de rastreio, protocolo ou id (GET /orders/search).
+  // Falha silenciosa (null) para não derrubar fluxos de auto-recebimento.
+  async pesquisarPedido(q: string): Promise<MelhorEnvioSituacao | null> {
+    const termo = q.trim();
+    if (!termo) {
+      return null;
+    }
+    try {
+      const resposta = await this.chamarApi(
+        'GET',
+        `/api/v2/me/orders/search?q=${encodeURIComponent(termo)}`,
+      );
+      if (!resposta.ok) {
+        return null;
+      }
+      const corpo = resposta.corpo;
+      const lista = Array.isArray(corpo)
+        ? corpo
+        : corpo &&
+            typeof corpo === 'object' &&
+            !Array.isArray(corpo) &&
+            Array.isArray((corpo as { data?: unknown }).data)
+          ? (corpo as { data: unknown[] }).data
+          : null;
+      if (!lista?.length) {
+        return null;
+      }
+      return this.paraSituacao(lista[0]);
+    } catch {
+      return null;
+    }
+  }
+
   // Chamada autenticada genérica. Não lança por status HTTP (quem chama
   // decide); lança só por falha de rede, conexão ou configuração.
   private async chamarApi(
@@ -1315,14 +1351,18 @@ export class MelhorEnvioService {
     const pagoEm = this.paraData(envio.paid_at);
     const geradoEm = this.paraData(envio.generated_at);
     const postadoEm = this.paraData(envio.posted_at);
+    const entregueEm =
+      this.paraData(envio.delivered_at) ?? this.paraData(envio.deliveredAt);
     return {
       status,
       pago: pagoEm !== null || STATUS_PAGOS.includes(status),
       gerado: geradoEm !== null || STATUS_GERADOS.includes(status),
       postado: postadoEm !== null || STATUS_POSTADOS.includes(status),
+      entregue: entregueEm !== null || STATUS_ENTREGUES.includes(status),
       pagoEm,
       geradoEm,
       postadoEm,
+      entregueEm,
       codigoDevolucao: texto(envio.authorization_code),
       codigoRastreio: texto(envio.tracking),
     };

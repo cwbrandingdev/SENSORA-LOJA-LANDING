@@ -22,9 +22,11 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import {
+  atualizarCodigoRastreioPedido,
   buscarPedidoComItens,
   solicitarReembolsoMeuPedido,
 } from "@/services/pedidos";
+import { urlMelhorRastreio } from "@/lib/rastreio";
 import { atualizarItemPedido, removerItemPedido } from "@/services/itensPedido";
 import { listarProdutos } from "@/services/produtos";
 import { ROUTES } from "@/lib/routes";
@@ -94,6 +96,8 @@ export default function PedidoDetalhePage() {
   // evita clique duplicado disparando duas solicitações (mesmo padrão de
   // `marcandoEnviadoId` em app/workspace-x/pedidos/page.tsx).
   const [solicitandoReembolso, setSolicitandoReembolso] = useState(false);
+  const [codigoRastreio, setCodigoRastreio] = useState("");
+  const [salvandoRastreio, setSalvandoRastreio] = useState(false);
 
   async function carregarPedido() {
     setLoading(true);
@@ -139,6 +143,24 @@ export default function PedidoDetalhePage() {
     carregarPedido();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoId]);
+
+  useEffect(() => {
+    setCodigoRastreio(pedido?.codigoRastreio ?? "");
+  }, [pedido?.id, pedido?.codigoRastreio]);
+
+  async function handleSalvarRastreio() {
+    if (!pedido || salvandoRastreio) return;
+    setSalvandoRastreio(true);
+    try {
+      const atualizado = await atualizarCodigoRastreioPedido(pedido.id, codigoRastreio);
+      setPedido(atualizado);
+      toast.success("Código de rastreio salvo.");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Não foi possível salvar o rastreio."));
+    } finally {
+      setSalvandoRastreio(false);
+    }
+  }
 
   async function handleSubmit(data: ItemPedidoFormValues) {
     if (!editingItem) return;
@@ -310,10 +332,47 @@ export default function PedidoDetalhePage() {
                   </span>
                 </div>
               )}
-              {pedido.codigoRastreio && (
-                <p className="mt-1 font-mono text-xs text-slate-500">
-                  {pedido.codigoRastreio}
-                </p>
+              {pedido.status === StatusPedido.PAGO ? (
+                <div className="mt-3 flex flex-col gap-2">
+                  <label className="text-xs font-medium text-slate-600" htmlFor="rastreio-admin">
+                    Código de rastreio
+                  </label>
+                  <input
+                    id="rastreio-admin"
+                    type="text"
+                    maxLength={80}
+                    value={codigoRastreio}
+                    onChange={(event) => setCodigoRastreio(event.target.value)}
+                    disabled={salvandoRastreio}
+                    className="rounded-md border border-slate-300 px-3 py-2 font-mono text-sm focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <FormButton
+                      type="button"
+                      variant="secondary"
+                      disabled={salvandoRastreio}
+                      onClick={handleSalvarRastreio}
+                    >
+                      {salvandoRastreio ? "Salvando..." : "Salvar rastreio"}
+                    </FormButton>
+                    {codigoRastreio.trim() && (
+                      <a
+                        href={urlMelhorRastreio(codigoRastreio)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-brand-orange underline-offset-2 hover:underline"
+                      >
+                        Abrir no Melhor Rastreio
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                pedido.codigoRastreio && (
+                  <p className="mt-1 font-mono text-xs text-slate-500">
+                    {pedido.codigoRastreio}
+                  </p>
+                )
               )}
             </div>
 

@@ -9,6 +9,7 @@
 // só no ramo PAGO. O código de rastreio da ida, quando o admin cola ao
 // marcar como enviado, aparece abaixo da timeline.
 import { useEffect, useState } from "react";
+import RastreioPedido from "@/components/conta/RastreioPedido";
 import { StatusEnvio, StatusPedido } from "@/lib/types/loja";
 
 type Etapa = {
@@ -162,19 +163,28 @@ export default function AcompanhamentoPedido({
       </ol>
 
       {statusEnvio === StatusEnvio.ENVIADO && enviadoEm ? (
-        <p className="mt-6 text-xs leading-relaxed text-slate-500">
-          Enviado em {formatarDataEnvio(enviadoEm)}.
-          {recebidoEm && <> Entregue em {formatarDataEnvio(recebidoEm)}.</>}
-          {codigoRastreio ? (
-            <>
-              {" "}
-              Código de rastreio:{" "}
-              <span className="font-mono text-brand-navy">{codigoRastreio}</span>
-            </>
-          ) : (
-            " Ainda não temos código de rastreio disponível para este pedido."
+        <div className="mt-6">
+          <p className="text-xs leading-relaxed text-slate-500">
+            Enviado em {formatarDataEnvio(enviadoEm)}.
+            {recebidoEm && <> Entregue em {formatarDataEnvio(recebidoEm)}.</>}
+            {!codigoRastreio &&
+              " Ainda não temos código de rastreio disponível para este pedido."}
+            {!recebidoEm &&
+              " Quando o Melhor Envio confirmar a entrega, marcamos como entregue automaticamente. Você também pode clicar em \"Recebi meu pedido\" abaixo."}
+          </p>
+          {codigoRastreio && (
+            <RastreioPedido codigoRastreio={codigoRastreio} variant="block" />
           )}
-        </p>
+        </div>
+      ) : codigoRastreio ? (
+        <div className="mt-6">
+          <p className="text-xs leading-relaxed text-slate-500">
+            Seu pedido ainda está sendo preparado para envio. O rastreio já está
+            disponível abaixo. Quando o Melhor Envio confirmar a entrega, marcamos
+            como entregue automaticamente (ou após 7 dias do envio).
+          </p>
+          <RastreioPedido codigoRastreio={codigoRastreio} variant="block" />
+        </div>
       ) : (
         <p className="mt-6 text-xs leading-relaxed text-slate-500">
           Ainda não temos informações de envio/rastreio disponíveis para este

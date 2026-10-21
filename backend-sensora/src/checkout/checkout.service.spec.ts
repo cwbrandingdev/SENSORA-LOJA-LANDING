@@ -1538,11 +1538,11 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
     // Etapa 6.5 (Frete), teste J — o valor enviado ao Asaas inclui o frete
     // como um item próprio, calculado pelo backend (nunca o preço do
     // cliente): o total cobrado no gateway reflete produtos + frete.
+    // Total 103,30 → floor(103,30/100)=1 → só à vista no cartão (sem INSTALLMENT).
     expect(criarCheckout).toHaveBeenCalledWith(
       expect.objectContaining({
         externalReference: '42',
-        chargeTypes: ['DETACHED', 'INSTALLMENT'],
-        installment: { maxInstallmentCount: 6 },
+        chargeTypes: ['DETACHED'],
         items: [
           { name: 'Vela de Lavanda', quantity: 2, value: 39.9 },
           { name: 'Frete - Correios PAC', quantity: 1, value: 23.5 },
@@ -1553,6 +1553,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         },
       }),
     );
+    expect(criarCheckout.mock.calls[0][0]).not.toHaveProperty('installment');
     expect(pedidoUpdate).toHaveBeenCalledWith({
       where: { id: 42 },
       data: { asaasCheckoutId: 'chk_abc' },
@@ -1561,6 +1562,86 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
       sessionId: 'chk_abc',
       url: 'https://sandbox.asaas.com/checkoutSession/show/chk_abc',
     });
+  });
+
+  it('Asaas: total alto o suficiente expõe parcelamento até min(teto, floor(total/mínimo))', async () => {
+    const pedidoCreate = jest.fn(() => ({ id: 43, numero: 'PED-2' }));
+    const pedidoUpdate = jest.fn();
+    const criarCheckout = jest.fn(() => ({
+      id: 'chk_parcelas',
+      link: 'https://sandbox.asaas.com/checkoutSession/show/chk_parcelas',
+      status: 'ACTIVE',
+    }));
+    const melhorEnvioService = melhorEnvioServiceComOpcoes();
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({
+                CHECKOUT_GATEWAY: 'asaas',
+                FRONTEND_URL: 'http://localhost:3001',
+                ASAAS_MAX_INSTALLMENT_COUNT: 10,
+                ASAAS_MIN_INSTALLMENT_VALUE: 100,
+              })[key as string],
+          },
+        },
+        {
+          provide: PrismaService,
+          useValue: {
+            pedido: { create: pedidoCreate, update: pedidoUpdate },
+          },
+        },
+        {
+          provide: ProdutosService,
+          useValue: {
+            findOne: jest.fn(() => ({
+              id: 5,
+              nome: 'Vela de Lavanda',
+              descricao: null,
+              aroma: 'Lavanda',
+              imagemUrl: null,
+              ativo: true,
+              quantidade: 20,
+              preco: 39.9,
+            })),
+          },
+        },
+        {
+          provide: EnderecosService,
+          useValue: { findOneForUsuario: jest.fn(() => ENDERECO_FAKE) },
+        },
+        { provide: AsaasService, useValue: { criarCheckout } },
+        { provide: UsuariosService, useValue: usuariosServiceVerificado },
+        { provide: MelhorEnvioService, useValue: melhorEnvioService },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
+      ],
+    }).compile();
+    const service = module.get<CheckoutService>(CheckoutService);
+
+    await service.createSession(
+      {
+        itens: [{ produtoId: 5, quantidade: 6 }],
+        clienteEmail: 'cliente@sensora.dev',
+        cpf: '52998224725',
+        enderecoId: 1,
+        freteServicoId: OPCAO_FRETE_FAKE.id,
+      },
+      1,
+    );
+
+    // 6×39,90 + 23,50 = 262,90 → até 2× (mín. R$ 100/parcela), teto 10.
+    expect(criarCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chargeTypes: ['DETACHED', 'INSTALLMENT'],
+        installment: { maxInstallmentCount: 2 },
+      }),
+    );
   });
 
   // Etapa "Dados do Cliente / Cadastro" (achado da auditoria) — prova

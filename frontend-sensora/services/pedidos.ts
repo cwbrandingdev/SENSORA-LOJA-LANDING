@@ -163,6 +163,16 @@ export async function marcarPedidoComoEnviado(
   return response.data;
 }
 
+export async function atualizarCodigoRastreioPedido(
+  id: number,
+  codigoRastreio: string,
+): Promise<Pedido> {
+  const response = await api.patch<Pedido>(`/pedidos/${id}/codigo-rastreio`, {
+    codigoRastreio,
+  });
+  return response.data;
+}
+
 // Etiqueta de ida no Melhor Envio (só ADMIN): cria, paga com o saldo da
 // carteira e gera. Sem chave da NF-e, vai com declaração de conteúdo.
 export async function gerarEtiquetaPedido(

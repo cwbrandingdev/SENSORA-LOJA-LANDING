@@ -8,7 +8,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import Stripe from 'stripe';
-import { AsaasService } from '../asaas/asaas.service';
+import {
+  AsaasChargeType,
+  AsaasService,
+} from '../asaas/asaas.service';
 import { escaparHtml } from '../common/utils/html.util';
 import { DevolucoesService } from '../devolucoes/devolucoes.service';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
@@ -81,8 +84,10 @@ export class CheckoutService {
   private readonly logger = new Logger(CheckoutService.name);
   private readonly gateway: CheckoutGateway;
   private readonly frontendUrl: string;
-  /** Limite de parcelas no cartão (Asaas Checkout), 1–21 — ver ASAAS_MAX_INSTALLMENT_COUNT. */
+  /** Teto de parcelas no cartão (Asaas Checkout), 1–21 — ASAAS_MAX_INSTALLMENT_COUNT. */
   private readonly asaasMaxParcelas: number;
+  /** Valor mínimo de cada parcela (R$) — ASAAS_MIN_INSTALLMENT_VALUE. */
+  private readonly asaasMinValorParcela: number;
   // Legado (Task 21) — só instanciado no modo de rollback
   // (CHECKOUT_GATEWAY="stripe"). Preservado exatamente como na integração
   // original (Task 15): é o caminho que garante que voltar para o Stripe
@@ -118,7 +123,9 @@ export class CheckoutService {
     this.frontendUrl =
       this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
     this.asaasMaxParcelas =
-      this.configService.get<number>('ASAAS_MAX_INSTALLMENT_COUNT') ?? 6;
+      this.configService.get<number>('ASAAS_MAX_INSTALLMENT_COUNT') ?? 10;
+    this.asaasMinValorParcela =
+      this.configService.get<number>('ASAAS_MIN_INSTALLMENT_VALUE') ?? 100;
 
     if (this.gateway === 'stripe') {
       const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
@@ -426,14 +433,36 @@ export class CheckoutService {
   // Checkout, usando `externalReference` para amarrar o checkout ao pedido
   // — é essa referência que o webhook usa para reconciliar o pagamento
   // (mesmo papel que `metadata.pedidoId` cumpria no lado Stripe).
+  // Parcelamento no Checkout Asaas: só `maxInstallmentCount` na API — o
+  // mínimo por parcela é calculado aqui a partir do total do pedido.
+  private opcoesParcelamentoAsaas(totalPedido: number): {
+    chargeTypes: AsaasChargeType[];
+    installment?: { maxInstallmentCount: number };
+  } {
+    const maxPorValor = Math.floor(
+      totalPedido / this.asaasMinValorParcela,
+    );
+    const maxParcelas = Math.min(this.asaasMaxParcelas, maxPorValor);
+    if (maxParcelas < 2) {
+      return { chargeTypes: ['DETACHED'] };
+    }
+    return {
+      chargeTypes: ['DETACHED', 'INSTALLMENT'],
+      installment: { maxInstallmentCount: maxParcelas },
+    };
+  }
+
   private async criarSessaoAsaas(
     pedido: PedidoCriado,
     itens: ItemSelecionado[],
   ): Promise<CheckoutSessionResponse> {
+    const { chargeTypes, installment } = this.opcoesParcelamentoAsaas(
+      Number(pedido.total),
+    );
     const checkout = await this.asaasService.criarCheckout({
       billingTypes: ['PIX', 'CREDIT_CARD'],
-      chargeTypes: ['DETACHED', 'INSTALLMENT'],
-      installment: { maxInstallmentCount: this.asaasMaxParcelas },
+      chargeTypes,
+      ...(installment ? { installment } : {}),
       items: itens.map((item) => ({
         name: item.nome,
         quantity: item.quantidade,

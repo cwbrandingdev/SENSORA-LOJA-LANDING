@@ -210,7 +210,7 @@ export default function PedidoTable({
                       Ver itens
                     </Link>
                     <FormButton variant="secondary" onClick={() => onEdit(pedido)}>
-                      Editar
+                      {pedido.status === StatusPedido.PAGO ? "Editar rastreio" : "Editar"}
                     </FormButton>
                     {podeExcluir && (
                       <FormButton variant="danger" onClick={() => onRemove(pedido)}>

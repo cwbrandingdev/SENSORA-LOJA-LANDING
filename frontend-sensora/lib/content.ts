@@ -161,7 +161,7 @@ export const CATEGORIES: Category[] = [
     label: "Difusores",
     description:
       "Uma presença perfumada que transforma o ambiente em uma extensão do seu estilo.",
-    imageSrc: "/images/categories/difusores-especiarias.jpg",
+    imageSrc: "/images/categories/difusores-especiarias.png",
   },
 ];
 
@@ -184,7 +184,8 @@ const VELAS_4_ESTACOES: Collection = {
   categorySlug: "velas",
   name: "Velas",
   tagline: "",
-  description: "Seu aroma favorito, escolhido para criar a sua atmosfera.",
+  description:
+    "Quatro aromas, quatro momentos: a essência de cada estação para transformar a sua casa o ano todo.",
   heroImageSrc: "/images/hero/velas.png",
   heroImageAlt:
     "Kit de velas aromáticas 4 Estações da Sensora, com as quatro velas lado a lado sobre uma bancada",

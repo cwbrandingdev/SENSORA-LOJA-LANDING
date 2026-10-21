@@ -157,6 +157,47 @@ export default function MeuPedidoDetalhePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoId]);
 
+  // Atualiza recebimento automático (Melhor Envio / prazo de 7 dias) sem
+  // exigir refresh manual enquanto o pedido ainda não foi entregue.
+  useEffect(() => {
+    const pedido = dados?.pedido;
+    if (
+      !pedido ||
+      pedido.status !== StatusPedido.PAGO ||
+      pedido.statusEnvio !== StatusEnvio.ENVIADO ||
+      pedido.recebidoEm
+    ) {
+      return;
+    }
+
+    const intervalo = window.setInterval(() => {
+      buscarMeuPedido(pedidoId)
+        .then(async (resultado) => {
+          setDados((atual) => {
+            const eraPendente = atual?.pedido && !atual.pedido.recebidoEm;
+            if (eraPendente && resultado.pedido.recebidoEm) {
+              toast.success(
+                "Seu pedido foi marcado como entregue. Você já pode avaliar os produtos.",
+              );
+              void carregarDevolucoes(resultado.pedido);
+            }
+            return resultado;
+          });
+        })
+        .catch(() => {
+          /* silencioso — a próxima visita ou refresh resolve */
+        });
+    }, 90_000);
+
+    return () => window.clearInterval(intervalo);
+  }, [
+    pedidoId,
+    dados?.pedido.status,
+    dados?.pedido.statusEnvio,
+    dados?.pedido.recebidoEm,
+    toast,
+  ]);
+
   // Etapa 5A (Cancelamento de Pedido) — só chamado quando o status já
   // exibido é PENDENTE (botão só existe nesse caso, ver abaixo), mas o
   // backend é sempre a autoridade real: se o status mudou entre o

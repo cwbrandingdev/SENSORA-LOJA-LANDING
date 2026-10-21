@@ -24,6 +24,7 @@ import { getErrorMessage } from "@/lib/errors";
 import {
   listarPedidos,
   atualizarPedido,
+  atualizarCodigoRastreioPedido,
   removerPedido,
   marcarPedidoComoEnviado,
   gerarEtiquetaPedido,
@@ -159,10 +160,20 @@ function PedidosConteudo() {
     if (!editingPedido) return;
 
     try {
-      await atualizarPedido(editingPedido.id, data);
+      if (editingPedido.status === StatusPedido.PAGO) {
+        const codigo =
+          "codigoRastreio" in data ? (data.codigoRastreio ?? "") : "";
+        await atualizarCodigoRastreioPedido(editingPedido.id, codigo);
+        toast.success("Código de rastreio atualizado.");
+      } else {
+        await atualizarPedido(editingPedido.id, {
+          numero: (data as { numero: string; data: string }).numero,
+          data: (data as { numero: string; data: string }).data,
+        });
+        toast.success("Pedido atualizado com sucesso.");
+      }
       setShowForm(false);
       setEditingPedido(undefined);
-      toast.success("Pedido atualizado com sucesso.");
       await carregarPedidos();
     } catch (err) {
       toast.error(getErrorMessage(err, "Não foi possível salvar o pedido."));

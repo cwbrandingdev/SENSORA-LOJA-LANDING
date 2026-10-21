@@ -13,6 +13,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import Button from "@/components/ui/Button";
 import Skeleton from "@/components/ui/Skeleton";
 import AccountPageHeader from "@/components/conta/AccountPageHeader";
+import RastreioPedido from "@/components/conta/RastreioPedido";
 import StatusPedidoBadge from "@/components/conta/StatusPedidoBadge";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
@@ -101,11 +102,18 @@ export default function MeusPedidosPage() {
                           status, "aguardando envio" não faz sentido e o
                           badge de status financeiro já é suficiente). */}
                       {pedido.status === StatusPedido.PAGO && (
-                        <p className="mt-1 text-xs font-medium text-slate-500">
-                          {pedido.statusEnvio === StatusEnvio.ENVIADO
-                            ? "🚚 Enviado"
-                            : "📦 Aguardando envio"}
-                        </p>
+                        <>
+                          <p className="mt-1 text-xs font-medium text-slate-500">
+                            {pedido.recebidoEm
+                              ? "✅ Entregue"
+                              : pedido.statusEnvio === StatusEnvio.ENVIADO
+                                ? "🚚 Enviado"
+                                : "📦 Aguardando envio"}
+                          </p>
+                          {pedido.codigoRastreio && (
+                            <RastreioPedido codigoRastreio={pedido.codigoRastreio} />
+                          )}
+                        </>
                       )}
                     </div>
                     <div className="flex items-center gap-4">

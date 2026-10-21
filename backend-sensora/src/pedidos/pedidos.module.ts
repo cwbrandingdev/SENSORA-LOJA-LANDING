@@ -9,6 +9,7 @@ import { ProdutosModule } from '../produtos/produtos.module';
 import { PedidoEtiquetaController } from './pedido-etiqueta.controller';
 import { PedidoEtiquetaService } from './pedido-etiqueta.service';
 import { PedidosController } from './pedidos.controller';
+import { PedidosRecebimentoService } from './pedidos-recebimento.service';
 import { PedidosService } from './pedidos.service';
 
 @Module({
@@ -30,7 +31,7 @@ import { PedidosService } from './pedidos.service';
     MailModule,
   ],
   controllers: [PedidosController, PedidoEtiquetaController],
-  providers: [PedidosService, PedidoEtiquetaService],
+  providers: [PedidosService, PedidoEtiquetaService, PedidosRecebimentoService],
   exports: [PedidosService],
 })
 export class PedidosModule {}
