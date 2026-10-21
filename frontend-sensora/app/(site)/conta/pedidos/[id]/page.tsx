@@ -513,12 +513,17 @@ export default function MeuPedidoDetalhePage() {
                 status={dados.pedido.status}
                 statusEnvio={dados.pedido.statusEnvio}
                 enviadoEm={dados.pedido.enviadoEm}
+                recebidoEm={dados.pedido.recebidoEm}
                 codigoRastreio={dados.pedido.codigoRastreio}
               />
             </div>
           </div>
 
-          <AvaliacoesPedido pedido={dados.pedido} itens={dados.itens} />
+          <AvaliacoesPedido
+            pedido={dados.pedido}
+            itens={dados.itens}
+            onRecebido={(pedido) => setDados((atual) => (atual ? { ...atual, pedido } : atual))}
+          />
 
           <div className="mt-10">
             <h2 className="font-serif text-xl font-normal text-brand-navy">

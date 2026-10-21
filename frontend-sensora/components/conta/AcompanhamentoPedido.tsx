@@ -17,7 +17,7 @@ type Etapa = {
   atual: boolean;
 };
 
-function montarEtapas(status: StatusPedido, statusEnvio: StatusEnvio): Etapa[] {
+function montarEtapas(status: StatusPedido, statusEnvio: StatusEnvio, recebido: boolean): Etapa[] {
   if (status === StatusPedido.CANCELADO) {
     return [
       { label: "Pedido realizado", alcancada: true, atual: false },
@@ -56,7 +56,8 @@ function montarEtapas(status: StatusPedido, statusEnvio: StatusEnvio): Etapa[] {
 
   // Etapa 6.6 (Status de Envio) — só aparece para pedidos PAGO. Eixo
   // logístico independente do financeiro: `statusEnvio` é quem decide o
-  // rótulo/estado desta 3ª etapa, nunca `status`.
+  // rótulo/estado desta 3ª etapa, nunca `status`. Depois de enviado entra a
+  // 4ª, "Entregue", alcançada quando o cliente confirma o recebimento.
   const enviado = statusEnvio === StatusEnvio.ENVIADO;
   return [
     { label: "Pedido realizado", alcancada: true, atual: false },
@@ -64,8 +65,9 @@ function montarEtapas(status: StatusPedido, statusEnvio: StatusEnvio): Etapa[] {
     {
       label: enviado ? "Pedido enviado" : "Aguardando envio",
       alcancada: enviado,
-      atual: enviado,
+      atual: enviado && !recebido,
     },
+    ...(enviado ? [{ label: "Entregue", alcancada: recebido, atual: recebido }] : []),
   ];
 }
 
@@ -84,6 +86,7 @@ type AcompanhamentoPedidoProps = {
   status: StatusPedido;
   statusEnvio: StatusEnvio;
   enviadoEm?: string | null;
+  recebidoEm?: string | null;
   codigoRastreio?: string | null;
 };
 
@@ -91,9 +94,10 @@ export default function AcompanhamentoPedido({
   status,
   statusEnvio,
   enviadoEm,
+  recebidoEm,
   codigoRastreio,
 }: AcompanhamentoPedidoProps) {
-  const etapas = montarEtapas(status, statusEnvio);
+  const etapas = montarEtapas(status, statusEnvio, Boolean(recebidoEm));
   const cancelado = status === StatusPedido.CANCELADO;
 
   // Etapa 6.1 (Refinamento) — a barra entre duas etapas "desenha" da
@@ -160,6 +164,7 @@ export default function AcompanhamentoPedido({
       {statusEnvio === StatusEnvio.ENVIADO && enviadoEm ? (
         <p className="mt-6 text-xs leading-relaxed text-slate-500">
           Enviado em {formatarDataEnvio(enviadoEm)}.
+          {recebidoEm && <> Entregue em {formatarDataEnvio(recebidoEm)}.</>}
           {codigoRastreio ? (
             <>
               {" "}

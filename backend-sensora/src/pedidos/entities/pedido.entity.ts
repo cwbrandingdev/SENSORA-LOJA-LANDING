@@ -44,6 +44,8 @@ export class Pedido {
   // no schema); `enviadoEm` só é preenchido quando `statusEnvio === ENVIADO`.
   statusEnvio: StatusEnvio;
   enviadoEm?: Date;
+  // Cliente confirmou o recebimento ("Recebi meu pedido").
+  recebidoEm?: Date;
   codigoRastreio?: string;
   // Etiqueta do Melhor Envio já gerada (pode ser impressa).
   etiquetaGeradaEm?: Date;

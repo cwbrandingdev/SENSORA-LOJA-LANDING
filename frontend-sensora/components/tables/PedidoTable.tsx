@@ -165,12 +165,19 @@ export default function PedidoTable({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-col gap-1">
-                    <Badge tone={pedido.statusEnvio === StatusEnvio.ENVIADO ? "info" : "warning"}>
-                      {pedido.statusEnvio === StatusEnvio.ENVIADO ? "Enviado" : "Aguardando envio"}
-                    </Badge>
+                    {/* Entregue = o cliente clicou em "Recebi meu pedido". */}
+                    {pedido.recebidoEm ? (
+                      <Badge tone="success">Entregue</Badge>
+                    ) : (
+                      <Badge tone={pedido.statusEnvio === StatusEnvio.ENVIADO ? "info" : "warning"}>
+                        {pedido.statusEnvio === StatusEnvio.ENVIADO ? "Enviado" : "Aguardando envio"}
+                      </Badge>
+                    )}
                     {pedido.statusEnvio === StatusEnvio.ENVIADO && pedido.enviadoEm && (
                       <span className="text-xs text-slate-500">
-                        {formatarDataEnvio(pedido.enviadoEm)}
+                        {pedido.recebidoEm
+                          ? `Enviado ${formatarDataEnvio(pedido.enviadoEm)} · entregue ${formatarDataEnvio(pedido.recebidoEm)}`
+                          : formatarDataEnvio(pedido.enviadoEm)}
                       </span>
                     )}
                     {pedido.codigoRastreio && (

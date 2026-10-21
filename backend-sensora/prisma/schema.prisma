@@ -222,6 +222,10 @@ model Pedido {
   // UpdatePedidoDto), então não há como um pedido nascer "ENVIADO".
   statusEnvio         StatusEnvio @default(NAO_ENVIADO)
   enviadoEm           DateTime?
+  // Cliente confirmou que recebeu ("Recebi meu pedido", só depois de
+  // ENVIADO; ver PedidosService.confirmarRecebimento). Libera a avaliação na
+  // hora, sem esperar a data prevista de entrega.
+  recebidoEm          DateTime?
   // Lembrete por e-mail para avaliar já enviado (um só por pedido; ver
   // AvaliacoesService.enviarLembretes).
   lembreteAvaliacaoEm DateTime?

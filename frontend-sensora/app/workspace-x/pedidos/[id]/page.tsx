@@ -298,6 +298,18 @@ export default function PedidoDetalhePage() {
                   </span>
                 )}
               </div>
+              {/* O cliente clicou em "Recebi meu pedido". */}
+              {pedido.recebidoEm && (
+                <div className="mt-1 flex items-center gap-2">
+                  <Badge tone="success">Entregue</Badge>
+                  <span className="text-xs text-slate-500">
+                    {new Date(pedido.recebidoEm).toLocaleDateString("pt-BR", {
+                      timeZone: "America/Sao_Paulo",
+                    })}{" "}
+                    · confirmado pelo cliente
+                  </span>
+                </div>
+              )}
               {pedido.codigoRastreio && (
                 <p className="mt-1 font-mono text-xs text-slate-500">
                   {pedido.codigoRastreio}
