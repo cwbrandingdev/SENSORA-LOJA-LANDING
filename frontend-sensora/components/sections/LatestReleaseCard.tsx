@@ -5,7 +5,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { Check, ShoppingBag } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-import { useToast } from "@/context/ToastContext";
 import { statusEstoque } from "@/lib/estoque";
 import type { ProdutoPublico } from "@/lib/api-publica";
 import { imagemKitRedimensionada } from "@/lib/loja-imagens";
@@ -31,7 +30,6 @@ const formatPrice = new Intl.NumberFormat("pt-BR", {
 
 export default function LatestReleaseCard({ produto }: { produto: ReleaseItem }) {
   const { adicionarItem } = useCart();
-  const toast = useToast();
   const [adicionado, setAdicionado] = useState(false);
   const [imagemQuebrou, setImagemQuebrou] = useState(false);
   const [imagemHoverQuebrou, setImagemHoverQuebrou] = useState(false);
@@ -56,7 +54,6 @@ export default function LatestReleaseCard({ produto }: { produto: ReleaseItem })
       1,
     );
 
-    toast.success(`"${lojaProduto.nome}" adicionado ao carrinho.`);
     setAdicionado(true);
     window.setTimeout(() => setAdicionado(false), 1600);
   }

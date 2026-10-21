@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, ShoppingBag, UserRound, X } from "lucide-react";
@@ -45,7 +45,7 @@ function IconLink({
   label: string;
   badge?: number;
   children: ReactNode;
-  onClick?: () => void;
+  onClick?: (evento: MouseEvent<HTMLAnchorElement>) => void;
   className?: string;
 }) {
   return (
@@ -97,9 +97,20 @@ function CategoryNav({
   );
 }
 
+// O ícone de sacola abre a sacola lateral em vez de navegar; o href para
+// /loja/carrinho fica como alternativa (nova aba, sem JavaScript).
+function abrirSacolaNoClique(abrirSacola: () => void) {
+  return (evento: MouseEvent<HTMLAnchorElement>) => {
+    if (evento.metaKey || evento.ctrlKey || evento.shiftKey) return;
+    evento.preventDefault();
+    abrirSacola();
+  };
+}
+
 function UtilityCluster({
   cartLabel,
   totalItens,
+  onAbrirSacola,
   loading,
   contaHref,
   contaLabel,
@@ -107,6 +118,7 @@ function UtilityCluster({
 }: {
   cartLabel: string;
   totalItens: number;
+  onAbrirSacola: (evento: MouseEvent<HTMLAnchorElement>) => void;
   loading: boolean;
   contaHref: string;
   contaLabel: string;
@@ -124,6 +136,7 @@ function UtilityCluster({
         href={ROUTES.LOJA_CARRINHO}
         label={cartLabel}
         badge={totalItens}
+        onClick={onAbrirSacola}
         className="rounded-full hover:bg-slate-100"
       >
         <ShoppingBag className="h-4.5 w-4.5" strokeWidth={1.75} />
@@ -143,7 +156,8 @@ function UtilityCluster({
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { totalItens } = useCart();
+  const { totalItens, abrirSacola } = useCart();
+  const onAbrirSacola = abrirSacolaNoClique(abrirSacola);
   const pathname = usePathname();
   const { isAuthenticated, loading, perfil, logout } = useAuth();
 
@@ -236,6 +250,7 @@ export default function Navbar() {
                   href={ROUTES.LOJA_CARRINHO}
                   label={cartLabel}
                   badge={totalItens}
+                  onClick={onAbrirSacola}
                 >
                   <ShoppingBag
                     className="h-[22px] w-[22px]"
@@ -346,6 +361,7 @@ export default function Navbar() {
               <UtilityCluster
                 cartLabel={cartLabel}
                 totalItens={totalItens}
+                onAbrirSacola={onAbrirSacola}
                 loading={loading}
                 contaHref={contaHref}
                 contaLabel={contaLabel}

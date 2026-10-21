@@ -561,6 +561,30 @@ describe('AuthService', () => {
       expect(mailService.enviarEmail).not.toHaveBeenCalled();
     });
 
+    it('CPF/telefone alterados: avisa o e-mail da conta, sem os valores novos; só o nome não avisa', async () => {
+      usuariosService.findOne.mockResolvedValueOnce(atual);
+      usuariosService.atualizarMeusDados.mockResolvedValueOnce({
+        ...atual,
+        nome: 'Outro Nome',
+        cpf: '52998224725',
+        telefone: '41999999999',
+      });
+
+      await service.atualizarMeusDados(7, {
+        nome: 'Outro Nome',
+        email: 'cliente@sensora.dev',
+        cpf: '529.982.247-25',
+        telefone: '(41) 99999-9999',
+      });
+
+      const aviso = emailPara('cliente@sensora.dev');
+      expect(mailService.enviarEmail).toHaveBeenCalledTimes(1);
+      expect(aviso?.subject).toBe('Dados da conta alterados — Sensora');
+      expect(aviso?.html).toContain('O CPF e o telefone');
+      expect(aviso?.html).not.toContain('52998224725');
+      expect(aviso?.html).not.toContain('41999999999');
+    });
+
     it('troca sem senhaAtual é rejeitada (400), sem gravar, gerar token, revogar sessões nem enviar e-mail', async () => {
       prepararTroca();
 

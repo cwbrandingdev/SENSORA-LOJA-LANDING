@@ -9,7 +9,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check, ShoppingBag } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-import { useToast } from "@/context/ToastContext";
 import { statusEstoque } from "@/lib/estoque";
 import type { ReleaseItem } from "./LatestReleaseCard";
 import { imagemKitRedimensionada } from "@/lib/loja-imagens";
@@ -17,10 +16,9 @@ import { descricaoSemFichaTecnica } from "@/lib/descricao-produto";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
-// Mesma ação do LatestReleaseCard: adiciona 1 unidade e avisa.
+// Mesma ação do LatestReleaseCard: adiciona 1 unidade (a sacola lateral abre).
 function BotaoSacola({ item }: { item: ReleaseItem }) {
   const { adicionarItem } = useCart();
-  const toast = useToast();
   const [adicionado, setAdicionado] = useState(false);
   const produto = item.produto;
   const esgotado = produto ? statusEstoque(produto.quantidade) === "ESGOTADO" : false;
@@ -38,7 +36,6 @@ function BotaoSacola({ item }: { item: ReleaseItem }) {
       },
       1,
     );
-    toast.success(`"${produto.nome}" adicionado ao carrinho.`);
     setAdicionado(true);
     window.setTimeout(() => setAdicionado(false), 1600);
   }
@@ -66,8 +63,10 @@ export default function KitSeloCircular({ item }: { item: ReleaseItem }) {
   const idCirculo = useId();
   const [imagemQuebrou, setImagemQuebrou] = useState(false);
   const textoSelo = `Kit exclusivo · ${item.nome} · Sensora · `.toUpperCase();
+  // Só o primeiro parágrafo (a apresentação do kit), inteiro e sem
+  // reticências; composição e ficha técnica ficam na página do produto.
   const descricao = item.produto?.descricao
-    ? descricaoSemFichaTecnica(item.produto.descricao)
+    ? descricaoSemFichaTecnica(item.produto.descricao).split(/\n\s*\n/)[0]
     : undefined;
 
   return (
@@ -105,7 +104,7 @@ export default function KitSeloCircular({ item }: { item: ReleaseItem }) {
       <div className="flex flex-col items-start gap-4">
         <h4 className="font-serif text-4xl font-normal tracking-tight text-brand-navy sm:text-5xl">{item.nome}</h4>
         {descricao && (
-          <p className="line-clamp-4 max-w-md whitespace-pre-line text-[15px] leading-relaxed text-slate-600">
+          <p className="max-w-lg whitespace-pre-line text-[15px] leading-relaxed text-slate-600">
             {descricao}
           </p>
         )}

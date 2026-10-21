@@ -18,6 +18,36 @@ export default function Footer() {
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 px-6 py-20 sm:grid-cols-2 lg:grid-cols-5 lg:px-10">
         <div className="sm:col-span-2 lg:col-span-2">
           <Logo className="items-start text-left" />
+          <div className="mt-6 flex gap-4">
+            {FOOTER_CONTENT.social.map((social) => (
+              <Link
+                key={social.label}
+                href={social.href}
+                aria-label={social.label}
+                title={social.label}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 ring-1 ring-white/20 transition-colors duration-300 hover:text-brand-orange hover:ring-brand-orange"
+              >
+                {/* Ícone do Instagram desenhado aqui: o lucide-react não traz
+                    mais ícones de marca. Mesmo traço (1.5) dos demais. */}
+                <svg
+                  aria-hidden
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-5 w-5"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="5" />
+                  <circle cx="12" cy="12" r="4" />
+                  <circle cx="17.5" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+                </svg>
+              </Link>
+            ))}
+          </div>
         </div>
 
         <div>
@@ -86,24 +116,6 @@ export default function Footer() {
               </a>
             </li>
           </ul>
-          <div className="mt-6 flex gap-4">
-            {FOOTER_CONTENT.social.map((social) => (
-              <Link
-                key={social.label}
-                href={social.href}
-                aria-label={social.label}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group relative inline-block text-sm text-white/70 transition-colors duration-300 hover:text-brand-orange"
-              >
-                {social.label}
-                <span
-                  aria-hidden
-                  className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-brand-orange transition-transform duration-300 ease-out group-hover:scale-x-100 motion-reduce:transition-none"
-                />
-              </Link>
-            ))}
-          </div>
         </div>
       </div>
 
