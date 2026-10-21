@@ -106,6 +106,18 @@ export class PedidosController {
     return this.pedidosService.solicitarReembolso(id, user);
   }
 
+  // "Recebi meu pedido": libera a avaliação na hora (ver
+  // PedidosService.confirmarRecebimento). Sem corpo.
+  @Post('meus/:id/recebido')
+  @Roles(...TODOS_OS_PERFIS)
+  @HttpCode(HttpStatus.OK)
+  confirmarRecebimentoMeuPedido(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: UsuarioAutenticado,
+  ): Promise<Pedido> {
+    return this.pedidosService.confirmarRecebimento(id, user);
+  }
+
   @Patch('meus/:id/endereco')
   @Roles(...TODOS_OS_PERFIS)
   atualizarEnderecoMeuPedido(

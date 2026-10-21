@@ -2,8 +2,8 @@
 
 // Página do pedido (Minha Conta): avaliação de cada produto. Só para pedido
 // pago e já enviado, e a partir da data prevista de entrega (envio + prazo
-// do frete, calculada pelo backend). Vai para a loja depois da aprovação do
-// Admin.
+// do frete, calculada pelo backend) ou antes, quando o cliente clica em
+// "Recebi meu pedido". Vai para a loja depois da aprovação do Admin.
 import { useEffect, useState } from "react";
 import { Truck } from "lucide-react";
 import Estrelas from "@/components/loja/Estrelas";
@@ -19,6 +19,7 @@ import {
   type StatusAvaliacao,
 } from "@/lib/types/loja";
 import { listarAvaliacoesDoPedido, salvarAvaliacao } from "@/services/avaliacoes";
+import { confirmarRecebimentoMeuPedido } from "@/services/pedidos";
 
 const MAXIMO_COMENTARIO = 2000;
 
@@ -31,6 +32,8 @@ const SITUACAO: Record<StatusAvaliacao, { texto: string; classe: string }> = {
 type Props = {
   pedido: Pedido;
   itens: ItemPedidoDetalhado[];
+  /** Pedido atualizado depois do "Recebi meu pedido" (a página mostra "Entregue"). */
+  onRecebido: (pedido: Pedido) => void;
 };
 
 function FormAvaliacao({
@@ -137,11 +140,13 @@ function FormAvaliacao({
   );
 }
 
-export default function AvaliacoesPedido({ pedido, itens }: Props) {
+export default function AvaliacoesPedido({ pedido, itens, onRecebido }: Props) {
+  const toast = useToast();
   const [liberadaEm, setLiberadaEm] = useState<string | null>(null);
   // Comparado com "agora" quando a resposta chega (não durante a renderização).
   const [aCaminho, setACaminho] = useState(false);
   const [avaliacoes, setAvaliacoes] = useState<AvaliacaoDoCliente[] | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
   const elegivel = pedido.status === StatusPedido.PAGO && pedido.statusEnvio === StatusEnvio.ENVIADO;
 
   useEffect(() => {
@@ -158,11 +163,26 @@ export default function AvaliacoesPedido({ pedido, itens }: Props) {
     return () => {
       ativo = false;
     };
-  }, [elegivel, pedido.id]);
+    // pedido.recebidoEm: depois do "Recebi meu pedido" busca de novo e já
+    // abre a avaliação.
+  }, [elegivel, pedido.id, pedido.recebidoEm]);
+
+  async function confirmarRecebimento() {
+    setConfirmando(true);
+    try {
+      onRecebido(await confirmarRecebimentoMeuPedido(pedido.id));
+      toast.success("Que bom que chegou! Agora você já pode avaliar os produtos.");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Não foi possível confirmar o recebimento."));
+    } finally {
+      setConfirmando(false);
+    }
+  }
 
   if (!elegivel || avaliacoes === null || !liberadaEm) return null;
 
-  // Ainda a caminho: mostra a partir de quando dá para avaliar.
+  // Ainda a caminho: mostra a partir de quando dá para avaliar, ou já
+  // libera se o cliente confirmar que recebeu.
   if (aCaminho) {
     return (
       <div className="mt-8 flex items-start gap-3 rounded-sm border border-brand-navy/15 bg-brand-navy/[0.03] p-5">
@@ -171,9 +191,12 @@ export default function AvaliacoesPedido({ pedido, itens }: Props) {
           <p className="font-medium text-brand-navy">Seu pedido está a caminho</p>
           <p className="mt-0.5 text-sm text-slate-600">
             Você poderá avaliar os produtos a partir de{" "}
-            {new Date(liberadaEm).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}, quando ele já tiver
-            chegado.
+            {new Date(liberadaEm).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}. Já chegou? Confirme
+            abaixo e avalie agora.
           </p>
+          <FormButton type="button" onClick={confirmarRecebimento} disabled={confirmando} className="mt-3">
+            {confirmando ? "Confirmando…" : "Recebi meu pedido"}
+          </FormButton>
         </div>
       </div>
     );

@@ -47,6 +47,13 @@ export async function solicitarReembolsoMeuPedido(id: number): Promise<Pedido> {
   return response.data;
 }
 
+// "Recebi meu pedido" — POST /pedidos/meus/:id/recebido, sem body. Só para
+// pedido pago e já enviado; libera a avaliação na hora.
+export async function confirmarRecebimentoMeuPedido(id: number): Promise<Pedido> {
+  const response = await api.post<Pedido>(`/pedidos/meus/${id}/recebido`);
+  return response.data;
+}
+
 // Etapa 4 (Devoluções) — POST /pedidos/meus/:id/devolucoes, para pedido
 // PAGO já ENVIADO. O backend valida dono, status, itens e quantidades
 // disponíveis; daqui só saem motivo, descrição e itens/quantidades.

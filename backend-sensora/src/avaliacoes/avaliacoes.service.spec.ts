@@ -128,6 +128,25 @@ describe('AvaliacoesService', () => {
     ).toBeNull();
   });
 
+  it('liberação: "Recebi meu pedido" antes da data prevista libera na confirmação', () => {
+    const base = new Date('2026-10-10T12:00:00Z');
+    const pedido = (recebidoEm: Date) => ({
+      status: 'PAGO' as const,
+      statusEnvio: 'ENVIADO' as const,
+      enviadoEm: base,
+      recebidoEm,
+      fretePrazoDias: 5,
+    });
+    const umDia = new Date(base.getTime() + DIA_MS);
+    const dezDias = new Date(base.getTime() + 10 * DIA_MS);
+
+    expect(dataLiberacaoAvaliacao(pedido(umDia))).toEqual(umDia);
+    // Confirmou depois da data prevista: continua valendo a prevista.
+    expect(dataLiberacaoAvaliacao(pedido(dezDias))).toEqual(
+      new Date(base.getTime() + 7 * DIA_MS),
+    );
+  });
+
   it('nome exibido: primeiro nome + inicial do último sobrenome', () => {
     expect(nomeParaExibicao('Ana Souza Lima')).toBe('Ana L.');
     expect(nomeParaExibicao('  ana  ')).toBe('ana');

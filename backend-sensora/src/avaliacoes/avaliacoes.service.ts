@@ -45,12 +45,14 @@ export function nomeParaExibicao(nome: string): string {
 
 // Quando a avaliação do pedido é liberada: na data prevista de entrega, ou
 // seja, envio + prazo do frete. O prazo do frete é em dias úteis, então vira
-// dias corridos (× 7/5) para não liberar antes de a encomenda chegar. Sem
+// dias corridos (× 7/5) para não liberar antes de a encomenda chegar. Se o
+// cliente confirmou o recebimento antes disso, libera na confirmação. Sem
 // pagamento ou ainda não enviado: nunca (null).
 export function dataLiberacaoAvaliacao(pedido: {
   status: StatusPedido | `${StatusPedido}`;
   statusEnvio: StatusEnvio | `${StatusEnvio}`;
   enviadoEm: Date | null;
+  recebidoEm?: Date | null;
   fretePrazoDias: number | null;
 }): Date | null {
   if (
@@ -64,7 +66,10 @@ export function dataLiberacaoAvaliacao(pedido: {
     Math.ceil(((pedido.fretePrazoDias ?? 0) * 7) / 5),
     DIAS_MINIMOS_ENTREGA,
   );
-  return new Date(pedido.enviadoEm.getTime() + dias * DIA_MS);
+  const prevista = new Date(pedido.enviadoEm.getTime() + dias * DIA_MS);
+  return pedido.recebidoEm && pedido.recebidoEm < prevista
+    ? pedido.recebidoEm
+    : prevista;
 }
 
 @Injectable()
@@ -277,6 +282,7 @@ export class AvaliacoesService implements OnModuleInit, OnModuleDestroy {
           status: true,
           statusEnvio: true,
           enviadoEm: true,
+          recebidoEm: true,
           fretePrazoDias: true,
           itens: { select: { produtoId: true } },
           avaliacoes: { select: { produtoId: true } },
@@ -349,6 +355,7 @@ export class AvaliacoesService implements OnModuleInit, OnModuleDestroy {
         status: true,
         statusEnvio: true,
         enviadoEm: true,
+        recebidoEm: true,
         fretePrazoDias: true,
         itens: { select: { produtoId: true } },
       },

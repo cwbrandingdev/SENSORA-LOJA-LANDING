@@ -249,6 +249,9 @@ export type Pedido = {
   // para envios marcados à noite no horário de Brasília.
   statusEnvio: StatusEnvio;
   enviadoEm?: string | null;
+  // Cliente confirmou o recebimento ("Recebi meu pedido") — mesmo fuso de
+  // `enviadoEm` na exibição.
+  recebidoEm?: string | null;
   codigoRastreio?: string | null;
   // Etiqueta do Melhor Envio já gerada (botão "Imprimir etiqueta").
   etiquetaGeradaEm?: string | null;

@@ -720,6 +720,39 @@ export class PedidosService {
     return enviado;
   }
 
+  // "Recebi meu pedido" — o próprio cliente confirma a entrega de um pedido
+  // PAGO e já ENVIADO. Só grava `recebidoEm` uma vez (updateMany com
+  // recebidoEm: null): clique duplo devolve o pedido sem mudar a data.
+  async confirmarRecebimento(
+    id: number,
+    user: UsuarioAutenticado,
+  ): Promise<Pedido> {
+    const pedidoAtual = await this.findOne(id, user);
+    if (pedidoAtual.recebidoEm) {
+      return pedidoAtual;
+    }
+    if (
+      pedidoAtual.status !== StatusPedido.PAGO ||
+      pedidoAtual.statusEnvio !== StatusEnvio.ENVIADO
+    ) {
+      throw new ConflictException(
+        'Só é possível confirmar o recebimento de um pedido já enviado.',
+      );
+    }
+
+    await this.prisma.pedido.updateMany({
+      where: {
+        id,
+        usuarioId: user.id,
+        status: StatusPedido.PAGO,
+        statusEnvio: StatusEnvio.ENVIADO,
+        recebidoEm: null,
+      },
+      data: { recebidoEm: new Date() },
+    });
+    return this.findOne(id, user);
+  }
+
   // Fora da escrita de status (HTTP externo não pode segurar o claim).
   // Falha de e-mail nunca desfaz o "marcado como enviado".
   private async avisarPedidoEnviado(pedido: Pedido): Promise<void> {
@@ -971,6 +1004,7 @@ export class PedidosService {
       fretePrazoDias: pedido.fretePrazoDias ?? undefined,
       statusEnvio: pedido.statusEnvio as StatusEnvio,
       enviadoEm: pedido.enviadoEm ?? undefined,
+      recebidoEm: pedido.recebidoEm ?? undefined,
       codigoRastreio: pedido.codigoRastreio ?? undefined,
       etiquetaGeradaEm: pedido.etiquetaGeradaEm ?? undefined,
     };
