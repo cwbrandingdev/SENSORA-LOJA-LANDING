@@ -149,9 +149,17 @@ export class CheckoutService {
       );
     }
 
-    // Telefone entra na compra (não só em Minha Conta): a etiqueta do
-    // Melhor Envio recusa pedido sem telefone no cadastro do cliente.
-    await this.usuariosService.garantirTelefone(usuarioId, dto.telefone);
+    // Telefone vem do cadastro (RegisterDto / Minha Conta), nunca do checkout.
+    // A etiqueta do Melhor Envio exige o número salvo em Usuario.
+    if (!usuario.telefone) {
+      throw new BadRequestException(
+        'Complete o telefone em Minha Conta > Dados pessoais antes de finalizar a compra.',
+      );
+    }
+
+    // CPF vem do checkout (ou confirma o já salvo); sem ele a compra não
+    // chega ao pagamento — NF e Melhor Envio leem Usuario.cpf depois.
+    await this.usuariosService.garantirCpf(usuarioId, dto.cpf);
 
     if (!dto.itens.length) {
       throw new BadRequestException('O carrinho está vazio');

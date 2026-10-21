@@ -1,19 +1,27 @@
 import { test, expect } from "@playwright/test";
 
 // Cadastro em /register é o AuthSwitch já no modo criar conta (mesma
-// transição do login). CPF e aceite dos termos são obrigatórios.
-// POST /auth/register é interceptado — sem backend real.
+// transição do login). Telefone e aceite dos termos são obrigatórios; CPF
+// é coletado no checkout. POST /auth/register é interceptado — sem backend real.
 
 const SUBMIT_BUTTON = 'form:has(#register-senha) button[type="submit"]';
-const CPF_VALIDO = "52998224725";
+const TELEFONE_VALIDO = "41999999999";
 
 async function preencherCadastro(
   page: import("@playwright/test").Page,
-  valores: { nome?: string; email?: string; cpf?: string; senha?: string; confirmar?: string },
+  valores: {
+    nome?: string;
+    email?: string;
+    telefone?: string;
+    senha?: string;
+    confirmar?: string;
+  },
 ) {
   if (valores.nome !== undefined) await page.locator("#register-nome").fill(valores.nome);
   if (valores.email !== undefined) await page.locator("#register-email").fill(valores.email);
-  if (valores.cpf !== undefined) await page.locator("#register-cpf").fill(valores.cpf);
+  if (valores.telefone !== undefined) {
+    await page.locator("#register-telefone").fill(valores.telefone);
+  }
   if (valores.senha !== undefined) await page.locator("#register-senha").fill(valores.senha);
   if (valores.confirmar !== undefined) {
     await page.locator("#register-confirmar-senha").fill(valores.confirmar);
@@ -33,7 +41,7 @@ test.describe("Criar conta — /register", () => {
     await preencherCadastro(page, {
       nome: "Cliente Teste",
       email: "cliente@sensora.dev",
-      cpf: CPF_VALIDO,
+      telefone: TELEFONE_VALIDO,
       senha: "senhaSegura123",
       confirmar: "senhaSegura123",
     });
@@ -54,7 +62,7 @@ test.describe("Criar conta — /register", () => {
     await preencherCadastro(page, {
       nome: "Cliente Teste",
       email: "cliente@sensora.dev",
-      cpf: CPF_VALIDO,
+      telefone: TELEFONE_VALIDO,
       senha: "senhaSegura123",
       confirmar: "outraSenha456",
     });
@@ -65,7 +73,9 @@ test.describe("Criar conta — /register", () => {
     expect(chamadas).toHaveLength(0);
   });
 
-  test("CPF inválido: bloqueado no frontend, sem chamar o backend", async ({ page }) => {
+  test("telefone inválido: bloqueado no frontend, sem chamar o backend", async ({
+    page,
+  }) => {
     const chamadas: unknown[] = [];
     page.on("request", (request) => {
       if (request.url().includes("/auth/register")) chamadas.push(request.url());
@@ -75,14 +85,14 @@ test.describe("Criar conta — /register", () => {
     await preencherCadastro(page, {
       nome: "Cliente Teste",
       email: "cliente@sensora.dev",
-      cpf: "111.111.111-11",
+      telefone: "123",
       senha: "senhaSegura123",
       confirmar: "senhaSegura123",
     });
     await page.locator("#register-aceite").check();
     await page.locator(SUBMIT_BUTTON).click();
 
-    await expect(page.getByText("CPF inválido")).toBeVisible();
+    await expect(page.getByText("Telefone inválido")).toBeVisible();
     expect(chamadas).toHaveLength(0);
   });
 
@@ -96,7 +106,7 @@ test.describe("Criar conta — /register", () => {
     await preencherCadastro(page, {
       nome: "Cliente Teste",
       email: "cliente@sensora.dev",
-      cpf: CPF_VALIDO,
+      telefone: TELEFONE_VALIDO,
       senha: "curta12",
       confirmar: "curta12",
     });
@@ -107,7 +117,7 @@ test.describe("Criar conta — /register", () => {
     expect(chamadas).toHaveLength(0);
   });
 
-  test("dados válidos com aceite: chama /auth/register com CPF e mostra confirmação", async ({
+  test("dados válidos com aceite: chama /auth/register sem CPF e mostra confirmação", async ({
     page,
   }) => {
     let corpoEnviado: unknown = null;
@@ -130,7 +140,7 @@ test.describe("Criar conta — /register", () => {
     await preencherCadastro(page, {
       nome: "Cliente Teste",
       email: "cliente@sensora.dev",
-      cpf: CPF_VALIDO,
+      telefone: TELEFONE_VALIDO,
       senha: "senhaSegura123",
       confirmar: "senhaSegura123",
     });
@@ -142,12 +152,10 @@ test.describe("Criar conta — /register", () => {
       nome: "Cliente Teste",
       email: "cliente@sensora.dev",
       senha: "senhaSegura123",
-      cpf: "529.982.247-25",
+      telefone: "(41) 99999-9999",
     });
     await expect(page).toHaveURL(/\/register$/);
 
-    // Aviso grande do e-mail de confirmação: fica na tela (não some sozinho)
-    // até o usuário fechar no X; só então volta ao modo Entrar.
     const aviso = page.getByRole("dialog", { name: "Conta criada!" });
     await expect(aviso).toContainText("cliente@sensora.dev");
     await page.waitForTimeout(3000);
@@ -196,7 +204,7 @@ test.describe("Criar conta — /register", () => {
     await preencherCadastro(page, {
       nome: "Cliente Teste",
       email: "cliente@outlok.com",
-      cpf: CPF_VALIDO,
+      telefone: TELEFONE_VALIDO,
       senha: "senhaSegura123",
       confirmar: "senhaSegura123",
     });

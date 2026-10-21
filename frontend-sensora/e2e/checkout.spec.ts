@@ -114,7 +114,11 @@ function comboboxEndereco(page: Page) {
   return page.getByRole("combobox", { name: "Selecione um endereço" });
 }
 
-async function mockMeuPerfil(page: Page, telefone: string | null = "41999999999") {
+async function mockMeuPerfil(
+  page: Page,
+  telefone: string | null = "41999999999",
+  cpf: string | null = "52998224725",
+) {
   await page.route("**/usuarios/me", async (route) => {
     if (route.request().method() !== "GET") {
       await route.fallback();
@@ -128,21 +132,25 @@ async function mockMeuPerfil(page: Page, telefone: string | null = "41999999999"
         perfil: "CLIENTE",
         ativo: true,
         emailVerificado: true,
-        cpf: "52998224725",
+        cpf,
         telefone,
       },
     });
   });
 }
 
-async function seedSession(page: Page, telefone: string | null = "41999999999") {
+async function seedSession(
+  page: Page,
+  telefone: string | null = "41999999999",
+  cpf: string | null = "52998224725",
+) {
   await page.addInitScript(
     ([tokenKey, token]) => {
       window.localStorage.setItem(tokenKey, token);
     },
     [TOKEN_KEY, fakeToken()] as const,
   );
-  await mockMeuPerfil(page, telefone);
+  await mockMeuPerfil(page, telefone, cpf);
 }
 
 // Etapa (Carrinho por conta) — espelha a resolução de chave de
@@ -700,7 +708,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
     const sessionRequests = captureCheckoutSessionRequests(page);
 
     await page.goto(CHECKOUT_URL);
-    await expect(page.getByLabel("Telefone")).toHaveValue("(41) 99999-9999");
+    await expect(page.getByLabel("CPF")).toHaveValue("529.982.247-25");
     // Escopado ao <aside> (resumo do pedido) — o rótulo do botão muda para
     // "Processando..." assim que clicado, então um locator preso ao nome
     // original quebraria na segunda verificação.
@@ -728,11 +736,7 @@ test.describe("Checkout — Task 10/11: criação da sessão e redirecionamento 
         { produtoId: 202, quantidade: 1 },
       ],
       clienteEmail: "cliente@sensora.dev",
-      // Etapa "Dados do Cliente / Cadastro" (achado da auditoria) —
-      // `clienteNome` não é mais enviado pelo frontend: o backend usa
-      // Usuario.nome diretamente (nunca mais "chutado" a partir da parte
-      // local do e-mail).
-      telefone: "(41) 99999-9999",
+      cpf: "529.982.247-25",
       enderecoId: ENDERECO_PADRAO.id,
       // Etapa 6.5 (Frete) — única opção mockada (OPCAO_FRETE_PADRAO), já
       // auto-selecionada pela página (mesmo padrão de UX do endereço).
@@ -1698,26 +1702,24 @@ test.describe("Checkout — Etapa 6.5: frete", () => {
     );
   });
 
-  test("sem telefone: não inicia o pagamento e pede o número na hora da compra", async ({
+  test("sem CPF: não inicia o pagamento e pede o documento na hora da compra", async ({
     page,
   }) => {
-    await seedSession(page, null);
+    await seedSession(page, "41999999999", null);
     await seedCart(page, [CART_ITEM]);
     await mockEnderecos(page, [ENDERECO_PADRAO]);
     await mockFreteCotacao(page);
     const sessionRequests = captureCheckoutSessionRequests(page);
 
     await page.goto(CHECKOUT_URL);
-    await expect(page.getByLabel("Telefone")).toBeVisible();
-    await expect(page.getByLabel("Telefone")).toHaveValue("");
+    await expect(page.getByLabel("CPF")).toBeVisible();
+    await expect(page.getByLabel("CPF")).toHaveValue("");
 
     await aceitarTermosDeCompra(page);
     await page.getByRole("button", { name: "Continuar para pagamento →" }).click();
 
     await expect(
-      page.getByText(
-        "Informe um telefone válido. A transportadora usa esse número na entrega.",
-      ),
+      page.getByText("Informe um CPF válido. Ele é usado na nota fiscal desta compra."),
     ).toBeVisible();
     expect(sessionRequests).toEqual([]);
   });

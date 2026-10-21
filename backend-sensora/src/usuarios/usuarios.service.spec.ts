@@ -519,6 +519,35 @@ describe('UsuariosService — atualizarMeusDados: CPF/telefone', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it('garantirCpf grava CPF formatado já normalizado', async () => {
+    const resultado = await service.garantirCpf(1, '529.982.247-25');
+
+    expect(resultado).toBe('52998224725');
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { cpf: '52998224725' },
+    });
+  });
+
+  it('garantirCpf não escreve de novo se o CPF já é o salvo', async () => {
+    usuariosFake.set(1, usuarioBase({ cpf: '52998224725' }));
+
+    await expect(service.garantirCpf(1, '529.982.247-25')).resolves.toBe(
+      '52998224725',
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('garantirCpf recusa vazio ou inválido', async () => {
+    await expect(service.garantirCpf(1, '')).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(service.garantirCpf(1, '123')).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
   // ---- findOne (GET /usuarios/me) --------------------------------------
 
   it('findOne (GET /usuarios/me) devolve cpf/telefone salvos, nunca a senha', async () => {

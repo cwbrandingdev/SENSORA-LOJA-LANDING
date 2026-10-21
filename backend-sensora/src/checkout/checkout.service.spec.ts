@@ -47,9 +47,13 @@ import {
 // Usuario.nome..." abaixo); mantido aqui, no mock compartilhado, para que
 // toda suíte que chega até a criação do pedido exercite o mesmo caminho.
 const usuariosServiceVerificado = {
-  findOne: jest.fn(() => ({ emailVerificado: true, nome: 'Cliente Sensora' })),
-  garantirTelefone: jest.fn(async (_id: number, telefone: string) =>
-    telefone.replace(/\D/g, ''),
+  findOne: jest.fn(() => ({
+    emailVerificado: true,
+    nome: 'Cliente Sensora',
+    telefone: '41999999999',
+  })),
+  garantirCpf: jest.fn(async (_id: number, cpf: string) =>
+    cpf.replace(/\D/g, ''),
   ),
 };
 
@@ -1426,7 +1430,7 @@ describe('CheckoutService — createSession: produto inativo (Task 16)', () => {
         {
           itens: [{ produtoId: 5, quantidade: 1 }],
           clienteEmail: 'cliente@sensora.dev',
-          telefone: '41999999999',
+          cpf: '52998224725',
           enderecoId: 1,
           freteServicoId: 1,
         },
@@ -1499,7 +1503,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
       {
         itens: [{ produtoId: 5, quantidade: 2 }],
         clienteEmail: 'cliente@sensora.dev',
-        telefone: '41999999999',
+        cpf: '52998224725',
         enderecoId: 1,
         freteServicoId: OPCAO_FRETE_FAKE.id,
       },
@@ -1582,6 +1586,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
     const findOne = jest.fn(() => ({
       emailVerificado: true,
       nome: 'Thiago Freitas',
+      telefone: '41999999999',
     }));
 
     const module: TestingModule = await Test.createTestingModule({
@@ -1610,8 +1615,8 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
           provide: UsuariosService,
           useValue: {
             findOne,
-            garantirTelefone: jest.fn(async (_id: number, telefone: string) =>
-              telefone.replace(/\D/g, ''),
+            garantirCpf: jest.fn(async (_id: number, cpf: string) =>
+              cpf.replace(/\D/g, ''),
             ),
           },
         },
@@ -1629,7 +1634,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         // clienteNome. O e-mail é deliberadamente diferente do nome real,
         // para que a asserção abaixo não passe "por acidente".
         clienteEmail: 'thiago.freitas@sensora.dev',
-        telefone: '41999999999',
+        cpf: '52998224725',
         enderecoId: 1,
         freteServicoId: OPCAO_FRETE_FAKE.id,
       },
@@ -1646,11 +1651,68 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
     );
   });
 
-  it('recusa a sessão se o telefone for inválido, sem criar pedido', async () => {
+  it('recusa a sessão se o usuário não tem telefone cadastrado, sem criar pedido', async () => {
     const pedidoCreate = jest.fn();
-    const garantirTelefone = jest.fn(async () => {
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({ CHECKOUT_GATEWAY: 'asaas' })[key as 'CHECKOUT_GATEWAY'],
+          },
+        },
+        {
+          provide: PrismaService,
+          useValue: { pedido: { create: pedidoCreate } },
+        },
+        { provide: ProdutosService, useValue: { findOne: jest.fn() } },
+        {
+          provide: EnderecosService,
+          useValue: { findOneForUsuario: jest.fn() },
+        },
+        { provide: AsaasService, useValue: {} },
+        {
+          provide: UsuariosService,
+          useValue: {
+            findOne: jest.fn(() => ({
+              emailVerificado: true,
+              nome: 'Cliente Sensora',
+              telefone: null,
+            })),
+          },
+        },
+        { provide: MelhorEnvioService, useValue: {} },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
+      ],
+    }).compile();
+    const service = module.get<CheckoutService>(CheckoutService);
+
+    await expect(
+      service.createSession(
+        {
+          itens: [{ produtoId: 5, quantidade: 1 }],
+          clienteEmail: 'cliente@sensora.dev',
+          cpf: '52998224725',
+          enderecoId: 1,
+          freteServicoId: 1,
+        },
+        1,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(pedidoCreate).not.toHaveBeenCalled();
+  });
+
+  it('recusa a sessão se o CPF for inválido, sem criar pedido', async () => {
+    const pedidoCreate = jest.fn();
+    const garantirCpf = jest.fn(async () => {
       throw new BadRequestException(
-        'Informe um telefone válido para finalizar a compra.',
+        'Informe um CPF válido para finalizar a compra.',
       );
     });
 
@@ -1682,8 +1744,9 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
             findOne: jest.fn(() => ({
               emailVerificado: true,
               nome: 'Cliente Sensora',
+              telefone: '41999999999',
             })),
-            garantirTelefone,
+            garantirCpf,
           },
         },
         { provide: MelhorEnvioService, useValue: {} },
@@ -1697,7 +1760,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         {
           itens: [{ produtoId: 5, quantidade: 1 }],
           clienteEmail: 'cliente@sensora.dev',
-          telefone: '123',
+          cpf: '123',
           enderecoId: 1,
           freteServicoId: 1,
         },
@@ -1705,7 +1768,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(garantirTelefone).toHaveBeenCalledWith(1, '123');
+    expect(garantirCpf).toHaveBeenCalledWith(1, '123');
     expect(pedidoCreate).not.toHaveBeenCalled();
   });
 
@@ -1757,7 +1820,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         {
           itens: [{ produtoId: 5, quantidade: 1 }],
           clienteEmail: 'cliente@sensora.dev',
-          telefone: '41999999999',
+          cpf: '52998224725',
           enderecoId: 1,
           freteServicoId: 999, // não existe em OPCAO_FRETE_FAKE
         },
@@ -1815,7 +1878,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         {
           itens: [{ produtoId: 5, quantidade: 1 }],
           clienteEmail: 'cliente@sensora.dev',
-          telefone: '41999999999',
+          cpf: '52998224725',
           enderecoId: 1,
           freteServicoId: 1,
         },
@@ -1883,7 +1946,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
           {
             itens: [{ produtoId: 5, quantidade: 1 }],
             clienteEmail: 'cliente@sensora.dev',
-            telefone: '41999999999',
+            cpf: '52998224725',
             enderecoId: 1,
             freteServicoId: 1,
           },
@@ -1946,7 +2009,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
         {
           itens: [{ produtoId: 5, quantidade: 1 }],
           clienteEmail: 'cliente@sensora.dev',
-          telefone: '41999999999',
+          cpf: '52998224725',
           enderecoId: 1,
           freteServicoId: 1,
         },
@@ -1983,7 +2046,11 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
       link: 'https://sandbox.asaas.com/checkoutSession/show/chk_verificado',
       status: 'ACTIVE',
     }));
-    const findOne = jest.fn(() => ({ emailVerificado: true, nome: 'Cliente Verificado' }));
+    const findOne = jest.fn(() => ({
+      emailVerificado: true,
+      nome: 'Cliente Verificado',
+      telefone: '41999999999',
+    }));
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -2011,8 +2078,8 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
           provide: UsuariosService,
           useValue: {
             findOne,
-            garantirTelefone: jest.fn(async (_id: number, telefone: string) =>
-              telefone.replace(/\D/g, ''),
+            garantirCpf: jest.fn(async (_id: number, cpf: string) =>
+              cpf.replace(/\D/g, ''),
             ),
           },
         },
@@ -2026,7 +2093,7 @@ describe('CheckoutService — createSession: bloqueio por e-mail não confirmado
       {
         itens: [{ produtoId: 5, quantidade: 1 }],
         clienteEmail: 'cliente@sensora.dev',
-        telefone: '41999999999',
+        cpf: '52998224725',
         enderecoId: 1,
         freteServicoId: OPCAO_FRETE_FAKE.id,
       },

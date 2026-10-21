@@ -34,7 +34,7 @@ import { loginComRedirect, possuiSessaoValida } from "@/lib/auth-redirect";
 import { decodeToken } from "@/lib/jwt";
 import { ROUTES } from "@/lib/routes";
 import { getToken, setCheckoutPendente } from "@/lib/storage";
-import { formatarTelefone, telefoneValido } from "@/lib/telefone";
+import { cpfValido, formatarCpf } from "@/lib/cpf";
 import { buscarMeuPerfil } from "@/services/conta";
 import { criarEndereco, listarEnderecos } from "@/services/enderecos";
 import {
@@ -84,9 +84,9 @@ export default function CheckoutPage() {
   const [destacarEndereco, setDestacarEndereco] = useState(false);
   const enderecoSectionRef = useRef<HTMLDivElement>(null);
 
-  const [telefone, setTelefone] = useState("");
-  const [destacarTelefone, setDestacarTelefone] = useState(false);
-  const telefoneSectionRef = useRef<HTMLDivElement>(null);
+  const [cpf, setCpf] = useState("");
+  const [destacarCpf, setDestacarCpf] = useState(false);
+  const cpfSectionRef = useRef<HTMLDivElement>(null);
 
   // Etapa 6.5 (Frete) — cotação é sempre reconsultada quando o endereço
   // selecionado muda (ver useEffect abaixo). `freteSelecionadoId` nunca é
@@ -157,13 +157,12 @@ export default function CheckoutPage() {
       carregarEnderecos();
       buscarMeuPerfil()
         .then((perfil) => {
-          if (perfil.telefone) {
-            setTelefone(formatarTelefone(perfil.telefone));
+          if (perfil.cpf) {
+            setCpf(formatarCpf(perfil.cpf));
           }
         })
         .catch(() => {
-          // Sem telefone no cadastro o campo fica vazio: o cliente preenche
-          // aqui. Falha de rede não bloqueia o restante do checkout.
+          // Sem CPF no cadastro o campo fica vazio para preencher aqui.
         });
     }
   }, [autorizado, carregarEnderecos]);
@@ -175,10 +174,10 @@ export default function CheckoutPage() {
   }, [destacarEndereco]);
 
   useEffect(() => {
-    if (!destacarTelefone) return;
-    const timer = window.setTimeout(() => setDestacarTelefone(false), 1800);
+    if (!destacarCpf) return;
+    const timer = window.setTimeout(() => setDestacarCpf(false), 1800);
     return () => window.clearTimeout(timer);
-  }, [destacarTelefone]);
+  }, [destacarCpf]);
 
   useEffect(() => {
     if (!destacarFrete) return;
@@ -287,12 +286,12 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!telefoneValido(telefone)) {
+    if (!cpfValido(cpf)) {
       toast.error(
-        "Informe um telefone válido. A transportadora usa esse número na entrega.",
+        "Informe um CPF válido. Ele é usado na nota fiscal desta compra.",
       );
-      setDestacarTelefone(true);
-      telefoneSectionRef.current?.scrollIntoView({
+      setDestacarCpf(true);
+      cpfSectionRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       });
@@ -352,7 +351,7 @@ export default function CheckoutPage() {
           quantidade: item.quantidade,
         })),
         clienteEmail: payload.email,
-        telefone,
+        cpf,
         enderecoId: enderecoSelecionadoId,
         freteServicoId: freteSelecionadoId,
       });
@@ -649,39 +648,40 @@ export default function CheckoutPage() {
                 </div>
 
                 <div
-                  ref={telefoneSectionRef}
+                  ref={cpfSectionRef}
                   className={`mt-10 rounded-sm transition-shadow duration-500 ${
-                    destacarTelefone
+                    destacarCpf
                       ? "ring-2 ring-brand-orange ring-offset-4 ring-offset-background"
                       : ""
                   }`}
                 >
                   <div className="border-b border-slate-200 pb-4">
                     <h2 className="font-serif text-xl font-normal text-brand-navy">
-                      Telefone para entrega
+                      CPF para nota fiscal
                     </h2>
                   </div>
                   <div className="mt-6">
                     <label
-                      htmlFor="checkout-telefone"
+                      htmlFor="checkout-cpf"
                       className="text-sm font-medium text-slate-700"
                     >
-                      Telefone
+                      CPF
                     </label>
                     <input
-                      id="checkout-telefone"
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      value={telefone}
+                      id="checkout-cpf"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={cpf}
                       onChange={(event) =>
-                        setTelefone(formatarTelefone(event.target.value))
+                        setCpf(formatarCpf(event.target.value))
                       }
-                      placeholder="(41) 99999-9999"
+                      placeholder="000.000.000-00"
                       className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-brand-navy placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-navy/40"
                     />
                     <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                      A transportadora precisa deste número para a entrega.
+                      Usamos este CPF na nota fiscal e na identificação da
+                      entrega.
                     </p>
                   </div>
                 </div>

@@ -45,9 +45,9 @@ export default function PoliticaDePrivacidadePage() {
         </p>
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            <strong>Cadastro:</strong> nome, e-mail e senha. CPF e telefone
-            podem ser preenchidos no perfil; o CPF é usado na nota fiscal e o
-            telefone, no checkout, entra na etiqueta de envio.
+            <strong>Cadastro:</strong> nome, e-mail, telefone e senha. O CPF é
+            informado no checkout (nota fiscal e identificação da entrega) e
+            pode ser atualizado depois em Minha Conta.
           </li>
           <li>
             <strong>Compra e entrega:</strong> endereços que você salva,

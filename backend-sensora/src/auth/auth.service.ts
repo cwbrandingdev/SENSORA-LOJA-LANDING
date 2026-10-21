@@ -147,7 +147,7 @@ export class AuthService {
         nome: registerDto.nome,
         email: registerDto.email,
         senha: registerDto.senha,
-        cpf: registerDto.cpf,
+        telefone: registerDto.telefone,
         perfil: PerfilUsuario.CLIENTE,
         ativo: true,
       },

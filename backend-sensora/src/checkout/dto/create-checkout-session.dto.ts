@@ -31,13 +31,12 @@ export class CreateCheckoutSessionDto {
   @IsNotEmpty()
   clienteEmail: string;
 
-  // A etiqueta do Melhor Envio exige telefone. O checkout grava este valor
-  // em Usuario (CheckoutService.createSession → UsuariosService.
-  // garantirTelefone); sem ele a compra nem chega ao pagamento.
+  // CPF para nota fiscal e etiqueta: gravado em Usuario antes do pagamento
+  // (CheckoutService.createSession → UsuariosService.garantirCpf).
   @IsString()
   @IsNotEmpty()
   @MaxLength(20)
-  telefone: string;
+  cpf: string;
 
   // Etapa "Dados do Cliente / Cadastro" (achado da auditoria) — `clienteNome`
   // foi removido deste DTO de propósito: o nome do pedido nunca mais vem do

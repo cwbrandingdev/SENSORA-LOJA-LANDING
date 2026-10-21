@@ -53,12 +53,16 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { isAxiosError } from "axios";
-import { Mail, Lock, User, Eye, EyeOff, X } from "lucide-react";
+import { Mail, Lock, User, Phone, Eye, EyeOff, X } from "lucide-react";
 import { login, register as registerUser } from "@/services/auth";
 import { setToken } from "@/lib/storage";
 import { isDestinoInternoValido } from "@/lib/auth-redirect";
 import { ROUTES } from "@/lib/routes";
-import { cpfValido, formatarCpf, normalizarCpf } from "@/lib/cpf";
+import {
+  formatarTelefone,
+  normalizarTelefone,
+  telefoneValido,
+} from "@/lib/telefone";
 import { getErrorMessage } from "@/lib/errors";
 import { useAuth } from "@/context/AuthContext";
 import { ToastProvider, useToast } from "@/context/ToastContext";
@@ -415,10 +419,12 @@ const registerSchema = z
     // Etapa (Repetir senha) — mínimo elevado de 6 para 8 caracteres, para
     // ficar igual ao backend (RegisterDto.senha, ver
     // backend-sensora/src/auth/dto/register.dto.ts — @MinLength(8)).
-    cpf: z
+    telefone: z
       .string()
-      .min(1, "CPF é obrigatório")
-      .refine((valor) => cpfValido(valor), { message: "CPF inválido" }),
+      .min(1, "Telefone é obrigatório")
+      .refine((valor) => telefoneValido(valor), {
+        message: "Telefone inválido",
+      }),
     senha: z
       .string()
       .min(1, "Senha é obrigatória")
@@ -463,7 +469,7 @@ function SignUpForm({
     resolver: zodResolver(registerSchema),
     defaultValues: {
       aceiteTermos: false,
-      cpf: "",
+      telefone: "",
       senha: "",
       confirmarSenha: "",
     },
@@ -473,9 +479,10 @@ function SignUpForm({
   const senhaValor = watch("senha");
   const confirmarValor = watch("confirmarSenha");
   const sugestaoEmail = sugerirEmail(watch("email") ?? "");
-  const cpfValor = watch("cpf");
-  const cpfInvalidoAoVivo =
-    normalizarCpf(cpfValor).length === 11 && !cpfValido(cpfValor);
+  const telefoneValor = watch("telefone");
+  const telefoneInvalidoAoVivo =
+    normalizarTelefone(telefoneValor).length >= 10 &&
+    !telefoneValido(telefoneValor);
   const mostrarComparacao = confirmarValor.length > 0;
   const senhasIguais = senhaValor === confirmarValor;
 
@@ -491,7 +498,7 @@ function SignUpForm({
         nome: data.nome,
         email: data.email,
         senha: data.senha,
-        cpf: data.cpf,
+        telefone: data.telefone,
       });
       setSuccess(true);
       // Aviso grande no centro da tela (não um Toast): a conta só entra
@@ -590,34 +597,43 @@ function SignUpForm({
       </div>
 
       <div className="authswitch-field">
-        <label htmlFor="register-cpf" className="sr-only">
-          CPF
+        <label htmlFor="register-telefone" className="sr-only">
+          Telefone
         </label>
         <div
-          className={cn("authswitch-input-field", errors.cpf && "has-error")}
+          className={cn(
+            "authswitch-input-field",
+            (telefoneInvalidoAoVivo || errors.telefone) && "has-error",
+          )}
         >
           <span className="authswitch-input-icon">
-            <User className="h-[18px] w-[18px]" />
+            <Phone className="h-[18px] w-[18px]" />
           </span>
           <input
-            id="register-cpf"
-            type="text"
-            inputMode="numeric"
-            placeholder="CPF"
-            autoComplete="off"
+            id="register-telefone"
+            type="tel"
+            inputMode="tel"
+            placeholder="Telefone"
+            autoComplete="tel"
             tabIndex={active ? 0 : -1}
-            aria-invalid={!!errors.cpf}
-            aria-describedby={errors.cpf ? "register-cpf-error" : undefined}
-            {...register("cpf", {
+            aria-invalid={!!errors.telefone || telefoneInvalidoAoVivo}
+            aria-describedby={
+              telefoneInvalidoAoVivo || errors.telefone
+                ? "register-telefone-error"
+                : undefined
+            }
+            {...register("telefone", {
               onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
-                event.target.value = formatarCpf(event.target.value);
+                event.target.value = formatarTelefone(event.target.value);
               },
             })}
           />
         </div>
-        {(cpfInvalidoAoVivo || errors.cpf) && (
-          <p id="register-cpf-error" className="authswitch-field-error">
-            {cpfInvalidoAoVivo ? "CPF inválido" : errors.cpf?.message}
+        {(telefoneInvalidoAoVivo || errors.telefone) && (
+          <p id="register-telefone-error" className="authswitch-field-error">
+            {telefoneInvalidoAoVivo
+              ? "Telefone inválido"
+              : errors.telefone?.message}
           </p>
         )}
       </div>

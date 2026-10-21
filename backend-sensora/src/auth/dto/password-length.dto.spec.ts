@@ -23,7 +23,7 @@ const CASOS: {
         nome: 'Cliente',
         email: 'cliente@sensora.dev',
         senha,
-        cpf: '529.982.247-25',
+        telefone: '41999999999',
       }),
   },
   {

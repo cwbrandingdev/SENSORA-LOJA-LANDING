@@ -104,7 +104,7 @@ export type RegisterPayload = {
   nome: string;
   email: string;
   senha: string;
-  cpf: string;
+  telefone: string;
 };
 
 export type CategoriaResumo = {
@@ -279,12 +279,12 @@ export type CheckoutItemPayload = {
 // (buscado no próprio CheckoutService.createSession), nunca mais um nome
 // enviado pelo frontend — mesmo raciocínio de nunca confiar em preço/
 // estoque/frete vindos do cliente, aplicado aqui pela primeira vez ao nome.
-// `telefone` é obrigatório na compra: o backend grava em Usuario antes de
-// criar a sessão (etiqueta do Melhor Envio exige o número).
+// `cpf` é obrigatório na compra: o backend grava em Usuario antes de
+// criar a sessão (nota fiscal e etiqueta do Melhor Envio).
 export type CriarSessaoCheckoutPayload = {
   itens: CheckoutItemPayload[];
   clienteEmail: string;
-  telefone: string;
+  cpf: string;
   enderecoId: number;
   freteServicoId: number;
 };

@@ -381,6 +381,38 @@ export class UsuariosService {
     return cpfNormalizado;
   }
 
+  // Checkout: CPF é obrigatório para NF e etiqueta. Vazio não limpa o
+  // cadastro — recusa a compra. Se o valor já é o salvo, não escreve de novo.
+  async garantirCpf(id: number, cpfInformado: string): Promise<string> {
+    const cpf = await this.normalizarEValidarCpfParaUsuario(id, cpfInformado);
+    if (!cpf) {
+      throw new BadRequestException(
+        'Informe um CPF válido para finalizar a compra.',
+      );
+    }
+
+    const atual = await this.localizar(id);
+    if (atual.cpf === cpf) {
+      return cpf;
+    }
+
+    try {
+      await this.prisma.usuario.update({
+        where: { id },
+        data: { cpf },
+      });
+    } catch (erro) {
+      if (
+        erro instanceof Prisma.PrismaClientKnownRequestError &&
+        erro.code === 'P2002'
+      ) {
+        throw new ConflictException('Este CPF já está em uso por outra conta.');
+      }
+      throw erro;
+    }
+    return cpf;
+  }
+
   // Checkout: telefone é obrigatório para gerar a etiqueta depois. Vazio
   // não limpa o cadastro — recusa a compra. Se o valor já é o salvo, não
   // escreve de novo.

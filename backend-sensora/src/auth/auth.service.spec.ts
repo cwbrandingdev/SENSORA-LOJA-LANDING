@@ -129,14 +129,14 @@ describe('AuthService', () => {
         nome: 'Cliente Teste',
         email: 'cliente@sensora.dev',
         senha: 'senhaSegura123',
-        cpf: '529.982.247-25',
+        telefone: '41999999999',
       });
 
       expect(usuariosService.create).toHaveBeenCalledWith(
         expect.objectContaining({
           nome: 'Cliente Teste',
           email: 'cliente@sensora.dev',
-          cpf: '529.982.247-25',
+          telefone: '41999999999',
           perfil: PerfilUsuario.CLIENTE,
         }),
         { emailVerificado: false },
@@ -159,7 +159,7 @@ describe('AuthService', () => {
         nome: 'Cliente Teste',
         email: 'cliente@sensora.dev',
         senha: 'senhaSegura123',
-        cpf: '529.982.247-25',
+        telefone: '41999999999',
       });
 
       expect(usuariosService.emitirTokenVerificacaoEmail).toHaveBeenCalledWith(
@@ -193,7 +193,7 @@ describe('AuthService', () => {
         nome: 'Cliente Teste',
         email: 'cliente@sensora.dev',
         senha: 'senhaSegura123',
-        cpf: '529.982.247-25',
+        telefone: '41999999999',
       });
 
       const hashPersistido =
@@ -229,7 +229,7 @@ describe('AuthService', () => {
         nome: 'Cliente Teste',
         email: 'cliente@sensora.dev',
         senha: 'senhaSegura123',
-        cpf: '529.982.247-25',
+        telefone: '41999999999',
       });
 
       expect(resultado).not.toHaveProperty('access_token');
@@ -254,7 +254,7 @@ describe('AuthService', () => {
         nome: nomeMalicioso,
         email: 'cliente@sensora.dev',
         senha: 'senhaSegura123',
-        cpf: '529.982.247-25',
+        telefone: '41999999999',
       });
 
       const [{ html }] = mailService.enviarEmail.mock.calls[0] as [
