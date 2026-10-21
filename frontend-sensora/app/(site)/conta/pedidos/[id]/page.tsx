@@ -22,6 +22,7 @@ import { BackLink } from "@/components/conta/AccountPageHeader";
 import StatusPedidoBadge from "@/components/conta/StatusPedidoBadge";
 import AcompanhamentoPedido from "@/components/conta/AcompanhamentoPedido";
 import HistoricoDevolucoes from "@/components/conta/HistoricoDevolucoes";
+import AvaliacoesPedido from "@/components/conta/AvaliacoesPedido";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
 import {
@@ -64,11 +65,11 @@ const inputClass =
 function possuiEnderecoCompleto(pedido: Pedido): boolean {
   return Boolean(
     pedido.enderecoCep &&
-      pedido.enderecoRua &&
-      pedido.enderecoNumero &&
-      pedido.enderecoBairro &&
-      pedido.enderecoCidade &&
-      pedido.enderecoEstado,
+    pedido.enderecoRua &&
+    pedido.enderecoNumero &&
+    pedido.enderecoBairro &&
+    pedido.enderecoCidade &&
+    pedido.enderecoEstado,
   );
 }
 
@@ -90,23 +91,29 @@ export default function MeuPedidoDetalhePage() {
   // ausente = item não selecionado).
   const [modalDevolucaoAberto, setModalDevolucaoAberto] = useState(false);
   const [enviandoDevolucao, setEnviandoDevolucao] = useState(false);
-  const [quantidadesDevolucao, setQuantidadesDevolucao] = useState<Record<number, number>>({});
+  const [quantidadesDevolucao, setQuantidadesDevolucao] = useState<
+    Record<number, number>
+  >({});
   const [motivoDevolucao, setMotivoDevolucao] = useState("");
   const [descricaoDevolucao, setDescricaoDevolucao] = useState("");
   const [erroDevolucao, setErroDevolucao] = useState<string | null>(null);
   // Etapa 6 — histórico de devoluções e saldo de cada item, vindos do
   // backend (fonte da verdade; a tela não recalcula o saldo).
-  const [devolucoesDoPedido, setDevolucoesDoPedido] = useState<DevolucoesDoPedido | null>(
-    null,
-  );
+  const [devolucoesDoPedido, setDevolucoesDoPedido] =
+    useState<DevolucoesDoPedido | null>(null);
   const [modalEnderecoAberto, setModalEnderecoAberto] = useState(false);
   const [enderecosConta, setEnderecosConta] = useState<Endereco[]>([]);
-  const [enderecoEscolhidoId, setEnderecoEscolhidoId] = useState<number | null>(null);
+  const [enderecoEscolhidoId, setEnderecoEscolhidoId] = useState<number | null>(
+    null,
+  );
   const [salvandoEndereco, setSalvandoEndereco] = useState(false);
 
   // Só pedido PAGO já ENVIADO tem devolução; para os outros, não busca nada.
   async function carregarDevolucoes(pedido: Pedido) {
-    if (pedido.status !== StatusPedido.PAGO || pedido.statusEnvio !== StatusEnvio.ENVIADO) {
+    if (
+      pedido.status !== StatusPedido.PAGO ||
+      pedido.statusEnvio !== StatusEnvio.ENVIADO
+    ) {
       setDevolucoesDoPedido(null);
       return;
     }
@@ -114,7 +121,10 @@ export default function MeuPedidoDetalhePage() {
       setDevolucoesDoPedido(await listarMinhasDevolucoes(pedido.id));
     } catch (err) {
       toast.error(
-        getErrorMessage(err, "Não foi possível carregar as devoluções deste pedido."),
+        getErrorMessage(
+          err,
+          "Não foi possível carregar as devoluções deste pedido.",
+        ),
       );
     }
   }
@@ -138,7 +148,9 @@ export default function MeuPedidoDetalhePage() {
         if (isAxiosError(err) && err.response?.status === 404) {
           setNaoEncontrado(true);
         } else {
-          toast.error(getErrorMessage(err, "Não foi possível carregar o pedido."));
+          toast.error(
+            getErrorMessage(err, "Não foi possível carregar o pedido."),
+          );
         }
       })
       .finally(() => setCarregando(false));
@@ -172,7 +184,9 @@ export default function MeuPedidoDetalhePage() {
     setCancelando(true);
     try {
       const pedidoCancelado = await cancelarMeuPedido(dados.pedido.id);
-      setDados((atual) => (atual ? { ...atual, pedido: pedidoCancelado } : atual));
+      setDados((atual) =>
+        atual ? { ...atual, pedido: pedidoCancelado } : atual,
+      );
       setModalCancelarAberto(false);
       toast.success("Pedido cancelado com sucesso.");
     } catch (err) {
@@ -206,7 +220,9 @@ export default function MeuPedidoDetalhePage() {
       setEnderecoEscolhidoId(null);
       setModalEnderecoAberto(true);
     } catch (err) {
-      toast.error(getErrorMessage(err, "Não foi possível carregar seus endereços."));
+      toast.error(
+        getErrorMessage(err, "Não foi possível carregar seus endereços."),
+      );
     }
   }
 
@@ -223,7 +239,9 @@ export default function MeuPedidoDetalhePage() {
         dados.pedido.id,
         enderecoEscolhidoId,
       );
-      setDados((atual) => (atual ? { ...atual, pedido: pedidoAtualizado } : atual));
+      setDados((atual) =>
+        atual ? { ...atual, pedido: pedidoAtualizado } : atual,
+      );
       setModalEnderecoAberto(false);
       toast.success("Endereço de entrega atualizado.");
     } catch (err) {
@@ -238,8 +256,12 @@ export default function MeuPedidoDetalhePage() {
 
     setSolicitandoReembolso(true);
     try {
-      const pedidoAtualizado = await solicitarReembolsoMeuPedido(dados.pedido.id);
-      setDados((atual) => (atual ? { ...atual, pedido: pedidoAtualizado } : atual));
+      const pedidoAtualizado = await solicitarReembolsoMeuPedido(
+        dados.pedido.id,
+      );
+      setDados((atual) =>
+        atual ? { ...atual, pedido: pedidoAtualizado } : atual,
+      );
       setModalReembolsoAberto(false);
       toast.success("Solicitação de reembolso enviada para processamento.");
     } catch (err) {
@@ -329,7 +351,9 @@ export default function MeuPedidoDetalhePage() {
         itens,
       });
       setModalDevolucaoAberto(false);
-      toast.success("Solicitação de devolução registrada. Você pode enviar fotos abaixo.");
+      toast.success(
+        "Solicitação de devolução registrada. Você pode enviar fotos abaixo.",
+      );
       // O histórico recarregado já traz a nova devolução (com as fotos
       // editáveis) e o saldo atualizado dos itens.
       await carregarDevolucoes(dados.pedido);
@@ -338,7 +362,10 @@ export default function MeuPedidoDetalhePage() {
         // O pedido mudou de situação (ex.: reembolso em andamento) — fecha
         // o formulário e busca o estado atual, como no fluxo de reembolso.
         toast.error(
-          getErrorMessage(err, "Este pedido não está mais disponível para devolução."),
+          getErrorMessage(
+            err,
+            "Este pedido não está mais disponível para devolução.",
+          ),
         );
         setModalDevolucaoAberto(false);
         buscarMeuPedido(dados.pedido.id)
@@ -370,7 +397,9 @@ export default function MeuPedidoDetalhePage() {
       item.quantidadeDisponivel,
     ]),
   );
-  const temSaldoParaDevolver = [...saldoPorItem.values()].some((saldo) => saldo > 0);
+  const temSaldoParaDevolver = [...saldoPorItem.values()].some(
+    (saldo) => saldo > 0,
+  );
 
   return (
     <div className="mx-auto max-w-4xl px-6 pt-8 pb-24 sm:pb-32 lg:px-10">
@@ -426,7 +455,11 @@ export default function MeuPedidoDetalhePage() {
             <div className="flex items-center gap-3">
               <StatusPedidoBadge status={dados.pedido.status} />
               {dados.pedido.status === StatusPedido.PENDENTE && (
-                <FormButton type="button" variant="danger" onClick={handleAbrirModalCancelar}>
+                <FormButton
+                  type="button"
+                  variant="danger"
+                  onClick={handleAbrirModalCancelar}
+                >
                   Cancelar pedido
                 </FormButton>
               )}
@@ -467,8 +500,7 @@ export default function MeuPedidoDetalhePage() {
 
           {dados.pedido.status === StatusPedido.REEMBOLSO_SOLICITADO && (
             <p className="mt-4 text-sm leading-relaxed text-slate-600">
-              Sua solicitação de reembolso foi recebida e está em
-              processamento.
+              Sua solicitação de reembolso foi recebida e está em processamento.
             </p>
           )}
 
@@ -486,6 +518,8 @@ export default function MeuPedidoDetalhePage() {
             </div>
           </div>
 
+          <AvaliacoesPedido pedido={dados.pedido} itens={dados.itens} />
+
           <div className="mt-10">
             <h2 className="font-serif text-xl font-normal text-brand-navy">
               Itens do pedido
@@ -497,9 +531,12 @@ export default function MeuPedidoDetalhePage() {
                   className="flex items-center justify-between gap-4 py-4 transition-colors duration-200 hover:bg-slate-50/80"
                 >
                   <div>
-                    <p className="text-sm font-medium text-brand-navy">{item.produtoNome}</p>
+                    <p className="text-sm font-medium text-brand-navy">
+                      {item.produtoNome}
+                    </p>
                     <p className="text-sm text-slate-500">
-                      {item.quantidade} × {formatPrice.format(item.precoUnitario)}
+                      {item.quantidade} ×{" "}
+                      {formatPrice.format(item.precoUnitario)}
                     </p>
                   </div>
                   <p className="font-medium tabular-nums text-brand-navy">
@@ -534,23 +571,27 @@ export default function MeuPedidoDetalhePage() {
                   <p>
                     {dados.pedido.enderecoRua}, {dados.pedido.enderecoNumero}
                   </p>
-                  {dados.pedido.enderecoComplemento && <p>{dados.pedido.enderecoComplemento}</p>}
+                  {dados.pedido.enderecoComplemento && (
+                    <p>{dados.pedido.enderecoComplemento}</p>
+                  )}
                   <p>{dados.pedido.enderecoBairro}</p>
                   <p>
-                    {dados.pedido.enderecoCidade} / {dados.pedido.enderecoEstado}
+                    {dados.pedido.enderecoCidade} /{" "}
+                    {dados.pedido.enderecoEstado}
                   </p>
                   <p>CEP {dados.pedido.enderecoCep}</p>
                 </address>
-                {dados.pedido.status === StatusPedido.PAGO && !pedidoEnviado && (
-                  <FormButton
-                    type="button"
-                    variant="secondary"
-                    className="mt-4"
-                    onClick={handleAbrirModalEndereco}
-                  >
-                    Alterar endereço
-                  </FormButton>
-                )}
+                {dados.pedido.status === StatusPedido.PAGO &&
+                  !pedidoEnviado && (
+                    <FormButton
+                      type="button"
+                      variant="secondary"
+                      className="mt-4"
+                      onClick={handleAbrirModalEndereco}
+                    >
+                      Alterar endereço
+                    </FormButton>
+                  )}
               </>
             ) : (
               <p className="mt-3 text-sm text-slate-500">
@@ -560,8 +601,8 @@ export default function MeuPedidoDetalhePage() {
           </div>
 
           <p className="mt-10 text-sm leading-relaxed text-slate-600">
-            Você pode solicitar a devolução em até 7 dias após o recebimento, ou acionar a
-            garantia de 30 dias se o produto vier com defeito.{" "}
+            Você pode solicitar a devolução em até 7 dias após o recebimento, ou
+            acionar a garantia de 30 dias se o produto vier com defeito.{" "}
             <Link
               href={ROTAS_LEGAIS.trocas}
               className="text-brand-navy underline underline-offset-4"
@@ -580,8 +621,8 @@ export default function MeuPedidoDetalhePage() {
             title="Cancelar pedido?"
             description={
               <p>
-                Cancelar o pedido {dados.pedido.numero}? Esta ação não pode
-                ser desfeita.
+                Cancelar o pedido {dados.pedido.numero}? Esta ação não pode ser
+                desfeita.
               </p>
             }
             confirmLabel="Cancelar pedido"
@@ -597,8 +638,7 @@ export default function MeuPedidoDetalhePage() {
               <>
                 <p>Você está solicitando o reembolso deste pedido.</p>
                 <p className="mt-2">
-                  Após confirmar, a solicitação será enviada para
-                  processamento.
+                  Após confirmar, a solicitação será enviada para processamento.
                 </p>
               </>
             }
@@ -623,7 +663,10 @@ export default function MeuPedidoDetalhePage() {
                     // está em outras devoluções).
                     const saldo = saldoPorItem.get(item.id) ?? 0;
                     return (
-                      <li key={item.id} className="flex items-center justify-between gap-3 py-3">
+                      <li
+                        key={item.id}
+                        className="flex items-center justify-between gap-3 py-3"
+                      >
                         <label
                           className={`flex items-center gap-3 ${saldo === 0 ? "text-slate-400" : "text-brand-navy"}`}
                         >
@@ -631,13 +674,18 @@ export default function MeuPedidoDetalhePage() {
                             type="checkbox"
                             checked={selecionado}
                             onChange={() =>
-                              alterarQuantidadeDevolucao(item.id, selecionado ? 0 : 1)
+                              alterarQuantidadeDevolucao(
+                                item.id,
+                                selecionado ? 0 : 1,
+                              )
                             }
                             disabled={enviandoDevolucao || saldo === 0}
                             className="h-4 w-4 accent-brand-navy"
                           />
                           <span>
-                            <span className="block font-medium">{item.produtoNome}</span>
+                            <span className="block font-medium">
+                              {item.produtoNome}
+                            </span>
                             <span className="block text-xs text-slate-500">
                               {saldo > 0
                                 ? `Disponível para devolução: ${saldo} de ${item.quantidade}`
@@ -652,10 +700,16 @@ export default function MeuPedidoDetalhePage() {
                             max={saldo}
                             disabled={enviandoDevolucao}
                             onIncrease={() =>
-                              alterarQuantidadeDevolucao(item.id, Math.min(quantidade + 1, saldo))
+                              alterarQuantidadeDevolucao(
+                                item.id,
+                                Math.min(quantidade + 1, saldo),
+                              )
                             }
                             onDecrease={() =>
-                              alterarQuantidadeDevolucao(item.id, Math.max(quantidade - 1, 1))
+                              alterarQuantidadeDevolucao(
+                                item.id,
+                                Math.max(quantidade - 1, 1),
+                              )
                             }
                           />
                         )}
@@ -677,10 +731,14 @@ export default function MeuPedidoDetalhePage() {
                 </label>
 
                 <label className="flex flex-col gap-1">
-                  <span className="font-medium text-slate-700">Descrição (opcional)</span>
+                  <span className="font-medium text-slate-700">
+                    Descrição (opcional)
+                  </span>
                   <textarea
                     value={descricaoDevolucao}
-                    onChange={(event) => setDescricaoDevolucao(event.target.value)}
+                    onChange={(event) =>
+                      setDescricaoDevolucao(event.target.value)
+                    }
                     maxLength={2000}
                     rows={3}
                     disabled={enviandoDevolucao}
@@ -739,7 +797,9 @@ export default function MeuPedidoDetalhePage() {
                           key={endereco.id}
                           endereco={endereco}
                           selecionado={enderecoEscolhidoId === endereco.id}
-                          onSelecionar={() => setEnderecoEscolhidoId(endereco.id)}
+                          onSelecionar={() =>
+                            setEnderecoEscolhidoId(endereco.id)
+                          }
                         />
                       ))}
                   </div>

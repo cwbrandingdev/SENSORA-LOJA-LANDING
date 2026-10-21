@@ -20,3 +20,4 @@ export const LINK_PEDIDOS = '/workspace-x/pedidos';
 export const LINK_INTEGRACOES = '/workspace-x/integracoes';
 export const LINK_DEVOLUCOES = '/workspace-x/devolucoes';
 export const LINK_SUPORTE = '/workspace-x/suporte';
+export const LINK_AVALIACOES = '/workspace-x/avaliacoes';

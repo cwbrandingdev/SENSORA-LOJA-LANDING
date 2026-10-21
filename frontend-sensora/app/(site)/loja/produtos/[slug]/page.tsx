@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ShieldCheck, Truck, Undo2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import {
+  buscarAvaliacoesDoProduto,
   buscarProdutoPublicoPorSlug,
   ApiPublicaIndisponivelError,
 } from "@/lib/api-publica";
@@ -13,8 +14,10 @@ import AddToCartControls from "@/components/loja/AddToCartControls";
 import AvisosProduto from "@/components/loja/AvisosProduto";
 import GaleriaProduto from "@/components/loja/GaleriaProduto";
 import ProdutosRelacionados from "@/components/loja/ProdutosRelacionados";
+import AvaliacoesProduto from "@/components/loja/AvaliacoesProduto";
+import Estrelas from "@/components/loja/Estrelas";
 import { imagemKitRedimensionada } from "@/lib/loja-imagens";
-import { descricaoSemFichaTecnica } from "@/lib/descricao-produto";
+import { descricaoSemFichaTecnica, fichaTecnica } from "@/lib/descricao-produto";
 import JsonLd from "@/components/seo/JsonLd";
 import { OPEN_GRAPH_PADRAO, breadcrumbJsonLd, resumir, urlAbsoluta } from "@/lib/seo";
 
@@ -115,8 +118,15 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
   const descricao = produto.descricao
     ? descricaoSemFichaTecnica(produto.descricao)
     : "";
+  // E a ficha técnica que saiu da descrição vira um bloco próprio.
+  const ficha = produto.descricao ? fichaTecnica(produto.descricao) : [];
 
-  // Preço, fotos e disponibilidade nos resultados do Google e para as IAs.
+  // Avaliações aprovadas; se a API falhar, a seção só não aparece.
+  const avaliacoes = await buscarAvaliacoesDoProduto(produto.slug);
+  const comAvaliacoes = avaliacoes !== null && avaliacoes.total > 0 && avaliacoes.media !== null;
+
+  // Preço, fotos, disponibilidade e avaliações nos resultados do Google e
+  // para as IAs.
   const produtoJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -135,6 +145,22 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
       availability:
         produto.quantidade > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
     },
+    ...(comAvaliacoes && {
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: avaliacoes.media,
+        reviewCount: avaliacoes.total,
+        bestRating: 5,
+        worstRating: 1,
+      },
+      review: avaliacoes.avaliacoes.slice(0, 10).map((a) => ({
+        "@type": "Review",
+        author: { "@type": "Person", name: a.nomeExibicao },
+        datePublished: a.criadaEm.slice(0, 10),
+        reviewRating: { "@type": "Rating", ratingValue: a.nota, bestRating: 5, worstRating: 1 },
+        ...(a.comentario && { reviewBody: a.comentario }),
+      })),
+    }),
   };
 
   return (
@@ -182,6 +208,16 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
             </p>
           )}
 
+          {comAvaliacoes && (
+            <a href="#avaliacoes" className="mt-3 inline-flex w-fit items-center gap-2 text-sm text-slate-600 hover:text-brand-navy">
+              <Estrelas valor={avaliacoes.media!} tamanho="sm" />
+              <span>
+                {avaliacoes.media!.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ·{" "}
+                {avaliacoes.total} {avaliacoes.total === 1 ? "avaliação" : "avaliações"}
+              </span>
+            </a>
+          )}
+
           <p className="mt-6 text-3xl font-semibold tracking-tight tabular-nums text-brand-navy">
             {formatPrice.format(produto.preco)}
           </p>
@@ -219,6 +255,22 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
             </div>
           )}
 
+          {ficha.length > 0 && (
+            <div className="mt-10">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-navy">
+                Ficha técnica
+              </p>
+              <dl className="mt-4 divide-y divide-slate-200 border-y border-slate-200 text-[15px]">
+                {ficha.map((item) => (
+                  <div key={item.rotulo} className="flex justify-between gap-6 py-2.5">
+                    <dt className="text-slate-500">{item.rotulo}</dt>
+                    <dd className="text-right font-medium text-brand-navy">{item.valor}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+
           <AvisosProduto
             categoriaSlug={produto.categoria?.slug}
             categoriaNome={produto.categoria?.nome}
@@ -241,6 +293,8 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
           </div>
         </RevealOnScroll>
       </div>
+
+      {avaliacoes && <AvaliacoesProduto resumo={avaliacoes} />}
 
       <ProdutosRelacionados atual={produto} />
     </div>

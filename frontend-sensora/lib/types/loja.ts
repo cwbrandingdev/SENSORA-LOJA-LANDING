@@ -763,7 +763,8 @@ export type AlertaTipo =
   | "MELHOR_ENVIO_DESCONECTADO"
   | "DEVOLUCAO_SOLICITADA"
   | "PEDIDO_NOVO"
-  | "SUPORTE_ABERTO";
+  | "SUPORTE_ABERTO"
+  | "AVALIACAO_PENDENTE";
 
 export type AlertaSeveridade = "info" | "warning" | "danger";
 
@@ -985,4 +986,53 @@ export type PaginaSolicitacoesSuporte = {
   pageSize: number;
   total: number;
   totalPages: number;
+};
+
+// Avaliações de produto (backend: src/avaliacoes). Só aparecem na loja
+// depois de aprovadas no Admin; editar volta para PENDENTE.
+export type StatusAvaliacao = "PENDENTE" | "APROVADA" | "RECUSADA";
+
+export type AvaliacaoDoCliente = {
+  produtoId: number;
+  nota: number;
+  comentario: string | null;
+  status: StatusAvaliacao;
+  atualizadaEm: string;
+};
+
+// GET /avaliacoes/pedido/:id — a partir de quando dá para avaliar (data
+// prevista de entrega; null = pedido ainda não pago/enviado).
+export type AvaliacoesDoPedido = {
+  liberadaEm: string | null;
+  avaliacoes: AvaliacaoDoCliente[];
+};
+
+export type AvaliacaoPublica = {
+  id: number;
+  nomeExibicao: string;
+  nota: number;
+  comentario: string | null;
+  criadaEm: string;
+};
+
+export type ResumoAvaliacoes = {
+  media: number | null;
+  total: number;
+  avaliacoes: AvaliacaoPublica[];
+};
+
+export type AvaliacaoAdmin = {
+  id: number;
+  produtoId: number;
+  produtoNome: string;
+  produtoSlug: string;
+  pedidoId: number;
+  pedidoNumero: string;
+  nomeExibicao: string;
+  clienteEmail: string | null;
+  nota: number;
+  comentario: string | null;
+  status: StatusAvaliacao;
+  criadaEm: string;
+  atualizadaEm: string;
 };

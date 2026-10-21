@@ -56,9 +56,8 @@ export default function AvisosProduto({
         </ul>
       </div>
 
-      <p>
-        Você pode solicitar a devolução em até 7 dias após o recebimento.
-        Defeito tem garantia legal de 30 dias.{" "}
+      <p className="text-xs">
+        7 dias para devoluções. 30 dias para trocas por defeito.{" "}
         <Link
           href={ROTAS_LEGAIS.trocas}
           className="text-brand-navy underline underline-offset-4"

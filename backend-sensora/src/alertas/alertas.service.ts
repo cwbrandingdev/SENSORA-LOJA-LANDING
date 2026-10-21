@@ -6,6 +6,7 @@ import { StatusEnvio } from '../pedidos/enums/status-envio.enum';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { StatusDevolucao } from '../devolucoes/enums/status-devolucao.enum';
 import { StatusSolicitacaoSuporte } from '../suporte/enums/status-solicitacao-suporte.enum';
+import { StatusAvaliacao } from '../avaliacoes/enums/status-avaliacao.enum';
 import {
   LIMIAR_DIAS_PEDIDO_SEM_ENVIO,
   LINK_DEVOLUCOES,
@@ -13,6 +14,7 @@ import {
   LINK_PEDIDOS,
   LINK_PRODUTOS,
   LINK_SUPORTE,
+  LINK_AVALIACOES,
 } from './constants/alertas.constants';
 import { Alerta } from './entities/alerta.entity';
 
@@ -45,6 +47,7 @@ export class AlertasService {
       devolucoesAguardandoAnalise,
       pedidosNovos,
       suporteAberto,
+      avaliacoesPendentes,
     ] = await Promise.all([
       this.prisma.produto.count({
         where: { ativo: true, quantidade: 0 },
@@ -84,6 +87,10 @@ export class AlertasService {
       // Chamados de suporte que ninguém pegou ainda (status inicial).
       this.prisma.solicitacaoSuporte.count({
         where: { status: StatusSolicitacaoSuporte.ABERTA },
+      }),
+      // Avaliações de clientes esperando a aprovação para ir à loja.
+      this.prisma.avaliacao.count({
+        where: { status: StatusAvaliacao.PENDENTE },
       }),
     ]);
 
@@ -155,6 +162,16 @@ export class AlertasService {
         titulo: 'Chamados de suporte abertos',
         quantidade: suporteAberto,
         link: LINK_SUPORTE,
+      });
+    }
+
+    if (avaliacoesPendentes > 0) {
+      alertas.push({
+        tipo: 'AVALIACAO_PENDENTE',
+        severidade: 'info',
+        titulo: 'Avaliações aguardando aprovação',
+        quantidade: avaliacoesPendentes,
+        link: LINK_AVALIACOES,
       });
     }
 

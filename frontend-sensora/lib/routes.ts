@@ -44,6 +44,8 @@ export const ROUTES = {
   // (/suporte/:id) é o link do e-mail de aviso aos admins (backend:
   // CAMINHO_ADMIN_SUPORTE em suporte.service.ts).
   SUPORTE: `${ADMIN_ROUTE}/suporte`,
+  // Moderação das avaliações de produto — ADMIN-only (backend: admin/avaliacoes).
+  AVALIACOES: `${ADMIN_ROUTE}/avaliacoes`,
   LOJA: "/loja",
   LOJA_PRODUTOS: "/loja/produtos",
   LOJA_CARRINHO: "/loja/carrinho",

@@ -1,3 +1,4 @@
+import type { ResumoAvaliacoes } from "@/lib/types/loja";
 // Client da API pública do backend da Loja — mesma convenção de
 // frontend/lib/api-publica.js (mesmos endpoints, mesmo formato de dados).
 // Única fonte de dados comerciais: nunca criar catálogo paralelo aqui.
@@ -83,6 +84,14 @@ export class ApiPublicaIndisponivelError extends Error {
     super(message);
     this.name = "ApiPublicaIndisponivelError";
   }
+}
+
+// Avaliações aprovadas e a média (GET /public/produtos/:slug/avaliacoes).
+// Falha vira null: a página do produto só não mostra a seção.
+export async function buscarAvaliacoesDoProduto(slug: string): Promise<ResumoAvaliacoes | null> {
+  return getJSON<ResumoAvaliacoes>(`/public/produtos/${encodeURIComponent(slug)}/avaliacoes`, [
+    "avaliacoes",
+  ]);
 }
 
 export async function buscarProdutoPublicoPorSlug(slug: string): Promise<ProdutoPublico | null> {

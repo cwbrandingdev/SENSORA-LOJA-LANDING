@@ -15,6 +15,12 @@ export async function revalidarProdutos(): Promise<void> {
   updateTag("produtos");
 }
 
+// Avaliação aprovada/recusada no Admin aparece (ou some) na página do
+// produto na hora, sem esperar o cache de 60 s.
+export async function revalidarAvaliacoes(): Promise<void> {
+  updateTag("avaliacoes");
+}
+
 export async function revalidarCategorias(): Promise<void> {
   updateTag("categorias");
   // Produtos embutem a categoria (nome/slug) na resposta pública — uma

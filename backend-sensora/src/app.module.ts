@@ -1,3 +1,4 @@
+import { AvaliacoesModule } from './avaliacoes/avaliacoes.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
@@ -146,6 +147,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     PrismaModule,
     ProdutosModule,
     AlertasModule,
+    AvaliacoesModule,
     CategoriasModule,
     CheckoutModule,
     ClientesModule,

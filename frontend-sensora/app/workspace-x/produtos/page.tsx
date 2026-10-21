@@ -21,6 +21,8 @@ import type { Categoria, CreateProdutoPayload, Produto } from "@/lib/types/loja"
 function toPayload(data: ProductFormValues): CreateProdutoPayload {
   return {
     nome: data.nome,
+    // Sempre enviado (mesmo vazio): apagar o campo no formulário tira o aroma da loja.
+    aroma: data.aroma ?? "",
     descricao: data.descricao || undefined,
     preco: data.preco,
     quantidade: data.quantidade,

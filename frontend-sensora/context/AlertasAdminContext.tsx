@@ -21,6 +21,7 @@ const AVISO: Partial<Record<AlertaTipo, (novos: number) => string>> = {
   SUPORTE_ABERTO: (n) => (n === 1 ? "Novo chamado de suporte" : `${n} novos chamados de suporte`),
   DEVOLUCAO_SOLICITADA: (n) => (n === 1 ? "Nova devolução solicitada" : `${n} novas devoluções solicitadas`),
   REEMBOLSO_SOLICITADO: (n) => (n === 1 ? "Novo reembolso solicitado" : `${n} novos reembolsos solicitados`),
+  AVALIACAO_PENDENTE: (n) => (n === 1 ? "Nova avaliação para aprovar" : `${n} novas avaliações para aprovar`),
   MELHOR_ENVIO_DESCONECTADO: () => "Melhor Envio desconectado — frete indisponível",
 };
 

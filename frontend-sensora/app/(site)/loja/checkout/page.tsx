@@ -513,20 +513,24 @@ export default function CheckoutPage() {
           `mx-auto` é o mesmo padrão já usado na seção equivalente de
           /loja/carrinho/page.tsx, centraliza dentro do max-w-3xl em
           qualquer largura. */}
-      <section className="relative mx-auto max-w-3xl overflow-hidden px-6 py-8 pb-8 text-center lg:px-10">
-        <RevealOnScroll>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
-            Loja
-          </p>
-          <h1 className="mt-4 font-serif text-4xl font-normal tracking-tight text-brand-navy sm:text-5xl">
-            Checkout
-          </h1>
-          <p className="mt-4 text-base leading-relaxed text-slate-600">
-            Revise o endereço de entrega e os itens da sua sacola antes de
-            seguir para o pagamento.
-          </p>
-        </RevealOnScroll>
-      </section>
+      {/* Com itens, o cabeçalho deixa à direita o mesmo espaço do painel de
+          fotos (como o formulário abaixo), para o texto não passar por baixo dele. */}
+      <div className={itens.length > 0 ? "lg:pr-[min(480px,42vw)] xl:pr-[min(520px,38vw)]" : undefined}>
+        <section className="relative mx-auto max-w-3xl overflow-hidden px-6 py-8 pb-8 text-center lg:px-10">
+          <RevealOnScroll>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
+              Loja
+            </p>
+            <h1 className="mt-4 font-serif text-4xl font-normal tracking-tight text-brand-navy sm:text-5xl">
+              Checkout
+            </h1>
+            <p className="mt-4 text-base leading-relaxed text-slate-600">
+              Revise o endereço de entrega e os itens da sua sacola antes de
+              seguir para o pagamento.
+            </p>
+          </RevealOnScroll>
+        </section>
+      </div>
 
       {itens.length === 0 ? (
         <div className="mx-auto max-w-7xl px-6 pb-24 sm:pb-32 lg:px-10 lg:pb-40">
@@ -546,8 +550,10 @@ export default function CheckoutPage() {
         </div>
       ) : (
         <section className="relative pb-24 sm:pb-32 lg:pb-0">
-          <div className="fixed inset-y-0 right-0 z-0 hidden w-[min(480px,42vw)] lg:block xl:w-[min(520px,38vw)]">
-            <CheckoutItemsShowcase itens={itens} className="h-screen" />
+          {/* Começa logo abaixo do menu fixo: antes ficava atrás dele e o
+              topo das fotos (ex.: o gatilho do spray) sumia. */}
+          <div className="fixed right-0 bottom-0 top-[var(--navbar-height)] z-0 hidden w-[min(480px,42vw)] lg:block xl:w-[min(520px,38vw)]">
+            <CheckoutItemsShowcase itens={itens} className="h-full" />
           </div>
 
           <div className="relative z-10 lg:pr-[min(480px,42vw)] xl:pr-[min(520px,38vw)]">
@@ -790,7 +796,9 @@ export default function CheckoutPage() {
                     <input
                       type="checkbox"
                       checked={aceiteTermos}
-                      onChange={(event) => setAceiteTermos(event.target.checked)}
+                      onChange={(event) =>
+                        setAceiteTermos(event.target.checked)
+                      }
                       className="mt-1 h-4 w-4 shrink-0 accent-brand-navy"
                     />
                     <span>
@@ -813,8 +821,8 @@ export default function CheckoutPage() {
                   </label>
                   <p className="mt-3 text-xs leading-relaxed text-slate-500">
                     A nota fiscal sai no CPF cadastrado em Dados pessoais. Se
-                    estiver em branco, pedimos por e-mail ({EMPRESA.emailSuporte})
-                    antes de emitir.
+                    estiver em branco, pedimos por e-mail (
+                    {EMPRESA.emailSuporte}) antes de emitir.
                   </p>
 
                   <div className="mt-6 flex flex-col gap-3">
