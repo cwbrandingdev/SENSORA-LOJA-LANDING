@@ -401,7 +401,12 @@ export class AuthService {
     const atual = await this.usuariosService.findOne(usuarioId);
 
     if (normalizarEmail(dto.email) === atual.email) {
-      return this.usuariosService.atualizarMeusDados(usuarioId, dto);
+      const usuario = await this.usuariosService.atualizarMeusDados(
+        usuarioId,
+        dto,
+      );
+      await this.avisarCpfTelefoneAlterados(atual, usuario);
+      return usuario;
     }
 
     // Troca de e-mail exige a senha atual (ALTO-2): uma sessão roubada não
@@ -458,8 +463,54 @@ export class AuthService {
     );
 
     await this.avisarEmailAntigo(atual.email, atual.nome, novoEmail);
+    await this.avisarCpfTelefoneAlterados(atual, usuario);
 
     return usuario;
+  }
+
+  // Aviso de segurança quando o CPF ou o telefone da conta mudam (nome e
+  // endereços não avisam). Vai para o e-mail oficial atual, sem os valores
+  // novos (não expõe CPF na caixa de entrada). Nunca lança: falha no envio
+  // não desfaz a alteração.
+  private async avisarCpfTelefoneAlterados(
+    antes: UsuarioPublico,
+    depois: UsuarioPublico,
+  ): Promise<void> {
+    const campos = [
+      (antes.cpf ?? null) !== (depois.cpf ?? null) && 'CPF',
+      (antes.telefone ?? null) !== (depois.telefone ?? null) && 'telefone',
+    ].filter(Boolean);
+    if (campos.length === 0) {
+      return;
+    }
+
+    try {
+      const quando = new Date().toLocaleString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        dateStyle: 'short',
+        timeStyle: 'short',
+      });
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+      const recuperacao = frontendUrl
+        ? `<p>Para redefinir sua senha: <a href="${frontendUrl}/forgot-password">${frontendUrl}/forgot-password</a></p>`
+        : '';
+
+      await this.mailService.enviarEmail({
+        to: antes.email,
+        subject: 'Dados da conta alterados — Sensora',
+        html:
+          `<p>Olá, ${escaparHtml(antes.nome)}.</p>` +
+          `<p>O ${campos.join(' e o ')} da sua conta na Sensora ${campos.length > 1 ? 'foram alterados' : 'foi alterado'} em ${quando} (horário de Brasília).</p>` +
+          '<p>Se foi você, não é preciso fazer nada.</p>' +
+          '<p>Se você não fez essa alteração, redefina sua senha agora pela opção "Esqueci minha senha" e entre em contato com o suporte da Sensora respondendo este e-mail.</p>' +
+          recuperacao,
+      });
+    } catch (erro) {
+      this.logger.error(
+        'Falha ao enviar o aviso de dados da conta alterados.',
+        erro instanceof Error ? erro.stack : String(erro),
+      );
+    }
   }
 
   // Aviso de segurança ao e-mail atual quando uma troca é pedida. Sem token
