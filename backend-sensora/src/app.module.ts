@@ -72,6 +72,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
           then: Joi.required(),
           otherwise: Joi.optional(),
         }),
+        ASAAS_MAX_INSTALLMENT_COUNT: Joi.number().integer().min(1).max(21).default(6),
         // Etapa 6.5 (Frete) — todas opcionais na validação de boot
         // (diferente de ASAAS_*, que já bloqueiam o startup): MelhorEnvioService
         // valida preguiçosamente (mesmo padrão de AsaasService), lançando só

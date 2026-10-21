@@ -25,6 +25,8 @@ export interface CriarCheckoutPayload {
   items: AsaasCheckoutItem[];
   callback: { successUrl: string; cancelUrl: string };
   externalReference: string;
+  /** Obrigatório na API Asaas quando `chargeTypes` inclui `INSTALLMENT`. */
+  installment?: { maxInstallmentCount: number };
 }
 
 export interface AsaasCheckout {
