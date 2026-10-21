@@ -61,7 +61,9 @@ export default function AddToCartControls({ produto }: AddToCartControlsProps) {
 
   function handleAdicionar() {
     if (semEstoque) return;
-    adicionarItem(produto, quantidade);
+    // Na página do produto a sacola lateral não abre: a confirmação é o
+    // aviso e o "Adicionado ✓" do botão.
+    adicionarItem(produto, quantidade, { abrirSacola: false });
 
     toast.success(
       quantidade > 1

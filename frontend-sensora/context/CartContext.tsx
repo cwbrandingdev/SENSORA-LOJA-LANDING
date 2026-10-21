@@ -65,7 +65,11 @@ export type ProdutoParaCarrinho = Omit<CartItem, "quantidade">;
 
 type CartContextValue = {
   itens: CartItem[];
-  adicionarItem: (produto: ProdutoParaCarrinho, quantidade?: number) => void;
+  adicionarItem: (
+    produto: ProdutoParaCarrinho,
+    quantidade?: number,
+    opcoes?: { abrirSacola?: boolean },
+  ) => void;
   removerItem: (produtoId: number) => void;
   aumentarQuantidade: (produtoId: number) => void;
   diminuirQuantidade: (produtoId: number) => void;
@@ -75,6 +79,11 @@ type CartContextValue = {
   subtotal: number;
   estaNoCarrinho: (produtoId: number) => boolean;
   quantidadeNoCarrinho: (produtoId: number) => number;
+  // Sacola lateral (SacolaDrawer): abre sozinha a cada adicionarItem e pelo
+  // ícone de sacola do menu.
+  sacolaAberta: boolean;
+  abrirSacola: () => void;
+  fecharSacola: () => void;
 };
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
@@ -195,6 +204,7 @@ function mesclarCarrinhoVisitanteNaConta(chaveConta: string): void {
 export function CartProvider({ children }: { children: ReactNode }) {
   const [itens, setItens] = useState<CartItem[]>([]);
   const [hidratado, setHidratado] = useState(false);
+  const [sacolaAberta, setSacolaAberta] = useState(false);
   // Etapa (Carrinho por conta) — chave em uso pelo efeito de persistência
   // abaixo. `useRef`, não `useState`: resolvida uma única vez por mount
   // (nunca muda depois — um login/logout real sempre remonta este provider
@@ -235,7 +245,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [itens, hidratado]);
 
   const adicionarItem = useCallback(
-    (produto: ProdutoParaCarrinho, quantidade: number = QUANTIDADE_MINIMA) => {
+    (
+      produto: ProdutoParaCarrinho,
+      quantidade: number = QUANTIDADE_MINIMA,
+      opcoes: { abrirSacola?: boolean } = {},
+    ) => {
       const quantidadeNormalizada = normalizarQuantidade(quantidade);
       setItens((prev) => {
         const existente = prev.find((item) => item.produtoId === produto.produtoId);
@@ -255,9 +269,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
         return [...prev, { ...produto, quantidade: quantidadeNormalizada }];
       });
+      // A sacola aberta é a confirmação de que o item entrou — menos na
+      // página do produto, que confirma no próprio botão
+      // (AddToCartControls, abrirSacola: false).
+      if (opcoes.abrirSacola !== false) setSacolaAberta(true);
     },
     [],
   );
+
+  const abrirSacola = useCallback(() => setSacolaAberta(true), []);
+  const fecharSacola = useCallback(() => setSacolaAberta(false), []);
 
   const removerItem = useCallback((produtoId: number) => {
     setItens((prev) => prev.filter((item) => item.produtoId !== produtoId));
@@ -331,6 +352,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     subtotal,
     estaNoCarrinho,
     quantidadeNoCarrinho,
+    sacolaAberta,
+    abrirSacola,
+    fecharSacola,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

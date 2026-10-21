@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Geist_Mono, Inter, Nunito } from "next/font/google";
 import "../globals.css";
 import Navbar from "@/components/layout/Navbar";
+import SacolaDrawer from "@/components/loja/SacolaDrawer";
 import SiteMain from "@/components/layout/SiteMain";
 import SiteFooter from "@/components/layout/SiteFooter";
 import CookieConsentBanner from "@/components/layout/CookieConsentBanner";
@@ -122,6 +123,7 @@ export default function RootLayout({
               </AuthProvider>
               <SiteMain>{children}</SiteMain>
               <SiteFooter />
+              <SacolaDrawer />
               <CookieConsentBanner />
               <OptionalAnalyticsScripts />
             </PageFadeIn>
