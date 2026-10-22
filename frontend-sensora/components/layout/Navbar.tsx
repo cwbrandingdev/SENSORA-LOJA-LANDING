@@ -31,7 +31,7 @@ const CATEGORY_LINKS = [
 const DESKTOP_LINKS = [
   ...CATEGORY_LINKS,
   { label: "Ver tudo", href: ROUTES.LOJA_PRODUTOS },
-  { label: "Empresas", href: ROUTES.PARA_EMPRESAS },
+  { label: "Corporativo", href: ROUTES.PARA_EMPRESAS },
 ];
 
 function IconLink({
@@ -69,11 +69,7 @@ function IconLink({
   );
 }
 
-function CategoryNav({
-  isActive,
-}: {
-  isActive: (href: string) => boolean;
-}) {
+function CategoryNav({ isActive }: { isActive: (href: string) => boolean }) {
   return (
     <nav aria-label="Categorias de produtos">
       <ul className="flex items-center gap-3">
