@@ -34,7 +34,27 @@ export default function ItemPedidoTable({ itens, produtos, onEdit, onRemove }: I
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+    <>
+    {/* Celular: um card por item no lugar da tabela. */}
+    <ul className="flex flex-col gap-3 md:hidden">
+      {itens.map((item) => (
+        <li key={item.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="font-medium text-slate-900">{nomeProduto(item.produtoId)}</p>
+          <p className="mt-1 text-sm text-slate-600">
+            {item.quantidade} × {item.precoUnitario} = <span className="font-medium text-slate-900">{item.subtotal}</span>
+          </p>
+          <div className="mt-3 flex gap-2">
+            <FormButton variant="secondary" onClick={() => onEdit(item)}>
+              Editar
+            </FormButton>
+            <FormButton variant="danger" onClick={() => onRemove(item)}>
+              Remover
+            </FormButton>
+          </div>
+        </li>
+      ))}
+    </ul>
+    <div className="hidden overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm md:block">
       <table className="w-full text-left text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50">
@@ -77,5 +97,6 @@ export default function ItemPedidoTable({ itens, produtos, onEdit, onRemove }: I
         </tbody>
       </table>
     </div>
+    </>
   );
 }

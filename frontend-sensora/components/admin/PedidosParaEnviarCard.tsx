@@ -46,8 +46,27 @@ export default function PedidosParaEnviarCard({ pedidos }: PedidosParaEnviarCard
         </div>
       </div>
 
+      {/* Celular: lista simples no lugar da tabela. */}
       {pedidos.length > 0 && (
-        <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200">
+        <ul className="mt-5 divide-y divide-slate-100 rounded-lg border border-slate-200 md:hidden">
+          {pedidos.map((pedido) => (
+            <li key={pedido.id}>
+              <Link href={`${ROUTES.PEDIDOS}/${pedido.id}`} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="font-medium text-brand-navy">{pedido.numero}</p>
+                  <p className="truncate text-sm text-slate-600">
+                    {pedido.clienteNome ?? pedido.clienteEmail ?? "—"} · {formatarData(pedido.data)}
+                  </p>
+                </div>
+                <span className="shrink-0 text-sm font-medium text-brand-navy">Ver itens</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {pedidos.length > 0 && (
+        <div className="mt-5 hidden overflow-x-auto rounded-lg border border-slate-200 md:block">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="bg-slate-50 text-slate-500">

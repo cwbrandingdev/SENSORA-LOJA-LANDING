@@ -107,7 +107,36 @@ export default function ProductTable({ produtos, categorias, onEdit, onRemove }:
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+    <>
+    {/* Celular: um card por produto no lugar da tabela. */}
+    <ul className="flex flex-col gap-3 md:hidden">
+      {produtos.map((produto) => (
+        <li key={produto.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <ProductThumb key={produto.imagemUrl ?? "sem-imagem"} src={produto.imagemUrl} alt={produto.nome} />
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-slate-900">{produto.nome}</p>
+              <p className="truncate text-xs text-slate-400">{nomeCategoria(produto) ?? "Sem categoria"}</p>
+            </div>
+            <RowActions
+              actions={[
+                { label: "Editar", icon: Pencil, onClick: () => onEdit(produto) },
+                { label: "Remover", icon: Trash2, variant: "danger", onClick: () => onRemove(produto) },
+              ]}
+            />
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            <span className="font-semibold tabular-nums text-slate-900">{formatPrice.format(produto.preco)}</span>
+            <span className={`tabular-nums ${ESTOQUE_TONE[statusEstoque(produto.quantidade)]}`}>
+              Estoque: {produto.quantidade}
+            </span>
+            <Badge tone={produto.ativo ? "success" : "neutral"}>{produto.ativo ? "Ativo" : "Inativo"}</Badge>
+            {produto.destaque && <Badge tone="info" dot={false}>Destaque</Badge>}
+          </div>
+        </li>
+      ))}
+    </ul>
+    <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm md:block">
       <table className="w-full table-fixed text-left text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50/80">
@@ -195,5 +224,6 @@ export default function ProductTable({ produtos, categorias, onEdit, onRemove }:
         </tbody>
       </table>
     </div>
+    </>
   );
 }

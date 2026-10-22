@@ -45,7 +45,32 @@ export default function ClientTable({ clientes, onEdit, onRemove }: ClientTableP
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+    <>
+    {/* Celular: um card por cliente no lugar da tabela. */}
+    <ul className="flex flex-col gap-3 md:hidden">
+      {clientes.map((cliente) => (
+        <li key={cliente.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium text-slate-900">{cliente.nome}</p>
+              <p className="truncate text-sm text-slate-600">{cliente.email}</p>
+            </div>
+            <RowActions
+              actions={[
+                { label: "Editar", icon: Pencil, onClick: () => onEdit(cliente) },
+                { label: "Remover", icon: Trash2, variant: "danger", onClick: () => onRemove(cliente) },
+              ]}
+            />
+          </div>
+          <p className="mt-2 text-sm text-slate-600">
+            {cliente.telefone}
+            {cliente.cpf && <span className="ml-3 text-xs tabular-nums text-slate-400">CPF {cliente.cpf}</span>}
+          </p>
+          {cliente.endereco && <p className="mt-1 text-xs text-slate-400">{cliente.endereco}</p>}
+        </li>
+      ))}
+    </ul>
+    <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm md:block">
       <table className="w-full table-fixed text-left text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50/80">
@@ -107,5 +132,6 @@ export default function ClientTable({ clientes, onEdit, onRemove }: ClientTableP
         </tbody>
       </table>
     </div>
+    </>
   );
 }

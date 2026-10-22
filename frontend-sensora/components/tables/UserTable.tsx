@@ -59,7 +59,40 @@ export default function UserTable({ usuarios, onEdit, onRemove }: UserTableProps
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+    <>
+    {/* Celular: um card por usuário no lugar da tabela. */}
+    <ul className="flex flex-col gap-3 md:hidden">
+      {usuarios.map((usuario) => (
+        <li key={usuario.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-navy/10 text-xs font-semibold text-brand-navy"
+            >
+              {iniciais(usuario.nome)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-slate-900">{usuario.nome}</p>
+              <p className="truncate text-sm text-slate-500">{usuario.email}</p>
+            </div>
+            <RowActions
+              actions={[
+                { label: "Editar", icon: Pencil, onClick: () => onEdit(usuario) },
+                { label: "Remover", icon: Trash2, variant: "danger", onClick: () => onRemove(usuario) },
+              ]}
+            />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <Badge tone={PERFIL_TONE[usuario.perfil]}>{PERFIL_LABEL[usuario.perfil]}</Badge>
+            <Badge tone={usuario.ativo ? "success" : "neutral"}>{usuario.ativo ? "Ativo" : "Inativo"}</Badge>
+            <Badge tone={usuario.emailVerificado ? "success" : "warning"}>
+              {usuario.emailVerificado ? "E-mail verificado" : "E-mail não verificado"}
+            </Badge>
+          </div>
+        </li>
+      ))}
+    </ul>
+    <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm md:block">
       <table className="w-full min-w-[640px] table-fixed text-left text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50/80">
@@ -132,5 +165,6 @@ export default function UserTable({ usuarios, onEdit, onRemove }: UserTableProps
         </tbody>
       </table>
     </div>
+    </>
   );
 }

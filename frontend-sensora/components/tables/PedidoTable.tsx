@@ -74,6 +74,128 @@ type PedidoTableProps = {
   filtrosAtivos?: boolean;
 };
 
+function EnvioPedido({ pedido }: { pedido: Pedido }) {
+  const temFrete =
+    pedido.freteTransportadora || pedido.freteServico || pedido.freteValor != null;
+  return (
+    <div className="flex flex-col gap-1">
+      {/* Entregue = o cliente clicou em "Recebi meu pedido". */}
+      {pedido.recebidoEm ? (
+        <Badge tone="success">Entregue</Badge>
+      ) : (
+        <Badge tone={pedido.statusEnvio === StatusEnvio.ENVIADO ? "info" : "warning"}>
+          {pedido.statusEnvio === StatusEnvio.ENVIADO ? "Enviado" : "Aguardando envio"}
+        </Badge>
+      )}
+      {pedido.statusEnvio === StatusEnvio.ENVIADO && pedido.enviadoEm && (
+        <span className="text-xs text-slate-500">
+          {pedido.recebidoEm
+            ? `Enviado ${formatarDataEnvio(pedido.enviadoEm)} · entregue ${formatarDataEnvio(pedido.recebidoEm)}`
+            : formatarDataEnvio(pedido.enviadoEm)}
+        </span>
+      )}
+      {pedido.codigoRastreio && (
+        <span className="font-mono text-xs text-slate-500">
+          {pedido.codigoRastreio}
+        </span>
+      )}
+      {/* Achado da auditoria (Etapa 6.6) — freteTransportadora/
+          freteServico/freteValor são a opção de frete COTADA no
+          checkout, não uma confirmação de envio; mostrados aqui
+          só como referência de qual serviço foi escolhido. */}
+      {temFrete && (
+        <span className="text-xs text-slate-400">
+          {[pedido.freteTransportadora, pedido.freteServico]
+            .filter(Boolean)
+            .join(" · ")}
+          {pedido.freteValor != null &&
+            ` · ${formatPrice.format(pedido.freteValor)}`}
+        </span>
+      )}
+    </div>
+  );
+}
+
+type AcoesProps = Pick<
+  PedidoTableProps,
+  | "onEdit"
+  | "onRemove"
+  | "onMarcarEnviado"
+  | "marcandoEnviadoId"
+  | "onGerarEtiqueta"
+  | "onImprimirEtiqueta"
+  | "etiquetaEmAndamentoId"
+>;
+
+function AcoesPedido({
+  pedido,
+  onEdit,
+  onRemove,
+  onMarcarEnviado,
+  marcandoEnviadoId,
+  onGerarEtiqueta,
+  onImprimirEtiqueta,
+  etiquetaEmAndamentoId,
+}: AcoesProps & { pedido: Pedido }) {
+  const podeMarcarEnviado =
+    pedido.status === StatusPedido.PAGO &&
+    pedido.statusEnvio === StatusEnvio.NAO_ENVIADO;
+  // Etapa 8.2 (HIGH-02 — hard-delete de pedido financeiramente
+  // relevante) — só PENDENTE pode ser excluído (mesma regra que
+  // o backend aplica de forma atômica em PedidosService.remove();
+  // esconder o botão aqui é só UX, nunca a proteção real — uma
+  // chamada direta a DELETE /pedidos/:id para qualquer outro
+  // status continua sendo rejeitada com 409 pelo backend).
+  const podeExcluir = pedido.status === StatusPedido.PENDENTE;
+  const marcando = marcandoEnviadoId === pedido.id;
+  const etiquetaEmAndamento = etiquetaEmAndamentoId === pedido.id;
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Link
+        href={`${ROUTES.PEDIDOS}/${pedido.id}`}
+        className="inline-flex items-center justify-center rounded-md border border-brand-navy px-3 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
+      >
+        Ver itens
+      </Link>
+      <FormButton variant="secondary" onClick={() => onEdit(pedido)}>
+        {pedido.status === StatusPedido.PAGO ? "Editar rastreio" : "Editar"}
+      </FormButton>
+      {podeExcluir && (
+        <FormButton variant="danger" onClick={() => onRemove(pedido)}>
+          Remover
+        </FormButton>
+      )}
+      {podeMarcarEnviado && !pedido.etiquetaGeradaEm && (
+        <FormButton
+          variant="secondary"
+          disabled={etiquetaEmAndamento}
+          onClick={() => onGerarEtiqueta(pedido)}
+        >
+          Gerar etiqueta
+        </FormButton>
+      )}
+      {pedido.etiquetaGeradaEm && (
+        <FormButton
+          variant="secondary"
+          disabled={etiquetaEmAndamento}
+          onClick={() => onImprimirEtiqueta(pedido)}
+        >
+          {etiquetaEmAndamento ? "Abrindo..." : "Imprimir etiqueta"}
+        </FormButton>
+      )}
+      {podeMarcarEnviado && (
+        <FormButton
+          variant="primary"
+          disabled={marcando}
+          onClick={() => onMarcarEnviado(pedido)}
+        >
+          {marcando ? "Marcando..." : "Marcar como enviado"}
+        </FormButton>
+      )}
+    </div>
+  );
+}
+
 export default function PedidoTable({
   pedidos,
   onEdit,
@@ -105,8 +227,42 @@ export default function PedidoTable({
     );
   }
 
+  const acoesProps = {
+    onEdit,
+    onRemove,
+    onMarcarEnviado,
+    marcandoEnviadoId,
+    onGerarEtiqueta,
+    onImprimirEtiqueta,
+    etiquetaEmAndamentoId,
+  };
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+    <>
+    {/* Celular: um card por pedido no lugar da tabela. */}
+    <ul className="flex flex-col gap-3 md:hidden">
+      {pedidos.map((pedido) => (
+        <li key={pedido.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-medium text-slate-900">{pedido.numero}</p>
+              <p className="text-xs text-slate-500">
+                {new Date(pedido.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+              </p>
+            </div>
+            <p className="font-medium text-slate-900">{pedido.total}</p>
+          </div>
+          <div className="mt-3 flex flex-wrap items-start gap-3">
+            <Badge tone={STATUS_TONE[pedido.status]}>{STATUS_LABEL[pedido.status]}</Badge>
+            <EnvioPedido pedido={pedido} />
+          </div>
+          <div className="mt-4 border-t border-slate-100 pt-3">
+            <AcoesPedido pedido={pedido} {...acoesProps} />
+          </div>
+        </li>
+      ))}
+    </ul>
+    <div className="hidden overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm md:block">
       <table className="w-full text-left text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50">
@@ -132,21 +288,6 @@ export default function PedidoTable({
         </thead>
         <tbody className="divide-y divide-slate-100">
           {pedidos.map((pedido) => {
-            const podeMarcarEnviado =
-              pedido.status === StatusPedido.PAGO &&
-              pedido.statusEnvio === StatusEnvio.NAO_ENVIADO;
-            // Etapa 8.2 (HIGH-02 — hard-delete de pedido financeiramente
-            // relevante) — só PENDENTE pode ser excluído (mesma regra que
-            // o backend aplica de forma atômica em PedidosService.remove();
-            // esconder o botão aqui é só UX, nunca a proteção real — uma
-            // chamada direta a DELETE /pedidos/:id para qualquer outro
-            // status continua sendo rejeitada com 409 pelo backend).
-            const podeExcluir = pedido.status === StatusPedido.PENDENTE;
-            const marcando = marcandoEnviadoId === pedido.id;
-            const etiquetaEmAndamento = etiquetaEmAndamentoId === pedido.id;
-            const temFrete =
-              pedido.freteTransportadora || pedido.freteServico || pedido.freteValor != null;
-
             return (
               <tr key={pedido.id} className="transition-colors hover:bg-slate-50/80">
                 <td className="px-4 py-3 font-medium text-slate-900">{pedido.numero}</td>
@@ -164,87 +305,11 @@ export default function PedidoTable({
                   <Badge tone={STATUS_TONE[pedido.status]}>{STATUS_LABEL[pedido.status]}</Badge>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex flex-col gap-1">
-                    {/* Entregue = o cliente clicou em "Recebi meu pedido". */}
-                    {pedido.recebidoEm ? (
-                      <Badge tone="success">Entregue</Badge>
-                    ) : (
-                      <Badge tone={pedido.statusEnvio === StatusEnvio.ENVIADO ? "info" : "warning"}>
-                        {pedido.statusEnvio === StatusEnvio.ENVIADO ? "Enviado" : "Aguardando envio"}
-                      </Badge>
-                    )}
-                    {pedido.statusEnvio === StatusEnvio.ENVIADO && pedido.enviadoEm && (
-                      <span className="text-xs text-slate-500">
-                        {pedido.recebidoEm
-                          ? `Enviado ${formatarDataEnvio(pedido.enviadoEm)} · entregue ${formatarDataEnvio(pedido.recebidoEm)}`
-                          : formatarDataEnvio(pedido.enviadoEm)}
-                      </span>
-                    )}
-                    {pedido.codigoRastreio && (
-                      <span className="font-mono text-xs text-slate-500">
-                        {pedido.codigoRastreio}
-                      </span>
-                    )}
-                    {/* Achado da auditoria (Etapa 6.6) — freteTransportadora/
-                        freteServico/freteValor são a opção de frete COTADA no
-                        checkout, não uma confirmação de envio; mostrados aqui
-                        só como referência de qual serviço foi escolhido. */}
-                    {temFrete && (
-                      <span className="text-xs text-slate-400">
-                        {[pedido.freteTransportadora, pedido.freteServico]
-                          .filter(Boolean)
-                          .join(" · ")}
-                        {pedido.freteValor != null &&
-                          ` · ${formatPrice.format(pedido.freteValor)}`}
-                      </span>
-                    )}
-                  </div>
+                  <EnvioPedido pedido={pedido} />
                 </td>
                 <td className="px-4 py-3 font-medium text-slate-900">{pedido.total}</td>
                 <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-2">
-                    <Link
-                      href={`${ROUTES.PEDIDOS}/${pedido.id}`}
-                      className="inline-flex items-center justify-center rounded-md border border-brand-navy px-3 py-2 text-sm font-medium text-brand-navy transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
-                    >
-                      Ver itens
-                    </Link>
-                    <FormButton variant="secondary" onClick={() => onEdit(pedido)}>
-                      {pedido.status === StatusPedido.PAGO ? "Editar rastreio" : "Editar"}
-                    </FormButton>
-                    {podeExcluir && (
-                      <FormButton variant="danger" onClick={() => onRemove(pedido)}>
-                        Remover
-                      </FormButton>
-                    )}
-                    {podeMarcarEnviado && !pedido.etiquetaGeradaEm && (
-                      <FormButton
-                        variant="secondary"
-                        disabled={etiquetaEmAndamento}
-                        onClick={() => onGerarEtiqueta(pedido)}
-                      >
-                        Gerar etiqueta
-                      </FormButton>
-                    )}
-                    {pedido.etiquetaGeradaEm && (
-                      <FormButton
-                        variant="secondary"
-                        disabled={etiquetaEmAndamento}
-                        onClick={() => onImprimirEtiqueta(pedido)}
-                      >
-                        {etiquetaEmAndamento ? "Abrindo..." : "Imprimir etiqueta"}
-                      </FormButton>
-                    )}
-                    {podeMarcarEnviado && (
-                      <FormButton
-                        variant="primary"
-                        disabled={marcando}
-                        onClick={() => onMarcarEnviado(pedido)}
-                      >
-                        {marcando ? "Marcando..." : "Marcar como enviado"}
-                      </FormButton>
-                    )}
-                  </div>
+                  <AcoesPedido pedido={pedido} {...acoesProps} />
                 </td>
               </tr>
             );
@@ -252,5 +317,6 @@ export default function PedidoTable({
         </tbody>
       </table>
     </div>
+    </>
   );
 }
