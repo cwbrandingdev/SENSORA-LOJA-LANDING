@@ -24,6 +24,7 @@ describe('@NormalizarEmail nos DTOs', () => {
       email: '  TESTE@GMAIL.COM ',
       senha: 'senhaSegura123',
       cpf: '52998224725',
+      telefone: '41999999999',
     });
 
     expect(dto.email).toBe('teste@gmail.com');

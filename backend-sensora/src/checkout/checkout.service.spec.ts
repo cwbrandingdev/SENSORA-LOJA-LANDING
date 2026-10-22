@@ -1553,7 +1553,7 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         },
       }),
     );
-    expect(criarCheckout.mock.calls[0][0]).not.toHaveProperty('installment');
+    expect((criarCheckout.mock.calls[0] as unknown[])[0]).not.toHaveProperty('installment');
     expect(pedidoUpdate).toHaveBeenCalledWith({
       where: { id: 42 },
       data: { asaasCheckoutId: 'chk_abc' },

@@ -4,7 +4,10 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
+import {
+  MelhorEnvioService,
+  type MelhorEnvioSituacao,
+} from '../melhor-envio/melhor-envio.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StatusEnvio } from './enums/status-envio.enum';
 import { StatusPedido } from './enums/status-pedido.enum';
@@ -128,7 +131,7 @@ export class PedidosRecebimentoService implements OnModuleInit, OnModuleDestroy 
       return;
     }
 
-    let situacao = null;
+    let situacao: MelhorEnvioSituacao | null = null;
     try {
       if (pedido.etiquetaIdExterno) {
         situacao = await this.melhorEnvioService.consultarEnvio(

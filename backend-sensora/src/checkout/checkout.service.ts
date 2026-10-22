@@ -298,7 +298,7 @@ export class CheckoutService {
 
     return this.gateway === 'stripe'
       ? this.criarSessaoStripe(dto, pedido, itensSelecionados)
-      : this.criarSessaoAsaas(pedido, itensSelecionados);
+      : this.criarSessaoAsaas(pedido, itensSelecionados, total);
   }
 
   // Etapa 6.5 (Frete), Parte 3 — POST /checkout/frete/cotacao. Mesmo
@@ -452,13 +452,14 @@ export class CheckoutService {
     };
   }
 
+  // `total`: o mesmo valor já calculado em createSession (produtos + frete),
+  // em vez de reler o Decimal do pedido gravado.
   private async criarSessaoAsaas(
     pedido: PedidoCriado,
     itens: ItemSelecionado[],
+    total: number,
   ): Promise<CheckoutSessionResponse> {
-    const { chargeTypes, installment } = this.opcoesParcelamentoAsaas(
-      Number(pedido.total),
-    );
+    const { chargeTypes, installment } = this.opcoesParcelamentoAsaas(total);
     const checkout = await this.asaasService.criarCheckout({
       billingTypes: ['PIX', 'CREDIT_CARD'],
       chargeTypes,
