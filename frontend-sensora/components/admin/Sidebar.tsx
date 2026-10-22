@@ -37,6 +37,7 @@ import {
   Home,
   Search,
   BarChart3,
+  Building2,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -97,6 +98,8 @@ export function useAdminNav() {
               // Suporte também é ADMIN-only (backend: admin/suporte).
               { href: ROUTES.SUPORTE, label: "Suporte", icon: LifeBuoy },
               { href: ROUTES.AVALIACOES, label: "Avaliações", icon: Star },
+              // Propostas da página "Para empresas" (backend: admin/propostas-empresas).
+              { href: ROUTES.EMPRESAS, label: "Empresas", icon: Building2 },
             ],
           },
 

@@ -773,3 +773,30 @@ enum StatusAvaliacao {
   APROVADA
   RECUSADA
 }
+
+// Pedido de proposta da página "Para empresas" (presentes corporativos). Vem
+// do formulário público, sem conta; a equipe recebe e-mail e acompanha no
+// Admin. cargo/objetivo/quantidade são textos de listas fixas (ver
+// propostas-empresas/opcoes.ts).
+model PropostaEmpresa {
+  id           Int                   @id @default(autoincrement())
+  nome         String
+  email        String
+  telefone     String
+  empresa      String
+  cargo        String
+  objetivo     String
+  quantidade   String
+  mensagem     String?
+  status       StatusPropostaEmpresa @default(NOVA)
+  criadaEm     DateTime              @default(now())
+  atualizadaEm DateTime              @updatedAt
+
+  @@index([criadaEm(sort: Desc)])
+}
+
+enum StatusPropostaEmpresa {
+  NOVA
+  EM_CONTATO
+  ENCERRADA
+}

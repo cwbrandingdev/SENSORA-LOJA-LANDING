@@ -81,6 +81,9 @@ export default function Footer() {
               <FooterLink href={ROTAS_LEGAIS.quemSomos}>Quem somos</FooterLink>
             </li>
             <li>
+              <FooterLink href={ROUTES.PARA_EMPRESAS}>Para empresas</FooterLink>
+            </li>
+            <li>
               <FooterLink href={ROTAS_LEGAIS.termos}>Termos de Uso</FooterLink>
             </li>
             <li>

@@ -24,6 +24,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       (collection) => `${getCategoryHref(collection.categorySlug)}/${collection.slug}`,
     ),
     "/quem-somos",
+    "/para-empresas",
     "/faq",
     "/termos-de-uso",
     "/politica-de-privacidade",

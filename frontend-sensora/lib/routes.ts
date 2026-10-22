@@ -46,6 +46,11 @@ export const ROUTES = {
   SUPORTE: `${ADMIN_ROUTE}/suporte`,
   // Moderação das avaliações de produto — ADMIN-only (backend: admin/avaliacoes).
   AVALIACOES: `${ADMIN_ROUTE}/avaliacoes`,
+  // Pedidos de proposta da página "Para empresas" — ADMIN-only (backend:
+  // admin/propostas-empresas; o e-mail de aviso linka para cá).
+  EMPRESAS: `${ADMIN_ROUTE}/empresas`,
+  // Página pública de presentes corporativos (formulário de proposta).
+  PARA_EMPRESAS: "/para-empresas",
   LOJA: "/loja",
   LOJA_PRODUTOS: "/loja/produtos",
   LOJA_CARRINHO: "/loja/carrinho",

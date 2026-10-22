@@ -25,6 +25,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProdutosModule } from './produtos/produtos.module';
 import { PublicModule } from './public/public.module';
 import { SuporteModule } from './suporte/suporte.module';
+import { PropostasEmpresasModule } from './propostas-empresas/propostas-empresas.module';
 import { UsuariosModule } from './usuarios/usuarios.module';
 
 @Module({
@@ -170,6 +171,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     ImagekitModule,
     OcorrenciasModule,
     SuporteModule,
+    PropostasEmpresasModule,
   ],
   controllers: [AppController],
   providers: [

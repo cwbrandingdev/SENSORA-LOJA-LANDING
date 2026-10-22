@@ -31,6 +31,7 @@ const CATEGORY_LINKS = [
 const DESKTOP_LINKS = [
   ...CATEGORY_LINKS,
   { label: "Ver tudo", href: ROUTES.LOJA_PRODUTOS },
+  { label: "Empresas", href: ROUTES.PARA_EMPRESAS },
 ];
 
 function IconLink({
@@ -291,6 +292,18 @@ export default function Navbar() {
                     )}
                   >
                     Ver tudo
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href={ROUTES.PARA_EMPRESAS}
+                    onClick={() => setMenuOpen(false)}
+                    className={cn(
+                      mobileLinkClass,
+                      isActive(ROUTES.PARA_EMPRESAS) && "text-brand-navy",
+                    )}
+                  >
+                    Para empresas
                   </Link>
                 </li>
                 {!loading && (

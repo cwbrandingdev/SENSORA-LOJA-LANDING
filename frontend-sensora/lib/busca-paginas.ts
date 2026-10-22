@@ -56,6 +56,11 @@ export const PAGINAS_BUSCA: PaginaBusca[] = [
     palavras: "sobre empresa quem somos cnpj endereço loja",
   },
   {
+    titulo: "Para empresas",
+    href: ROUTES.PARA_EMPRESAS,
+    palavras: "empresas corporativo brinde presente personalizado proposta colaboradores clientes evento marca atacado",
+  },
+  {
     titulo: "Carrinho",
     href: ROUTES.LOJA_CARRINHO,
     palavras: "carrinho sacola",
