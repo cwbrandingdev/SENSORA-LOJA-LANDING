@@ -1,10 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mockCarrinhoApi } from "./mock-carrinho-api";
 
-// Task 17 — primeira suíte E2E dedicada a /loja/carrinho. O carrinho em si
-// continua 100% CartContext/localStorage; com sessão válida a página também
-// consulta GET /checkout/pendente (banner de pagamento em aberto). Sem
-// sessão, nenhuma API é chamada — a decisão do CTA de checkout ainda é
-// possuiSessaoValida(), sem rede.
+// Task 17 — primeira suíte E2E dedicada a /loja/carrinho. A UI continua
+// CartContext/localStorage; com sessão, o CartProvider também chama
+// GET/PUT /carrinho (cópia no banco) e GET /checkout/pendente (banner de
+// pagamento em aberto). Sem sessão, nenhuma API de sacola é chamada.
 const CARRINHO_URL = "/loja/carrinho";
 const CART_STORAGE_KEY = "sensora_carrinho";
 const TOKEN_KEY = "sensora_token";
@@ -121,6 +121,7 @@ test.beforeEach(async ({ page }) => {
     }
     await route.continue();
   });
+  await mockCarrinhoApi(page);
 });
 
 test.describe("Carrinho — carrinho vazio", () => {
@@ -900,13 +901,17 @@ test.describe("Carrinho — pagamento pendente (retomar checkout Asaas)", () => 
     });
   }
 
-  test("sem sessão: não mostra o banner e não chama /checkout/pendente", async ({
+  test("sem sessão: não mostra o banner e não chama /checkout/pendente nem /carrinho", async ({
     page,
   }) => {
     const chamadas: string[] = [];
     page.on("request", (request) => {
-      if (request.url().includes("/checkout/pendente")) {
-        chamadas.push(request.url());
+      const pathname = new URL(request.url()).pathname;
+      if (
+        pathname === "/checkout/pendente" ||
+        pathname === "/carrinho"
+      ) {
+        chamadas.push(pathname);
       }
     });
     await seedCart(page, [ITEM_VELA]);

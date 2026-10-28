@@ -3,12 +3,37 @@
 require("dotenv/config");
 const { defineConfig } = require("prisma/config");
 
+// Prisma migrate uses session-level pg_advisory_lock. Neon/PgBouncer in
+// transaction mode cannot hold that lock for the migrate session — and a
+// leftover lock on a pooled backend blocks every later deploy (P1002).
+// CLI connections therefore go to the unpooled host; the Nest app keeps
+// using DATABASE_URL (pooler) via PrismaService.
+function migrateUrl() {
+  const chosen =
+    process.env["DIRECT_URL"] ||
+    process.env["DIRECT_DATABASE_URL"] ||
+    process.env["DATABASE_URL"];
+  if (!chosen) {
+    return chosen;
+  }
+  try {
+    const parsed = new URL(chosen);
+    if (parsed.hostname.includes("pooler")) {
+      parsed.hostname = parsed.hostname.replace("-pooler", "");
+      return parsed.toString();
+    }
+  } catch {
+    return chosen;
+  }
+  return chosen;
+}
+
 module.exports = defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: migrateUrl(),
   },
 });

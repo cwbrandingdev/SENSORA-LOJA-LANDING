@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mockCarrinhoApi } from "./mock-carrinho-api";
 
 // Etapa "Dados do Cliente / Cadastro" — suíte E2E de /conta/dados-pessoais
 // dedicada aos campos novos (CPF/telefone) e ao ciclo completo de edição
@@ -42,6 +43,7 @@ async function seedSession(page: Page) {
     },
     [TOKEN_KEY, fakeToken()] as const,
   );
+  await mockCarrinhoApi(page);
 }
 
 const USUARIO_SEM_CPF_TELEFONE = {

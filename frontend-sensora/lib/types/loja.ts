@@ -273,6 +273,23 @@ export type CheckoutItemPayload = {
   quantidade: number;
 };
 
+// Espelha GET/PUT /carrinho (Carrinho / ItemCarrinho no backend). Preço,
+// nome e estoque vêm do produto real no servidor, nunca do que o cliente
+// tentou gravar — o PUT só aceita produtoId+quantidade.
+export type ItemCarrinho = {
+  produtoId: number;
+  quantidade: number;
+  nome: string;
+  slug: string;
+  preco: number;
+  imagemUrl?: string;
+  estoqueConhecido: number;
+};
+
+export type Carrinho = {
+  itens: ItemCarrinho[];
+};
+
 // Etapa 6.5 (Frete) — só o id do serviço escolhido na cotação (ver
 // services/frete.ts), nunca preço/prazo: o backend recotiza e valida esta
 // opção antes de aceitar o pedido (mesmo raciocínio de nunca confiar em

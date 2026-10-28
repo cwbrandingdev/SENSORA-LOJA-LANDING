@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mockCarrinhoApi } from "./mock-carrinho-api";
 
 // Formulário de suporte do cliente (/conta/suporte, POST /suporte). A API é
 // simulada via page.route pelo CAMINHO da URL (o host da API vem do .env do
@@ -42,6 +43,7 @@ async function seedSession(page: Page, perfil: "CLIENTE" | "ADMIN" = "CLIENTE") 
     },
     [TOKEN_KEY, fakeToken(perfil)] as const,
   );
+  await mockCarrinhoApi(page);
 }
 
 // A API fica em outra origem: a resposta simulada precisa liberar o CORS.

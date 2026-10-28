@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mockCarrinhoApi } from "./mock-carrinho-api";
 
 // Etapa 6.6 (Lote 2, Parte B) — regressão do bug de fuso horário
 // identificado originalmente em /workspace-x/pedidos (Etapa 8.12, antes
@@ -38,6 +39,7 @@ async function seedSession(page: Page) {
     },
     [TOKEN_KEY, fakeToken()] as const,
   );
+  await mockCarrinhoApi(page);
 }
 
 // Meia-noite UTC — o caso exato que expunha o bug (America/Sao_Paulo é

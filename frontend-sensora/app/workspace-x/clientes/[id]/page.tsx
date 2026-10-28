@@ -164,7 +164,7 @@ export default function ClienteDetalhePage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <MetricCard
               titulo="Pedidos"
-              link="historico-pedidos"
+              link="#historico-pedidos"
               icon={ClipboardList}
               iconTone="navy"
               valor={String(cliente.resumo.quantidadePedidos)}
@@ -259,7 +259,7 @@ export default function ClienteDetalhePage() {
           </div>
 
           <div
-            className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm"
+            className="scroll-mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm"
             id="historico-pedidos"
           >
             <h3 className="px-4 pt-4 text-sm font-semibold text-brand-navy">

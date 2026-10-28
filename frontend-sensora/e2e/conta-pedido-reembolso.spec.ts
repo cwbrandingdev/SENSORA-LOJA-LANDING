@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mockCarrinhoApi } from "./mock-carrinho-api";
 
 // Etapa 5B.7 (Frontend do Fluxo de Reembolso) — suíte E2E de
 // /conta/pedidos/[id], cobrindo a ação "Solicitar reembolso"
@@ -37,6 +38,7 @@ async function seedSession(page: Page) {
     },
     [TOKEN_KEY, fakeToken()] as const,
   );
+  await mockCarrinhoApi(page);
 }
 
 type PedidoFake = {

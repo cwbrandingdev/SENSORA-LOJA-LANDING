@@ -111,8 +111,14 @@ export default function PoliticaDeCookiesPage() {
 
         <Secao title="Armazenamento local (localStorage)">
           <p>
-            Além do cookie acima, o navegador guarda localmente (nunca
-            enviado a nenhum servidor de terceiro) os seguintes dados:
+            Além do cookie acima, o navegador guarda localmente os
+            seguintes dados. Nenhum deles vai para servidor de terceiro.
+            Com conta, a sacola também é copiada para o banco da Sensora
+            — o detalhe está na{" "}
+            <Link href="/politica-de-privacidade" className="text-brand-navy underline underline-offset-4">
+              Política de Privacidade
+            </Link>
+            .
           </p>
           <div className="flex flex-col gap-3">
             <ChaveItem
@@ -123,7 +129,7 @@ export default function PoliticaDeCookiesPage() {
             <ChaveItem
               chave={`${CART_STORAGE_KEY} / ${CART_STORAGE_KEY}_<id>`}
               tipo="localStorage · Carrinho"
-              finalidade="Os itens do seu carrinho de compras, para que eles continuem lá se você fechar o site e voltar depois. Guardado por conta (quando você está logado) ou como visitante."
+              finalidade="Cópia no navegador dos itens da sacola, para eles continuarem lá se você fechar o site. Com conta, os mesmos itens também ficam no banco da Sensora — para a sacola não se perder entre aparelhos e para um lembrete por e-mail se a compra não for concluída. Sem login, o carrinho fica só neste aparelho."
             />
             <ChaveItem
               chave={CHECKOUT_PENDENTE_KEY}

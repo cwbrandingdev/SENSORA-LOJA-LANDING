@@ -55,6 +55,11 @@ export default function PoliticaDePrivacidadePage() {
             escolhido, valor, status de pagamento e de envio.
           </li>
           <li>
+            <strong>Carrinho:</strong> com conta, os produtos e as
+            quantidades da sacola ficam no nosso banco, além da cópia no
+            seu navegador. Sem login, o carrinho fica só no aparelho.
+          </li>
+          <li>
             <strong>Pós-venda:</strong> pedidos de reembolso e devolução
             (motivo, descrição, fotos opcionais), chamados de suporte e
             mensagens enviadas aos e-mails da loja.
@@ -98,10 +103,15 @@ export default function PoliticaDePrivacidadePage() {
             que você pode recusar.
           </li>
           <li>
+            Guardar a sacola da conta no nosso banco e enviar um lembrete
+            se você deixar itens parados sem finalizar a compra: execução
+            de contrato. Não é mala direta de novidade.
+          </li>
+          <li>
             Mensagens transacionais (confirmação de conta, senha, pedido,
-            devolução). Mala direta ou e-mail de novidade, se um dia
-            existirem, só com um aceite separado. Comprar ou criar conta não
-            inscreve você em lista promocional.
+            devolução, carrinho não finalizado). Mala direta ou e-mail de
+            novidade, se um dia existirem, só com um aceite separado.
+            Comprar ou criar conta não inscreve você em lista promocional.
           </li>
         </ul>
       </Secao>
@@ -124,7 +134,8 @@ export default function PoliticaDePrivacidadePage() {
           </li>
           <li>
             Provedor de e-mail (Resend ou SMTP configurado), para confirmação
-            de conta, recuperação de senha e avisos de pedido e devolução.
+            de conta, recuperação de senha e avisos de pedido, devolução e
+            carrinho não finalizado.
           </li>
           <li>
             Hospedagem do site e, se você aceitar analytics, a ferramenta
@@ -147,7 +158,8 @@ export default function PoliticaDePrivacidadePage() {
           O site usa conexão segura. Senha e tokens de redefinição ou
           confirmação são guardados só como hash, nunca em texto puro. O
           pagamento acontece no ambiente do Asaas. Fotos de devolução não
-          ficam públicas.
+          ficam públicas. O carrinho da conta fica no nosso banco enquanto
+          houver itens na sacola.
         </p>
         <p>
           Nenhum sistema é isento de risco. Se houver incidente com risco
@@ -160,7 +172,9 @@ export default function PoliticaDePrivacidadePage() {
           Dados da conta ficam enquanto a conta existir e pelo tempo
           necessário para cumprir obrigação legal ou defender um direito.
           Dados de documento fiscal seguem o prazo de cinco anos. Depois
-          disso, são apagados ou anonimizados quando a lei permitir.
+          disso, são apagados ou anonimizados quando a lei permitir. Itens
+          do carrinho da conta são apagados quando você esvazia a sacola ou
+          quando o pagamento é confirmado.
         </p>
         <p>
           Se você pedir a exclusão da conta, podemos reter o que a lei manda
@@ -172,7 +186,8 @@ export default function PoliticaDePrivacidadePage() {
       <Secao title="O que são cookies e como os utilizamos">
         <p>
           Cookies e o armazenamento local do navegador reconhecem sua sessão,
-          o carrinho e a volta do checkout. Essenciais funcionam sem
+          uma cópia do carrinho e a volta do checkout. Com conta, a sacola
+          também fica no nosso banco. Essenciais funcionam sem
           consentimento porque a loja não opera sem eles. Medição e marketing
           só depois do aceite no aviso do site, que você pode mudar em
           Preferências de cookies no rodapé. A lista do que existe hoje está

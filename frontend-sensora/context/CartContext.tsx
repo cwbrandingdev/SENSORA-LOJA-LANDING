@@ -1,9 +1,10 @@
 "use client";
 
 // Mesmo padrão arquitetural de context/AuthContext.tsx e ToastContext.tsx —
-// createContext + Provider + hook. Carrinho é só estado local (localStorage),
-// sem nenhuma chamada ao backend: a validação real de estoque continua
-// acontecendo no checkout (próxima etapa), nunca aqui.
+// createContext + Provider + hook. A UI é estado local (localStorage) para
+// resposta imediata; com sessão válida, o mesmo conjunto é copiado em
+// GET/PUT /carrinho (banco da conta) para lembrete de sacola abandonada.
+// A validação real de estoque continua só no checkout, nunca aqui.
 //
 // Etapa (Carrinho por conta) — achado da auditoria: o carrinho usava uma
 // única chave fixa (CART_STORAGE_KEY) no localStorage, compartilhada por
@@ -37,8 +38,11 @@ import type { ReactNode } from "react";
 import { CART_STORAGE_KEY } from "@/lib/constants";
 import { getToken } from "@/lib/storage";
 import { decodeToken, isTokenExpired } from "@/lib/jwt";
+import { buscarCarrinho, salvarCarrinho } from "@/services/carrinho";
+import type { ItemCarrinho } from "@/lib/types/loja";
 
 const QUANTIDADE_MINIMA = 1;
+const DEBOUNCE_SINCRONIA_MS = 500;
 
 export type CartItem = {
   produtoId: number;
@@ -183,6 +187,49 @@ function mesclarItens(itensConta: CartItem[], itensVisitante: CartItem[]): CartI
   return resultado;
 }
 
+// União localStorage + banco por produtoId, quantidade = máximo (nunca
+// soma: a cópia local já é o eco do último PUT, somar dobraria no reload).
+// Campos de produto do servidor vencem (preço/estoque atuais).
+function mesclarPorMaximo(
+  locais: CartItem[],
+  servidor: CartItem[],
+): CartItem[] {
+  const porId = new Map<number, CartItem>();
+  for (const item of locais) {
+    porId.set(item.produtoId, { ...item });
+  }
+  for (const item of servidor) {
+    const existente = porId.get(item.produtoId);
+    if (!existente) {
+      porId.set(item.produtoId, { ...item });
+      continue;
+    }
+    porId.set(item.produtoId, {
+      ...item,
+      quantidade: Math.max(existente.quantidade, item.quantidade),
+    });
+  }
+  return [...porId.values()];
+}
+
+function paraCartItem(item: ItemCarrinho): CartItem | null {
+  const candidato: CartItem = {
+    produtoId: item.produtoId,
+    nome: item.nome,
+    slug: item.slug,
+    preco: item.preco,
+    quantidade: item.quantidade,
+    imagemUrl: item.imagemUrl || undefined,
+    estoqueConhecido: item.estoqueConhecido,
+  };
+  return isCartItemValido(candidato) ? candidato : null;
+}
+
+function temSessaoValida(): boolean {
+  const token = getToken();
+  return Boolean(token && !isTokenExpired(token));
+}
+
 // Migra (com merge, nunca substituição cega) o carrinho de visitante para a
 // chave da conta informada. Idempotente por construção: a chave de
 // visitante é sempre esvaziada ao final, então uma segunda chamada (reload,
@@ -212,6 +259,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // disparar re-render nenhum, só precisa estar disponível para o efeito
   // de persistência quando `itens` mudar.
   const chaveRef = useRef(CART_STORAGE_KEY);
+  const sincroniaTimer = useRef<number | undefined>(undefined);
 
   // Carrega o carrinho da conta (ou de visitante) atual uma única vez, no
   // mount — cobre os três cenários problemáticos já existentes: sem
@@ -222,18 +270,47 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // rodar de novo a cada mount (em vez de uma vez por todo o app) é o que
   // garante a chave certa depois de um login/logout real, que sempre
   // remonta este provider (ver comentário no topo do arquivo).
+  // Com sessão, une a cópia local com GET /carrinho (quantidade = máximo,
+  // para um reload não somar a sacola já sincronizada).
   useEffect(() => {
+    let cancelado = false;
     const chave = resolverChaveCarrinho();
     chaveRef.current = chave;
-    setItens(lerCarrinhoDoStorage(chave));
-    setHidratado(true);
+    const locais = lerCarrinhoDoStorage(chave);
+    setItens(locais);
+
+    if (!temSessaoValida()) {
+      setHidratado(true);
+      return;
+    }
+
+    void buscarCarrinho()
+      .then((servidor) => {
+        if (cancelado) return;
+        const doServidor = servidor
+          .map(paraCartItem)
+          .filter((item): item is CartItem => item !== null);
+        setItens(mesclarPorMaximo(locais, doServidor));
+      })
+      .catch(() => {
+        if (cancelado) return;
+        setItens(locais);
+      })
+      .finally(() => {
+        if (!cancelado) setHidratado(true);
+      });
+
+    return () => {
+      cancelado = true;
+    };
   }, []);
 
   // Só persiste depois de terminar de ler o localStorage — sem essa guarda,
   // o primeiro render (itens = []) salvaria um carrinho vazio por cima do
   // que já estava salvo, antes do efeito de carga acima rodar. Persiste em
   // `chaveRef.current` (não mais a constante fixa) — a mesma chave
-  // resolvida (e só ela) para esta conta/visitante.
+  // resolvida (e só ela) para esta conta/visitante. Com sessão, debounca
+  // PUT /carrinho; falha de rede é silenciosa.
   useEffect(() => {
     if (!hidratado) return;
     try {
@@ -242,6 +319,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
       // Storage indisponível/cheio (modo privado, quota excedida etc.) —
       // o carrinho continua funcionando em memória pelo resto da sessão.
     }
+
+    if (!temSessaoValida()) return;
+
+    window.clearTimeout(sincroniaTimer.current);
+    sincroniaTimer.current = window.setTimeout(() => {
+      void salvarCarrinho(
+        itens.map((item) => ({
+          produtoId: item.produtoId,
+          quantidade: item.quantidade,
+        })),
+      ).catch(() => {
+        // Sync em segundo plano — não quebra adicionar/remover.
+      });
+    }, DEBOUNCE_SINCRONIA_MS);
+
+    return () => window.clearTimeout(sincroniaTimer.current);
   }, [itens, hidratado]);
 
   const adicionarItem = useCallback(

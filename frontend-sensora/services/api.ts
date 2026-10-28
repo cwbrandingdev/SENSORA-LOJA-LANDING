@@ -37,10 +37,16 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const url = error.config?.url ?? "";
     const isSessaoExpirada =
       isAxiosError(error) &&
       error.response?.status === 401 &&
-      !error.config?.url?.startsWith("/auth/");
+      !url.startsWith("/auth/") &&
+      // Sync de sacola é em segundo plano: um 401 aqui (token de teste E2E,
+      // JWT inválido ainda não expirado no client) não pode expulsar quem
+      // só está navegando a loja. Checkout e Minha Conta continuam
+      // redirecionando no 401.
+      !url.startsWith("/carrinho");
 
     if (
       isSessaoExpirada &&

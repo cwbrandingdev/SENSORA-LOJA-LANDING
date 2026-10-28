@@ -9,6 +9,7 @@ import { AppService } from './app.service';
 import { AlertasModule } from './alertas/alertas.module';
 import { AuthModule } from './auth/auth.module';
 import { CloudflareAwareThrottlerGuard } from './auth/guards/render-throttler.guard';
+import { CarrinhoModule } from './carrinho/carrinho.module';
 import { CategoriasModule } from './categorias/categorias.module';
 import { CheckoutModule } from './checkout/checkout.module';
 import { ClientesModule } from './clientes/clientes.module';
@@ -87,6 +88,13 @@ import { UsuariosModule } from './usuarios/usuarios.module';
           .min(10)
           .max(1440)
           .default(1440),
+        // Sacola da conta parada (sem alteração de itens) dispara um
+        // lembrete por e-mail. Default 1h. Mesmo teto do checkout pendente.
+        CARRINHO_ABANDONO_MINUTOS: Joi.number()
+          .integer()
+          .min(10)
+          .max(1440)
+          .default(60),
         // Etapa 6.5 (Frete) — todas opcionais na validação de boot
         // (diferente de ASAAS_*, que já bloqueiam o startup): MelhorEnvioService
         // valida preguiçosamente (mesmo padrão de AsaasService), lançando só
@@ -163,6 +171,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     ProdutosModule,
     AlertasModule,
     AvaliacoesModule,
+    CarrinhoModule,
     CategoriasModule,
     CheckoutModule,
     ClientesModule,

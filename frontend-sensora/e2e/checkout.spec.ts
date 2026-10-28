@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { loadEnvConfig } from "@next/env";
+import { mockCarrinhoApi } from "./mock-carrinho-api";
 
 // Mesma origem de API que o dev server do Next injeta em services/api.ts
 // (NEXT_PUBLIC_API_URL via .env*) — o Playwright não carrega .env sozinho.
@@ -150,6 +151,7 @@ async function seedSession(
     },
     [TOKEN_KEY, fakeToken()] as const,
   );
+  await mockCarrinhoApi(page);
   await mockMeuPerfil(page, telefone, cpf);
 }
 

@@ -24,7 +24,10 @@ type MetricCardProps = {
   descricao?: string;
   loading?: boolean;
   erro?: string;
-  link?: any;
+  /** Destino do card. Segmento de rota (`"pedidos"` → `/workspace-x/pedidos`)
+   *  ou âncora da mesma página (`"#historico-pedidos"`). Sem `link`, o card
+   *  não é clicável. */
+  link?: string;
   /** Opcional — undefined preserva os 4 usos existentes (Dashboard) sem
    *  nenhuma mudança visual. Mesmo raciocínio de EmptyState.tsx: ícone
    *  decorativo (lucide-react), sempre aria-hidden. */
@@ -56,65 +59,89 @@ export default function MetricCard({
   destaque = false,
   iconTone = "orange",
 }: MetricCardProps) {
-  return (
-    <Link href={`/workspace-x/${link}`}>
-      <div
-        className={`flex flex-col gap-3 rounded-xl p-6 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
-          destaque
-            ? "bg-gradient-to-br from-brand-navy to-brand-navy-light text-white"
-            : "border border-slate-200 bg-white"
-        }`}
-      >
-        <div className="flex items-center justify-between">
-          <p
-            className={`text-xs font-semibold uppercase tracking-[0.14em] ${
-              destaque ? "text-white/60" : "text-slate-500"
-            }`}
-          >
-            {titulo}
-          </p>
-          {Icon && (
-            <span
-              aria-hidden
-              className={`flex h-9 w-9 shrink-0 items-center justify-center ${
-                destaque
-                  ? "rounded-xl bg-brand-orange text-white"
-                  : ICON_TONE_CLASSES[iconTone]
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-            </span>
-          )}
-        </div>
-
-        {loading ? (
-          <Skeleton className={destaque ? "h-11 w-32" : "h-9 w-24"} />
-        ) : erro ? (
-          <p
-            className={`text-sm ${destaque ? "text-red-300" : "text-red-600"}`}
-          >
-            {erro}
-          </p>
-        ) : (
-          <p
-            className={`tabular-nums ${
+  const card = (
+    <div
+      className={`flex flex-col gap-3 rounded-xl p-6 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+        destaque
+          ? "bg-gradient-to-br from-brand-navy to-brand-navy-light text-white"
+          : "border border-slate-200 bg-white"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <p
+          className={`text-xs font-semibold uppercase tracking-[0.14em] ${
+            destaque ? "text-white/60" : "text-slate-500"
+          }`}
+        >
+          {titulo}
+        </p>
+        {Icon && (
+          <span
+            aria-hidden
+            className={`flex h-9 w-9 shrink-0 items-center justify-center ${
               destaque
-                ? "text-4xl font-semibold sm:text-5xl"
-                : "text-3xl font-light text-brand-navy"
+                ? "rounded-xl bg-brand-orange text-white"
+                : ICON_TONE_CLASSES[iconTone]
             }`}
           >
-            {valor ?? "—"}
-          </p>
-        )}
-
-        {!loading && !erro && descricao && (
-          <p
-            className={`text-sm ${destaque ? "text-white/70" : "text-slate-500"}`}
-          >
-            {descricao}
-          </p>
+            <Icon className="h-4 w-4" />
+          </span>
         )}
       </div>
+
+      {loading ? (
+        <Skeleton className={destaque ? "h-11 w-32" : "h-9 w-24"} />
+      ) : erro ? (
+        <p className={`text-sm ${destaque ? "text-red-300" : "text-red-600"}`}>
+          {erro}
+        </p>
+      ) : (
+        <p
+          className={`tabular-nums ${
+            destaque
+              ? "text-4xl font-semibold sm:text-5xl"
+              : "text-3xl font-light text-brand-navy"
+          }`}
+        >
+          {valor ?? "—"}
+        </p>
+      )}
+
+      {!loading && !erro && descricao && (
+        <p
+          className={`text-sm ${destaque ? "text-white/70" : "text-slate-500"}`}
+        >
+          {descricao}
+        </p>
+      )}
+    </div>
+  );
+
+  if (!link) {
+    return card;
+  }
+
+  // Âncora da mesma página: scroll nativo, sem navegar para /workspace-x/*.
+  if (link.startsWith("#")) {
+    return (
+      <a
+        href={link}
+        className="block"
+        onClick={(evento) => {
+          const alvo = document.getElementById(link.slice(1));
+          if (!alvo) return;
+          evento.preventDefault();
+          alvo.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
+      >
+        {card}
+      </a>
+    );
+  }
+
+  return (
+    <Link href={`/workspace-x/${link}`} className="block">
+      {card}
     </Link>
   );
 }

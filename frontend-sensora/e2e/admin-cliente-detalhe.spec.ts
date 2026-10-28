@@ -143,6 +143,16 @@ test.describe("Admin / Cliente detalhe (Fase A — Clientes reais)", () => {
     const linkPedido = page.getByRole("link", { name: "PED-42" });
     await expect(linkPedido).toBeVisible();
     await expect(linkPedido).toHaveAttribute("href", "/workspace-x/pedidos/42");
+
+    // Card "Pedidos" só rola até o histórico da mesma página — nunca
+    // navega para /workspace-x/historico-pedidos.
+    const atalhoHistorico = page.locator('a[href="#historico-pedidos"]');
+    await expect(atalhoHistorico).toBeVisible();
+    await atalhoHistorico.click();
+    await expect(page).toHaveURL(/\/workspace-x\/clientes\/7/);
+    await expect(
+      page.getByRole("heading", { name: "Histórico de pedidos" }),
+    ).toBeInViewport();
   });
 
   test("cliente sem CPF/telefone/endereço/pedidos: mostra os estados vazios corretos, sem quebrar", async ({

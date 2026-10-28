@@ -70,6 +70,10 @@ model Usuario {
   refreshTokens           RefreshToken[]
   pedidos                 Pedido[]
   enderecos               Endereco[]
+  // Carrinho persistido da conta autenticada (lembrete de sacola abandonada).
+  // Visitante continua só no localStorage do navegador — sem e-mail, não há
+  // o que lembrar. 1:1 com Usuario: uma sacola por conta.
+  carrinho                Carrinho?
   // Devoluções: as solicitadas pelo próprio usuário (cliente) e as que ele
   // analisou (ADMIN). Duas relações com Devolucao, por isso os nomes.
   devolucoes              Devolucao[]          @relation("DevolucaoUsuario")
@@ -100,6 +104,35 @@ model Endereco {
   padrao      Boolean @default(false)
 
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+// Carrinho da conta autenticada. O frontend ainda guarda uma cópia no
+// localStorage (UX instantânea); esta tabela é a fonte no servidor para
+// (i) não perder a sacola entre aparelhos e (ii) disparar o e-mail de
+// lembrete se os itens ficarem parados mais de CARRINHO_ABANDONO_MINUTOS
+// (default 1h). `atualizadoEm` só muda quando o conjunto de itens muda —
+// um PUT idêntico não reinicia o relógio. `lembreteEnviadoEm` impede
+// reenvio no mesmo ciclo; volta a nulo quando o cliente altera a sacola.
+model Carrinho {
+  id                Int            @id @default(autoincrement())
+  usuarioId         Int            @unique
+  atualizadoEm      DateTime       @default(now())
+  lembreteEnviadoEm DateTime?
+  usuario           Usuario        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  itens             ItemCarrinho[]
+
+  @@index([lembreteEnviadoEm, atualizadoEm])
+}
+
+model ItemCarrinho {
+  id         Int      @id @default(autoincrement())
+  carrinhoId Int
+  produtoId  Int
+  quantidade Int
+  carrinho   Carrinho @relation(fields: [carrinhoId], references: [id], onDelete: Cascade)
+  produto    Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  @@unique([carrinhoId, produtoId])
 }
 
 // Task 27 — refresh token opaco (não é um JWT): só o hash (SHA-256) é
@@ -151,9 +184,10 @@ model Produto {
   ativo       Boolean      @default(true)
   destaque    Boolean      @default(false)
   categoriaId Int?
-  itensPedido ItemPedido[]
-  categoria   Categoria?   @relation(fields: [categoriaId], references: [id])
-  avaliacoes  Avaliacao[]
+  itensPedido    ItemPedido[]
+  itensCarrinho  ItemCarrinho[]
+  categoria      Categoria?     @relation(fields: [categoriaId], references: [id])
+  avaliacoes     Avaliacao[]
 }
 
 model Pedido {

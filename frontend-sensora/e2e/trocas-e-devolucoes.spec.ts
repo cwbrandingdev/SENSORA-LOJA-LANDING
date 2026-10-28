@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mockCarrinhoApi } from "./mock-carrinho-api";
 
 // Política de Trocas e Devoluções — orienta o cliente para o formulário
 // existente (Minha Conta → Meus Pedidos → pedido → Solicitar devolução) e
@@ -34,6 +35,7 @@ async function seedSession(page: Page) {
     },
     [TOKEN_KEY, fakeToken()] as const,
   );
+  await mockCarrinhoApi(page);
 }
 
 test.describe("Política de Trocas e Devoluções", () => {

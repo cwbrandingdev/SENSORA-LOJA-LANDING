@@ -7,6 +7,7 @@ import {
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
@@ -39,6 +40,7 @@ import {
   MelhorEnvioPacote,
   MelhorEnvioService,
 } from '../melhor-envio/melhor-envio.service';
+import { CarrinhoService } from '../carrinho/carrinho.service';
 import { garantirCepNaAreaDeEntrega } from './area-entrega';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { CotarFreteDto } from './dto/cotar-frete.dto';
@@ -133,6 +135,7 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     private readonly devolucoesService: DevolucoesService,
     private readonly mailService: MailService,
     private readonly ocorrenciasService: OcorrenciasService,
+    @Optional() private readonly carrinhoService?: CarrinhoService,
   ) {
     this.gateway =
       (this.configService.get<string>('CHECKOUT_GATEWAY') as
@@ -1393,6 +1396,9 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     // reenvia.
     if (confirmou) {
       await this.avisarPagamentoConfirmado(pedido);
+      if (pedido.usuarioId) {
+        await this.carrinhoService?.limparDoUsuario(pedido.usuarioId);
+      }
     }
   }
 
