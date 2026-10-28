@@ -114,6 +114,7 @@ export default function AdminDashboardPage() {
           <div className="sm:col-span-2">
             <MetricCard
               titulo="Faturamento"
+              link="resumo"
               icon={Wallet}
               destaque
               loading={loading}
