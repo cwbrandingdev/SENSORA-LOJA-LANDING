@@ -15,24 +15,24 @@ const PRODUTOS = [
     nome: "Velas aromáticas",
     texto:
       "Rótulo e embalagem com a sua marca, na fragrância que combina com a ocasião.",
-    imagem: "/images/categories/velas-aromaticas.webp",
+    imagem: "/images/para-empresas/VELA.webp",
   },
   {
     nome: "Sprays de ambiente",
     texto:
       "Um presente prático, para usar todos os dias e lembrar de quem presenteou.",
-    imagem: "/images/categories/sprays-de-ambiente.jpg",
+    imagem: "/images/para-empresas/SPRAY.webp",
   },
   {
     nome: "Difusores",
     texto:
       "Perfume contínuo para casa ou escritório, com acabamento personalizado.",
-    imagem: "/images/categories/difusores-de-aroma.jpg",
+    imagem: "/images/para-empresas/DIFUSOR.webp",
   },
   {
     nome: "Kits presenteáveis",
     texto: "Combinações montadas para o seu público, prontas para entregar.",
-    imagem: "/images/categories/kits-4-estacoes.jpg",
+    imagem: "/images/para-empresas/KIT.webp",
   },
 ];
 
