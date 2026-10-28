@@ -14,6 +14,19 @@ export class PedidoResumoCliente {
   data: Date;
   status: StatusPedido;
   total: number;
+  itens: ItemResumoPedidoCliente[];
+}
+
+export class ItemResumoPedidoCliente {
+  produtoNome: string;
+  quantidade: number;
+  subtotal: number;
+}
+
+export class ProdutoCompradoCliente {
+  produtoNome: string;
+  quantidadeTotal: number;
+  valorTotal: number;
 }
 
 export class ResumoPedidosCliente {
@@ -37,5 +50,21 @@ export class ClienteDetalhado {
   emailVerificado: boolean;
   enderecos: Endereco[];
   pedidos: PedidoResumoCliente[];
+  produtosComprados: ProdutoCompradoCliente[];
   resumo: ResumoPedidosCliente;
+}
+
+// Listagem administrativa (GET /usuarios/clientes) — um card por conta real.
+export class ClienteListagem {
+  id: number;
+  nome: string;
+  email: string;
+  cpf: string | null;
+  telefone: string | null;
+  ativo: boolean;
+  emailVerificado: boolean;
+  resumo: ResumoPedidosCliente;
+  ultimosPedidos: PedidoResumoCliente[];
+  pedidos: PedidoResumoCliente[];
+  produtosComprados: ProdutoCompradoCliente[];
 }

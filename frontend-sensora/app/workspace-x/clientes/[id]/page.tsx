@@ -8,7 +8,7 @@
 // vistoria "Clientes reais" para o raciocínio completo. Esta página não
 // duplica o detalhe do pedido (app/workspace-x/pedidos/[id]/page.tsx): cada
 // pedido listado aqui só linka para lá.
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { isAxiosError } from "axios";
@@ -217,6 +217,33 @@ export default function ClienteDetalhePage() {
             )}
           </div>
 
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <h3 className="text-sm font-semibold text-brand-navy">Produtos comprados</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Agregado dos pedidos pagos (quantidade total e valor).
+            </p>
+            {cliente.produtosComprados.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">Nenhum produto em pedido pago.</p>
+            ) : (
+              <ul className="mt-3 divide-y divide-slate-100">
+                {cliente.produtosComprados.map((produto) => (
+                  <li
+                    key={produto.produtoNome}
+                    className="flex items-center justify-between gap-4 py-2.5 first:pt-0"
+                  >
+                    <span className="text-sm text-slate-800">{produto.produtoNome}</span>
+                    <span className="shrink-0 text-right text-xs text-slate-600">
+                      {produto.quantidadeTotal} un. ·{" "}
+                      <span className="font-medium tabular-nums text-slate-900">
+                        {formatPrice.format(produto.valorTotal)}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
             <h3 className="px-4 pt-4 text-sm font-semibold text-brand-navy">
               Histórico de pedidos
@@ -245,29 +272,45 @@ export default function ClienteDetalhePage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {cliente.pedidos.map((pedido) => (
-                    <tr key={pedido.id} className="transition-colors hover:bg-slate-50/80">
-                      <td className="px-4 py-3 font-medium text-slate-900">
-                        <Link
-                          href={`${ROUTES.PEDIDOS}/${pedido.id}`}
-                          className="text-brand-navy hover:underline"
-                        >
-                          {pedido.numero}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {new Date(pedido.data).toLocaleDateString("pt-BR", {
-                          timeZone: "UTC",
-                        })}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge tone={STATUS_TONE[pedido.status]}>
-                          {STATUS_LABEL[pedido.status]}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-900">
-                        {formatPrice.format(pedido.total)}
-                      </td>
-                    </tr>
+                    <Fragment key={pedido.id}>
+                      <tr key={pedido.id} className="transition-colors hover:bg-slate-50/80">
+                        <td className="px-4 py-3 font-medium text-slate-900">
+                          <Link
+                            href={`${ROUTES.PEDIDOS}/${pedido.id}`}
+                            className="text-brand-navy hover:underline"
+                          >
+                            {pedido.numero}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {new Date(pedido.data).toLocaleDateString("pt-BR", {
+                            timeZone: "UTC",
+                          })}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge tone={STATUS_TONE[pedido.status]}>
+                            {STATUS_LABEL[pedido.status]}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-slate-900">
+                          {formatPrice.format(pedido.total)}
+                        </td>
+                      </tr>
+                      {pedido.itens.length > 0 && (
+                        <tr key={`${pedido.id}-itens`} className="bg-slate-50/50">
+                          <td colSpan={4} className="px-4 py-2">
+                            <ul className="flex flex-col gap-1 text-xs text-slate-600">
+                              {pedido.itens.map((item, index) => (
+                                <li key={`${pedido.id}-${index}`}>
+                                  {item.quantidade}× {item.produtoNome} —{" "}
+                                  {formatPrice.format(item.subtotal)}
+                                </li>
+                              ))}
+                            </ul>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

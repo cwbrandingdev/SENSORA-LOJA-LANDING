@@ -72,7 +72,13 @@ const CLIENTE_COMPLETO = {
       data: "2026-09-01T00:00:00.000Z",
       status: "PAGO",
       total: 99.9,
+      itens: [
+        { produtoNome: "Vela Lavanda", quantidade: 1, subtotal: 99.9 },
+      ],
     },
+  ],
+  produtosComprados: [
+    { produtoNome: "Vela Lavanda", quantidadeTotal: 1, valorTotal: 99.9 },
   ],
   resumo: {
     quantidadePedidos: 1,
@@ -91,6 +97,7 @@ const CLIENTE_SEM_HISTORICO = {
   emailVerificado: false,
   enderecos: [],
   pedidos: [],
+  produtosComprados: [],
   resumo: { quantidadePedidos: 0, totalComprado: 0, ultimoPedidoEm: null },
 };
 

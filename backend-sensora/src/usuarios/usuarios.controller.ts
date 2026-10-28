@@ -26,7 +26,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { AtualizarMeusDadosDto } from './dto/atualizar-meus-dados.dto';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
-import { ClienteDetalhado } from './entities/cliente-detalhado.entity';
+import { ClienteDetalhado, ClienteListagem } from './entities/cliente-detalhado.entity';
 import { UsuarioPublico } from './entities/usuario.entity';
 import { UsuariosService } from './usuarios.service';
 
@@ -62,6 +62,11 @@ export class UsuariosController {
   @Roles(...TODOS_OS_PERFIS)
   meuPerfil(@CurrentUser() user: UsuarioAutenticado): Promise<UsuarioPublico> {
     return this.usuariosService.findOne(user.id);
+  }
+
+  @Get('clientes')
+  listarClientes(): Promise<ClienteListagem[]> {
+    return this.usuariosService.listarClientesParaAdmin();
   }
 
   @Put('me')

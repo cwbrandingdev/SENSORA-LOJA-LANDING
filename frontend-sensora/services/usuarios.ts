@@ -2,6 +2,7 @@
 import api from "./api";
 import type {
   ClienteDetalhado,
+  ClienteListagem,
   CreateUsuarioPayload,
   UpdateUsuarioPayload,
   Usuario,
@@ -22,6 +23,11 @@ export async function buscarUsuario(id: number): Promise<Usuario> {
 // usuário não existe ou não tem perfil CLIENTE (ver UsuariosService.
 // buscarDetalheCliente) — mesmo tratamento de erro genérico já usado pelo
 // resto do Admin (getErrorMessage/isAxiosError no chamador).
+export async function listarClientesReais(): Promise<ClienteListagem[]> {
+  const response = await api.get<ClienteListagem[]>("/usuarios/clientes");
+  return response.data;
+}
+
 export async function buscarDetalheCliente(id: number): Promise<ClienteDetalhado> {
   const response = await api.get<ClienteDetalhado>(`/usuarios/${id}/detalhes`);
   return response.data;

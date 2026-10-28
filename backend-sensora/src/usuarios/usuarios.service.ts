@@ -21,7 +21,9 @@ import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import {
   ClienteDetalhado,
+  ClienteListagem,
   PedidoResumoCliente,
+  ProdutoCompradoCliente,
 } from './entities/cliente-detalhado.entity';
 import { Usuario, UsuarioPublico } from './entities/usuario.entity';
 import { PerfilUsuario } from './enums/perfil-usuario.enum';
@@ -42,6 +44,59 @@ export class UsuariosService {
 
   async findOne(id: number): Promise<UsuarioPublico> {
     return this.paraPublico(await this.localizar(id));
+  }
+
+  // Fase B — listagem de contas reais (Usuario CLIENTE) com histórico resumido.
+  async listarClientesParaAdmin(): Promise<ClienteListagem[]> {
+    const usuarios = await this.prisma.usuario.findMany({
+      where: { perfil: PerfilUsuario.CLIENTE },
+      orderBy: [{ ativo: 'desc' }, { nome: 'asc' }],
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        cpf: true,
+        telefone: true,
+        ativo: true,
+        emailVerificado: true,
+        pedidos: {
+          orderBy: { data: 'desc' },
+          select: {
+            id: true,
+            numero: true,
+            data: true,
+            status: true,
+            total: true,
+            itens: {
+              select: {
+                quantidade: true,
+                subtotal: true,
+                produto: { select: { nome: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return usuarios.map((usuario) => {
+      const pedidos = usuario.pedidos.map((pedido) =>
+        this.paraPedidoResumoCliente(pedido),
+      );
+      return {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        cpf: usuario.cpf,
+        telefone: usuario.telefone,
+        ativo: usuario.ativo,
+        emailVerificado: usuario.emailVerificado,
+        resumo: this.resumoPedidosCliente(pedidos),
+        ultimosPedidos: pedidos.slice(0, 3),
+        pedidos,
+        produtosComprados: this.agregarProdutosComprados(usuario.pedidos),
+      };
+    });
   }
 
   // Fase B (Admin/Clientes reais) — detalhe administrativo de um cliente,
@@ -73,20 +128,21 @@ export class UsuariosService {
           data: true,
           status: true,
           total: true,
+          itens: {
+            select: {
+              quantidade: true,
+              subtotal: true,
+              produto: { select: { nome: true } },
+            },
+          },
         },
       }),
     ]);
 
-    const pedidos: PedidoResumoCliente[] = pedidosPrisma.map((pedido) => ({
-      id: pedido.id,
-      numero: pedido.numero,
-      data: pedido.data,
-      status: pedido.status as StatusPedido,
-      total: Number(pedido.total),
-    }));
+    const pedidos = pedidosPrisma.map((pedido) =>
+      this.paraPedidoResumoCliente(pedido),
+    );
 
-    // Mesmo critério já usado no card "Faturamento" do Dashboard (frontend
-    // app/workspace-x/page.tsx): só PAGO conta como comprado de verdade.
     const totalComprado = pedidos
       .filter((pedido) => pedido.status === StatusPedido.PAGO)
       .reduce((soma, pedido) => soma + pedido.total, 0);
@@ -101,11 +157,10 @@ export class UsuariosService {
       emailVerificado: usuario.emailVerificado,
       enderecos,
       pedidos,
+      produtosComprados: this.agregarProdutosComprados(pedidosPrisma),
       resumo: {
         quantidadePedidos: pedidos.length,
         totalComprado,
-        // `pedidos` já vem ordenado por data desc — o primeiro é sempre o
-        // mais recente, independente do status.
         ultimoPedidoEm: pedidos[0]?.data ?? null,
       },
     };
@@ -764,5 +819,70 @@ export class UsuariosService {
       cpf: usuario.cpf,
       telefone: usuario.telefone,
     };
+  }
+
+  private paraPedidoResumoCliente(pedido: {
+    id: number;
+    numero: string;
+    data: Date;
+    status: string;
+    total: Prisma.Decimal;
+    itens: Array<{
+      quantidade: number;
+      subtotal: Prisma.Decimal;
+      produto: { nome: string };
+    }>;
+  }): PedidoResumoCliente {
+    return {
+      id: pedido.id,
+      numero: pedido.numero,
+      data: pedido.data,
+      status: pedido.status as StatusPedido,
+      total: Number(pedido.total),
+      itens: pedido.itens.map((item) => ({
+        produtoNome: item.produto.nome,
+        quantidade: item.quantidade,
+        subtotal: Number(item.subtotal),
+      })),
+    };
+  }
+
+  private resumoPedidosCliente(pedidos: PedidoResumoCliente[]) {
+    const totalComprado = pedidos
+      .filter((pedido) => pedido.status === StatusPedido.PAGO)
+      .reduce((soma, pedido) => soma + pedido.total, 0);
+    return {
+      quantidadePedidos: pedidos.length,
+      totalComprado,
+      ultimoPedidoEm: pedidos[0]?.data ?? null,
+    };
+  }
+
+  private agregarProdutosComprados(
+    pedidos: Array<{
+      status: string;
+      itens: Array<{
+        quantidade: number;
+        subtotal: Prisma.Decimal;
+        produto: { nome: string };
+      }>;
+    }>,
+  ): ProdutoCompradoCliente[] {
+    const mapa = new Map<string, { quantidadeTotal: number; valorTotal: number }>();
+    for (const pedido of pedidos) {
+      if ((pedido.status as StatusPedido) !== StatusPedido.PAGO) {
+        continue;
+      }
+      for (const item of pedido.itens) {
+        const nome = item.produto.nome;
+        const atual = mapa.get(nome) ?? { quantidadeTotal: 0, valorTotal: 0 };
+        atual.quantidadeTotal += item.quantidade;
+        atual.valorTotal += Number(item.subtotal);
+        mapa.set(nome, atual);
+      }
+    }
+    return [...mapa.entries()]
+      .map(([produtoNome, totais]) => ({ produtoNome, ...totais }))
+      .sort((a, b) => b.valorTotal - a.valorTotal);
   }
 }

@@ -653,6 +653,19 @@ export type PedidoResumoCliente = {
   data: string;
   status: StatusPedido;
   total: number;
+  itens: ItemResumoPedidoCliente[];
+};
+
+export type ItemResumoPedidoCliente = {
+  produtoNome: string;
+  quantidade: number;
+  subtotal: number;
+};
+
+export type ProdutoCompradoCliente = {
+  produtoNome: string;
+  quantidadeTotal: number;
+  valorTotal: number;
 };
 
 export type ResumoPedidosCliente = {
@@ -671,7 +684,22 @@ export type ClienteDetalhado = {
   emailVerificado: boolean;
   enderecos: Endereco[];
   pedidos: PedidoResumoCliente[];
+  produtosComprados: ProdutoCompradoCliente[];
   resumo: ResumoPedidosCliente;
+};
+
+export type ClienteListagem = {
+  id: number;
+  nome: string;
+  email: string;
+  cpf: string | null;
+  telefone: string | null;
+  ativo: boolean;
+  emailVerificado: boolean;
+  resumo: ResumoPedidosCliente;
+  ultimosPedidos: PedidoResumoCliente[];
+  pedidos: PedidoResumoCliente[];
+  produtosComprados: ProdutoCompradoCliente[];
 };
 
 // Vistoria do Dashboard operacional (Admin) — espelha
