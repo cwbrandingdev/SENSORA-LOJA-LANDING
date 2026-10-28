@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import FormularioProposta from "@/components/empresas/FormularioProposta";
-import FotoAmostra from "@/components/empresas/FotoAmostra";
+import FotoEmpresa from "@/components/empresas/FotoEmpresa";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import { PEDIDO_MINIMO_EMPRESAS } from "@/lib/propostas-empresas";
 
@@ -122,13 +122,13 @@ export default function ParaEmpresasPage() {
         </RevealOnScroll>
         <RevealOnScroll delayMs={120}>
           <div className="relative mx-auto w-full max-w-md pb-16">
-            <FotoAmostra
+            <FotoEmpresa
               src="/images/para-empresas/banner1.webp"
               alt="Velas Sensora personalizadas"
               sizes="(max-width: 1024px) 85vw, 380px"
               className="ml-auto aspect-[4/5] w-[85%] rounded-3xl"
             />
-            <FotoAmostra
+            <FotoEmpresa
               src="/images/para-empresas/banner2.webp"
               alt="Sprays Sensora personalizados"
               sizes="(max-width: 1024px) 50vw, 220px"
@@ -167,7 +167,7 @@ export default function ParaEmpresasPage() {
           {PRODUTOS.map((produto, i) => (
             <li key={produto.nome}>
               <RevealOnScroll delayMs={i * 90}>
-                <FotoAmostra
+                <FotoEmpresa
                   src={produto.imagem}
                   alt={produto.nome}
                   sizes="(max-width: 640px) 100vw, 270px"
@@ -265,7 +265,7 @@ export default function ParaEmpresasPage() {
               de produtos, fragrâncias e personalização.
             </p>
             <div className="relative mt-8 pb-24">
-              <FotoAmostra
+              <FotoEmpresa
                 src="/images/para-empresas/banner3.webp"
                 alt="Produção Sensora"
                 sizes="(max-width: 1024px) 100vw, 420px"
