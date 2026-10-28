@@ -123,13 +123,13 @@ export default function ParaEmpresasPage() {
         <RevealOnScroll delayMs={120}>
           <div className="relative mx-auto w-full max-w-md pb-16">
             <FotoAmostra
-              src="/images/hero/velas-4-estacoes.png"
+              src="/images/para-empresas/banner1.webp"
               alt="Velas Sensora personalizadas"
               sizes="(max-width: 1024px) 85vw, 380px"
               className="ml-auto aspect-[4/5] w-[85%] rounded-3xl"
             />
             <FotoAmostra
-              src="/images/categories/sprays-de-ambiente.jpg"
+              src="/images/para-empresas/banner2.webp"
               alt="Sprays Sensora personalizados"
               sizes="(max-width: 1024px) 50vw, 220px"
               className="absolute! -left-2 bottom-0 aspect-square w-1/2 rounded-3xl ring-8 ring-background sm:-left-10"
@@ -266,7 +266,7 @@ export default function ParaEmpresasPage() {
             </p>
             <div className="relative mt-8 pb-24">
               <FotoAmostra
-                src="/images/about/sobre-sensora.jpg"
+                src="/images/para-empresas/banner3.webp"
                 alt="Produção Sensora"
                 sizes="(max-width: 1024px) 100vw, 420px"
                 className="aspect-video rounded-2xl"
