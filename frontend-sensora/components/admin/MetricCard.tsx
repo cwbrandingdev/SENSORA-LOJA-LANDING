@@ -14,6 +14,7 @@
 // props explicitamente.
 import type { ComponentType } from "react";
 import Skeleton from "@/components/ui/Skeleton";
+import Link from "next/link";
 
 type IconTone = "orange" | "orange-outline" | "navy" | "navy-outline";
 
@@ -23,6 +24,7 @@ type MetricCardProps = {
   descricao?: string;
   loading?: boolean;
   erro?: string;
+  link?: any;
   /** Opcional — undefined preserva os 4 usos existentes (Dashboard) sem
    *  nenhuma mudança visual. Mesmo raciocínio de EmptyState.tsx: ícone
    *  decorativo (lucide-react), sempre aria-hidden. */
@@ -37,7 +39,8 @@ type MetricCardProps = {
 
 const ICON_TONE_CLASSES: Record<IconTone, string> = {
   orange: "rounded-full bg-brand-orange/10 text-brand-orange",
-  "orange-outline": "rounded-xl border border-brand-orange/30 text-brand-orange",
+  "orange-outline":
+    "rounded-xl border border-brand-orange/30 text-brand-orange",
   navy: "rounded-xl bg-brand-navy/8 text-brand-navy",
   "navy-outline": "rounded-full border border-brand-navy/25 text-brand-navy",
 };
@@ -48,57 +51,70 @@ export default function MetricCard({
   descricao,
   loading = false,
   erro,
+  link,
   icon: Icon,
   destaque = false,
   iconTone = "orange",
 }: MetricCardProps) {
   return (
-    <div
-      className={`flex flex-col gap-3 rounded-xl p-6 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
-        destaque
-          ? "bg-gradient-to-br from-brand-navy to-brand-navy-light text-white"
-          : "border border-slate-200 bg-white"
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <p
-          className={`text-xs font-semibold uppercase tracking-[0.14em] ${
-            destaque ? "text-white/60" : "text-slate-500"
-          }`}
-        >
-          {titulo}
-        </p>
-        {Icon && (
-          <span
-            aria-hidden
-            className={`flex h-9 w-9 shrink-0 items-center justify-center ${
-              destaque ? "rounded-xl bg-brand-orange text-white" : ICON_TONE_CLASSES[iconTone]
+    <Link href={`/workspace-x/${link}`}>
+      <div
+        className={`flex flex-col gap-3 rounded-xl p-6 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+          destaque
+            ? "bg-gradient-to-br from-brand-navy to-brand-navy-light text-white"
+            : "border border-slate-200 bg-white"
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <p
+            className={`text-xs font-semibold uppercase tracking-[0.14em] ${
+              destaque ? "text-white/60" : "text-slate-500"
             }`}
           >
-            <Icon className="h-4 w-4" />
-          </span>
+            {titulo}
+          </p>
+          {Icon && (
+            <span
+              aria-hidden
+              className={`flex h-9 w-9 shrink-0 items-center justify-center ${
+                destaque
+                  ? "rounded-xl bg-brand-orange text-white"
+                  : ICON_TONE_CLASSES[iconTone]
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+            </span>
+          )}
+        </div>
+
+        {loading ? (
+          <Skeleton className={destaque ? "h-11 w-32" : "h-9 w-24"} />
+        ) : erro ? (
+          <p
+            className={`text-sm ${destaque ? "text-red-300" : "text-red-600"}`}
+          >
+            {erro}
+          </p>
+        ) : (
+          <p
+            className={`tabular-nums ${
+              destaque
+                ? "text-4xl font-semibold sm:text-5xl"
+                : "text-3xl font-light text-brand-navy"
+            }`}
+          >
+            {valor ?? "—"}
+          </p>
+        )}
+
+        {!loading && !erro && descricao && (
+          <p
+            className={`text-sm ${destaque ? "text-white/70" : "text-slate-500"}`}
+          >
+            {descricao}
+          </p>
         )}
       </div>
-
-      {loading ? (
-        <Skeleton className={destaque ? "h-11 w-32" : "h-9 w-24"} />
-      ) : erro ? (
-        <p className={`text-sm ${destaque ? "text-red-300" : "text-red-600"}`}>{erro}</p>
-      ) : (
-        <p
-          className={`tabular-nums ${
-            destaque
-              ? "text-4xl font-semibold sm:text-5xl"
-              : "text-3xl font-light text-brand-navy"
-          }`}
-        >
-          {valor ?? "—"}
-        </p>
-      )}
-
-      {!loading && !erro && descricao && (
-        <p className={`text-sm ${destaque ? "text-white/70" : "text-slate-500"}`}>{descricao}</p>
-      )}
-    </div>
+    </Link>
   );
 }

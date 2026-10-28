@@ -22,7 +22,14 @@
 // legítimos, distintos de erro — nunca tratados como falha (ver
 // DashboardService.obterResumo, backend).
 import { useEffect, useState } from "react";
-import { Wallet, ClipboardList, Package, Tags, PackageX, Users } from "lucide-react";
+import {
+  Wallet,
+  ClipboardList,
+  Package,
+  Tags,
+  PackageX,
+  Users,
+} from "lucide-react";
 import AlertasPanel from "@/components/admin/AlertasPanel";
 import MetricCard from "@/components/admin/MetricCard";
 import { getErrorMessage } from "@/lib/errors";
@@ -68,7 +75,8 @@ export default function AdminDashboardPage() {
         if (!cancelado) setResumo(dados);
       })
       .catch((motivo) => {
-        if (!cancelado) setErro(getErrorMessage(motivo, "Não foi possível carregar."));
+        if (!cancelado)
+          setErro(getErrorMessage(motivo, "Não foi possível carregar."));
       });
 
     return () => {
@@ -81,7 +89,9 @@ export default function AdminDashboardPage() {
   return (
     <div className="flex flex-col gap-10">
       <div className="flex flex-col gap-1">
-        <h2 className="text-xl font-semibold text-brand-navy">Dashboard Sensora</h2>
+        <h2 className="text-xl font-semibold text-brand-navy">
+          Dashboard Sensora
+        </h2>
         <p className="text-sm text-slate-600">Visão geral da loja.</p>
       </div>
 
@@ -108,21 +118,29 @@ export default function AdminDashboardPage() {
               destaque
               loading={loading}
               erro={erro ?? undefined}
-              valor={resumo ? formatPrice.format(resumo.faturamento) : undefined}
-              descricao={resumo ? `${resumo.pedidos.pagos} pedidos pagos` : undefined}
+              valor={
+                resumo ? formatPrice.format(resumo.faturamento) : undefined
+              }
+              descricao={
+                resumo ? `${resumo.pedidos.pagos} pedidos pagos` : undefined
+              }
             />
           </div>
           <MetricCard
             titulo="Pedidos"
+            link="pedidos"
             icon={ClipboardList}
             iconTone="navy"
             loading={loading}
             erro={erro ?? undefined}
             valor={resumo ? String(resumo.pedidos.total) : undefined}
-            descricao={resumo ? descricaoPorStatus(resumo.pedidos.porStatus) : undefined}
+            descricao={
+              resumo ? descricaoPorStatus(resumo.pedidos.porStatus) : undefined
+            }
           />
           <MetricCard
             titulo="Produtos"
+            link={"produtos"}
             icon={Package}
             iconTone="orange-outline"
             loading={loading}
@@ -138,12 +156,17 @@ export default function AdminDashboardPage() {
           />
           <MetricCard
             titulo="Categorias"
+            link={"categorias"}
             icon={Tags}
             iconTone="navy-outline"
             loading={loading}
             erro={erro ?? undefined}
             valor={resumo ? String(resumo.categorias.total) : undefined}
-            descricao={resumo?.categorias.total === 0 ? "Nenhuma categoria cadastrada" : undefined}
+            descricao={
+              resumo?.categorias.total === 0
+                ? "Nenhuma categoria cadastrada"
+                : undefined
+            }
           />
         </div>
       </section>
@@ -161,26 +184,8 @@ export default function AdminDashboardPage() {
         </h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <MetricCard
-            titulo="Estoque baixo"
-            icon={PackageX}
-            iconTone="orange-outline"
-            loading={loading}
-            erro={erro ?? undefined}
-            valor={
-              resumo
-                ? String(resumo.produtos.estoqueBaixo + resumo.produtos.semEstoque)
-                : undefined
-            }
-            descricao={
-              resumo
-                ? resumo.produtos.semEstoque > 0
-                  ? `${resumo.produtos.semEstoque} sem estoque`
-                  : "Nenhum produto sem estoque"
-                : undefined
-            }
-          />
-          <MetricCard
             titulo="Clientes"
+            link="clientes"
             icon={Users}
             iconTone="navy-outline"
             loading={loading}
