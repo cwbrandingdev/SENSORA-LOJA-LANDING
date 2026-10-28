@@ -50,9 +50,10 @@ export default function CheckoutCanceladoPage() {
 
       <RevealOnScroll delayMs={90}>
         <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-slate-600">
-          O pagamento foi cancelado ou interrompido antes de ser concluído.
-          Seus itens continuam no carrinho — você pode voltar à loja e
-          tentar novamente quando quiser.
+          O pagamento foi cancelado, interrompido ou expirou antes de ser
+          concluído. Se ainda estiver no prazo, volte ao carrinho para
+          concluir sem criar uma compra nova. Pedidos não pagos são
+          cancelados automaticamente.
         </p>
       </RevealOnScroll>
 

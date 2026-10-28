@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Logger,
   NotFoundException,
@@ -8,7 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import Stripe from 'stripe';
-import { AsaasService } from '../asaas/asaas.service';
+import { AsaasNaoEncontradoError, AsaasService } from '../asaas/asaas.service';
 import {
   OcorrenciasService,
   RegistrarOcorrenciaInput,
@@ -30,6 +31,7 @@ import {
 import {
   CheckoutService,
   EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT,
+  MENSAGEM_CHECKOUT_PENDENTE_EXPIRADO,
 } from './checkout.service';
 
 // Etapa 6.4 (Confirmação de e-mail) — CheckoutService agora também injeta
@@ -500,6 +502,7 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
   let pedidoFake: {
     id: number;
     status: StatusPedido;
+    asaasCheckoutId?: string;
     asaasPaymentId: string | null;
     numero?: string;
     clienteNome?: string | null;
@@ -537,6 +540,7 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
     pedidoFake = {
       id: 1,
       status: StatusPedido.PENDENTE,
+      asaasCheckoutId: 'chk_123',
       asaasPaymentId: null,
       itens: [
         { id: 100, produtoId: 10, quantidade: 2 },
@@ -569,11 +573,39 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
             where,
             data,
           }: {
-            where: { id: number; asaasPaymentId: null };
-            data: { asaasPaymentId: string };
+            where: {
+              id?: number;
+              asaasCheckoutId?: string;
+              asaasPaymentId?: null;
+              status?: StatusPedido;
+            };
+            data: { asaasPaymentId?: string; status?: StatusPedido };
           }) => {
+            if (data.status === StatusPedido.CANCELADO) {
+              const statusOk =
+                !where.status || where.status === pedidoFake.status;
+              const idOk =
+                where.id === undefined || where.id === pedidoFake.id;
+              const checkoutOk =
+                where.asaasCheckoutId === undefined ||
+                where.asaasCheckoutId === pedidoFake.asaasCheckoutId;
+              if (
+                statusOk &&
+                idOk &&
+                checkoutOk &&
+                pedidoFake.status === StatusPedido.PENDENTE
+              ) {
+                pedidoFake.status = StatusPedido.CANCELADO;
+                return { count: 1 };
+              }
+              return { count: 0 };
+            }
             const semPaymentId = pedidoFake.asaasPaymentId === null;
-            if (where.id === pedidoFake.id && semPaymentId) {
+            if (
+              data.asaasPaymentId &&
+              where.id === pedidoFake.id &&
+              semPaymentId
+            ) {
               pedidoFake.asaasPaymentId = data.asaasPaymentId;
               return { count: 1 };
             }
@@ -845,6 +877,68 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
     expect(prisma.pedido.findUnique).not.toHaveBeenCalled();
     expect(produtosService.removerEstoque).not.toHaveBeenCalled();
     expect(pedidoFake.status).toBe(StatusPedido.PENDENTE);
+  });
+
+  it('CHECKOUT_CANCELED: cliente fechou a página — pedido permanece PENDENTE', async () => {
+    const payload = JSON.stringify({
+      id: 'evt_canceled',
+      event: 'CHECKOUT_CANCELED',
+      checkout: { id: 'chk_123', status: 'CANCELED' },
+    });
+    pedidoFake.status = StatusPedido.PENDENTE;
+
+    const resultado = await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(payload),
+    );
+
+    expect(resultado).toEqual({ received: true });
+    expect(pedidoFake.status).toBe(StatusPedido.PENDENTE);
+    expect(produtosService.removerEstoque).not.toHaveBeenCalled();
+  });
+
+  it('CHECKOUT_EXPIRED: cancela o Pedido ainda PENDENTE, sem tocar estoque', async () => {
+    const payload = JSON.stringify({
+      id: 'evt_expired',
+      event: 'CHECKOUT_EXPIRED',
+      checkout: { id: 'chk_123', status: 'EXPIRED' },
+    });
+    pedidoFake.status = StatusPedido.PENDENTE;
+
+    const resultado = await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(payload),
+    );
+
+    expect(resultado).toEqual({ received: true });
+    expect(prisma.pedido.updateMany).toHaveBeenCalledWith({
+      where: {
+        asaasCheckoutId: 'chk_123',
+        status: StatusPedido.PENDENTE,
+      },
+      data: { status: StatusPedido.CANCELADO },
+    });
+    expect(pedidoFake.status).toBe(StatusPedido.CANCELADO);
+    expect(produtosService.removerEstoque).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('CHECKOUT_EXPIRED em pedido já PAGO: não reverte o pagamento', async () => {
+    pedidoFake.status = StatusPedido.PAGO;
+    const payload = JSON.stringify({
+      id: 'evt_expired_pago',
+      event: 'CHECKOUT_EXPIRED',
+      checkout: { id: 'chk_123', status: 'EXPIRED' },
+    });
+
+    const resultado = await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(payload),
+    );
+
+    expect(resultado).toEqual({ received: true });
+    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+    expect(produtosService.removerEstoque).not.toHaveBeenCalled();
   });
 
   it('pedido inexistente: evento válido sem pedido correspondente -> não cria pedido, não altera estoque, responde controlado', async () => {
@@ -1550,7 +1644,9 @@ describe('CheckoutService — createSession (Task 21, gateway Asaas)', () => {
         callback: {
           successUrl: 'http://localhost:3001/checkout/sucesso',
           cancelUrl: 'http://localhost:3001/checkout/cancelado',
+          expiredUrl: 'http://localhost:3001/checkout/cancelado',
         },
+        minutesToExpire: 1440,
       }),
     );
     expect((criarCheckout.mock.calls[0] as unknown[])[0]).not.toHaveProperty('installment');
@@ -2923,5 +3019,350 @@ describe('CheckoutService — cotarFrete (Etapa 6.5)', () => {
       fetchSpy.mockRestore();
       limparCacheAreaEntrega();
     }
+  });
+});
+
+describe('CheckoutService — pagamento pendente (retomar checkout Asaas)', () => {
+  const PEDIDO_PENDENTE = {
+    id: 42,
+    numero: 'PED-42',
+    total: 103.3,
+    status: StatusPedido.PENDENTE,
+    usuarioId: 1,
+    asaasCheckoutId: 'chk_abc',
+    stripeSessionId: null,
+    data: new Date(),
+    freteValor: 23.5,
+    freteTransportadora: 'Correios',
+    freteServico: 'PAC',
+    itens: [
+      {
+        quantidade: 2,
+        precoUnitario: 39.9,
+        produto: { nome: 'Vela de Lavanda' },
+      },
+    ],
+  };
+
+  const PEDIDO_PENDENTE_EXPIRADO = {
+    ...PEDIDO_PENDENTE,
+    data: new Date(Date.now() - 25 * 60 * 60 * 1000),
+  };
+
+  const LINK_ATIVO = 'https://sandbox.asaas.com/checkoutSession/show/chk_abc';
+  const LINK_NOVO = 'https://sandbox.asaas.com/checkoutSession/show/chk_novo';
+
+  async function criarServicePendente(opts: {
+    pedido?: typeof PEDIDO_PENDENTE | null;
+    consultarCheckout?: jest.Mock;
+    criarCheckout?: jest.Mock;
+    resolverPayment?: jest.Mock;
+    pedidoUpdate?: jest.Mock;
+    pedidoUpdateMany?: jest.Mock;
+  }) {
+    const findFirst = jest.fn(() =>
+      Promise.resolve(opts.pedido === undefined ? PEDIDO_PENDENTE : opts.pedido),
+    );
+    const pedidoUpdate = opts.pedidoUpdate ?? jest.fn();
+    const pedidoUpdateMany =
+      opts.pedidoUpdateMany ?? jest.fn(() => Promise.resolve({ count: 1 }));
+    const consultarCheckout =
+      opts.consultarCheckout ??
+      jest.fn(() =>
+        Promise.resolve({
+          id: 'chk_abc',
+          link: LINK_ATIVO,
+          status: 'ACTIVE',
+        }),
+      );
+    const criarCheckout =
+      opts.criarCheckout ??
+      jest.fn(() =>
+        Promise.resolve({
+          id: 'chk_novo',
+          link: LINK_NOVO,
+          status: 'ACTIVE',
+        }),
+      );
+    const resolverPaymentIdPorCheckout =
+      opts.resolverPayment ??
+      jest.fn(() => Promise.resolve({ encontrado: false }));
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        { provide: DevolucoesService, useValue: devolucoesService },
+        { provide: OcorrenciasService, useValue: ocorrenciasService },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({
+                CHECKOUT_GATEWAY: 'asaas',
+                FRONTEND_URL: 'http://localhost:3001',
+              })[key as 'CHECKOUT_GATEWAY' | 'FRONTEND_URL'],
+          },
+        },
+        {
+          provide: PrismaService,
+          useValue: {
+            pedido: {
+              findFirst,
+              update: pedidoUpdate,
+              updateMany: pedidoUpdateMany,
+            },
+          },
+        },
+        { provide: ProdutosService, useValue: {} },
+        { provide: EnderecosService, useValue: {} },
+        {
+          provide: AsaasService,
+          useValue: {
+            consultarCheckout,
+            criarCheckout,
+            resolverPaymentIdPorCheckout,
+          },
+        },
+        { provide: UsuariosService, useValue: {} },
+        { provide: MelhorEnvioService, useValue: {} },
+        { provide: MailService, useValue: { enviarEmail: jest.fn() } },
+      ],
+    }).compile();
+
+    return {
+      service: module.get<CheckoutService>(CheckoutService),
+      findFirst,
+      pedidoUpdate,
+      pedidoUpdateMany,
+      consultarCheckout,
+      criarCheckout,
+      resolverPaymentIdPorCheckout,
+    };
+  }
+
+  it('buscarPendente: devolve resumo do PENDENTE mais recente, sem chamar o Asaas', async () => {
+    const { service, consultarCheckout, criarCheckout } =
+      await criarServicePendente({});
+
+    await expect(service.buscarPendente(1)).resolves.toEqual({
+      pedidoId: 42,
+      pedidoNumero: 'PED-42',
+      total: 103.3,
+    });
+    expect(consultarCheckout).not.toHaveBeenCalled();
+    expect(criarCheckout).not.toHaveBeenCalled();
+  });
+
+  it('buscarPendente: null quando o cliente não tem pedido PENDENTE', async () => {
+    const { service } = await criarServicePendente({ pedido: null });
+
+    await expect(service.buscarPendente(1)).resolves.toBeNull();
+  });
+
+  it('retomarPendente: checkout ACTIVE reaproveita o link, sem criar pedido nem checkout novo', async () => {
+    const { service, criarCheckout, pedidoUpdate } = await criarServicePendente(
+      {},
+    );
+
+    await expect(service.retomarPendente(1)).resolves.toEqual({
+      sessionId: 'chk_abc',
+      url: LINK_ATIVO,
+    });
+    expect(criarCheckout).not.toHaveBeenCalled();
+    expect(pedidoUpdate).not.toHaveBeenCalled();
+  });
+
+  it('retomarPendente: checkout EXPIRED cancela o pedido e não recria', async () => {
+    const consultarCheckout = jest.fn(() =>
+      Promise.resolve({
+        id: 'chk_abc',
+        link: LINK_ATIVO,
+        status: 'EXPIRED',
+      }),
+    );
+    const { service, criarCheckout, pedidoUpdateMany } =
+      await criarServicePendente({ consultarCheckout });
+
+    await expect(service.retomarPendente(1)).rejects.toMatchObject({
+      message: MENSAGEM_CHECKOUT_PENDENTE_EXPIRADO,
+    });
+    expect(criarCheckout).not.toHaveBeenCalled();
+    expect(pedidoUpdateMany).toHaveBeenCalledWith({
+      where: { id: 42, status: StatusPedido.PENDENTE },
+      data: { status: StatusPedido.CANCELADO },
+    });
+  });
+
+  it('retomarPendente: checkout CANCELED recria o checkout do MESMO pedido', async () => {
+    const consultarCheckout = jest.fn(() =>
+      Promise.resolve({
+        id: 'chk_abc',
+        link: LINK_ATIVO,
+        status: 'CANCELED',
+      }),
+    );
+    const { service, criarCheckout, pedidoUpdate, findFirst } =
+      await criarServicePendente({ consultarCheckout });
+
+    await expect(service.retomarPendente(1)).resolves.toEqual({
+      sessionId: 'chk_novo',
+      url: LINK_NOVO,
+    });
+    expect(criarCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        externalReference: '42',
+        items: [
+          { name: 'Vela de Lavanda', quantity: 2, value: 39.9 },
+          { name: 'Frete - Correios PAC', quantity: 1, value: 23.5 },
+        ],
+        minutesToExpire: expect.any(Number),
+      }),
+    );
+    expect(pedidoUpdate).toHaveBeenCalledWith({
+      where: { id: 42 },
+      data: { asaasCheckoutId: 'chk_novo' },
+    });
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ usuarioId: 1, status: 'PENDENTE' }),
+      }),
+    );
+  });
+
+  it('retomarPendente: checkout PAID não abre outro pagamento', async () => {
+    const consultarCheckout = jest.fn(() =>
+      Promise.resolve({
+        id: 'chk_abc',
+        link: LINK_ATIVO,
+        status: 'PAID',
+      }),
+    );
+    const { service, criarCheckout } = await criarServicePendente({
+      consultarCheckout,
+    });
+
+    await expect(service.retomarPendente(1)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(criarCheckout).not.toHaveBeenCalled();
+  });
+
+  it('retomarPendente: checkout 404 com Payment já existente não recria (webhook pode estar atrasado)', async () => {
+    const consultarCheckout = jest.fn(() =>
+      Promise.reject(
+        new AsaasNaoEncontradoError('Checkout não encontrado no Asaas'),
+      ),
+    );
+    const resolverPayment = jest.fn(() =>
+      Promise.resolve({
+        encontrado: true,
+        payment: { id: 'pay_1', status: 'RECEIVED' },
+      }),
+    );
+    const { service, criarCheckout } = await criarServicePendente({
+      consultarCheckout,
+      resolverPayment,
+    });
+
+    await expect(service.retomarPendente(1)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(criarCheckout).not.toHaveBeenCalled();
+  });
+
+  it('retomarPendente: checkout 404 sem Payment recria o checkout do mesmo pedido', async () => {
+    const consultarCheckout = jest.fn(() =>
+      Promise.reject(
+        new AsaasNaoEncontradoError('Checkout não encontrado no Asaas'),
+      ),
+    );
+    const { service, criarCheckout } = await criarServicePendente({
+      consultarCheckout,
+    });
+
+    await expect(service.retomarPendente(1)).resolves.toEqual({
+      sessionId: 'chk_novo',
+      url: LINK_NOVO,
+    });
+    expect(criarCheckout).toHaveBeenCalledTimes(1);
+  });
+
+  it('retomarPendente: sem pedido PENDENTE → 404, nunca cria checkout', async () => {
+    const { service, criarCheckout } = await criarServicePendente({
+      pedido: null,
+    });
+
+    await expect(service.retomarPendente(1)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(criarCheckout).not.toHaveBeenCalled();
+  });
+
+  it('retomarPendente: pedidoId específico entra no filtro (ownership pelo usuarioId do token)', async () => {
+    const { service, findFirst } = await criarServicePendente({});
+
+    await service.retomarPendente(7, 42);
+
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          usuarioId: 7,
+          id: 42,
+          status: 'PENDENTE',
+        }),
+      }),
+    );
+  });
+
+  it('buscarPendente: pedido fora do TTL é cancelado e some do banner', async () => {
+    const { service, pedidoUpdateMany, consultarCheckout } =
+      await criarServicePendente({ pedido: PEDIDO_PENDENTE_EXPIRADO });
+
+    await expect(service.buscarPendente(1)).resolves.toBeNull();
+    expect(pedidoUpdateMany).toHaveBeenCalledWith({
+      where: { id: 42, status: StatusPedido.PENDENTE },
+      data: { status: StatusPedido.CANCELADO },
+    });
+    expect(consultarCheckout).not.toHaveBeenCalled();
+  });
+
+  it('retomarPendente: pedido fora do TTL é cancelado e recusado, sem falar com o Asaas', async () => {
+    const { service, criarCheckout, consultarCheckout, pedidoUpdateMany } =
+      await criarServicePendente({ pedido: PEDIDO_PENDENTE_EXPIRADO });
+
+    await expect(service.retomarPendente(1)).rejects.toMatchObject({
+      message: MENSAGEM_CHECKOUT_PENDENTE_EXPIRADO,
+    });
+    expect(consultarCheckout).not.toHaveBeenCalled();
+    expect(criarCheckout).not.toHaveBeenCalled();
+    expect(pedidoUpdateMany).toHaveBeenCalledWith({
+      where: { id: 42, status: StatusPedido.PENDENTE },
+      data: { status: StatusPedido.CANCELADO },
+    });
+  });
+
+  it('expirarPedidosPendentes: cancela em lote só PENDENTE com checkout e data antiga', async () => {
+    const { service, pedidoUpdateMany } = await criarServicePendente({});
+
+    await expect(service.expirarPedidosPendentes()).resolves.toBe(1);
+    expect(pedidoUpdateMany).toHaveBeenCalledWith({
+      where: {
+        status: StatusPedido.PENDENTE,
+        data: { lt: expect.any(Date) },
+        OR: [
+          { asaasCheckoutId: { not: null } },
+          { stripeSessionId: { not: null } },
+        ],
+      },
+      data: { status: StatusPedido.CANCELADO },
+    });
+    const corte = (
+      pedidoUpdateMany.mock.calls[0][0] as {
+        where: { data: { lt: Date } };
+      }
+    ).where.data.lt;
+    const idadeMs = Date.now() - corte.getTime();
+    expect(idadeMs).toBeGreaterThan(23 * 60 * 60 * 1000);
+    expect(idadeMs).toBeLessThan(25 * 60 * 60 * 1000);
   });
 });

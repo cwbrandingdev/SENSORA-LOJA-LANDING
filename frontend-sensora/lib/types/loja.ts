@@ -373,6 +373,19 @@ export type CheckoutSessionResponse = {
   url: string;
 };
 
+// Espelha GET /checkout/pendente (CheckoutPendenteLookupResponse no backend).
+// Pedido PENDENTE do usuário autenticado, para o banner "Você tem uma compra
+// para pagar" — a URL de pagamento só sai em POST /checkout/pendente.
+export type CheckoutPendente = {
+  pedidoId: number;
+  pedidoNumero: string;
+  total: number;
+};
+
+export type CheckoutPendenteLookup = {
+  pendente: CheckoutPendente | null;
+};
+
 // Espelha CheckoutSessionStatus (backend/src/checkout/entities/checkout-session.entity.ts).
 // Etapa 2 (Minha Conta) — usado por /checkout/sucesso para confirmar o
 // status real antes de esvaziar o carrinho (ver services/checkout.ts).

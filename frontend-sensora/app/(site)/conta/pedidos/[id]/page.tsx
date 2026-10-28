@@ -33,6 +33,10 @@ import {
   solicitarReembolsoMeuPedido,
   atualizarEnderecoMeuPedido,
 } from "@/services/pedidos";
+import {
+  redirecionarParaPagamento,
+  retomarCheckoutPendente,
+} from "@/services/checkout";
 import { listarEnderecos } from "@/services/enderecos";
 import { normalizarCep } from "@/lib/cep";
 import { ROUTES } from "@/lib/routes";
@@ -82,6 +86,7 @@ export default function MeuPedidoDetalhePage() {
   const [carregando, setCarregando] = useState(true);
   const [naoEncontrado, setNaoEncontrado] = useState(false);
   const [cancelando, setCancelando] = useState(false);
+  const [pagandoPendente, setPagandoPendente] = useState(false);
   const [modalCancelarAberto, setModalCancelarAberto] = useState(false);
   const [modalReembolsoAberto, setModalReembolsoAberto] = useState(false);
   const [solicitandoReembolso, setSolicitandoReembolso] = useState(false);
@@ -210,6 +215,28 @@ export default function MeuPedidoDetalhePage() {
   // fluxo de reembolso abaixo: só troca a UI de confirmação, a lógica de
   // negócio (endpoint, condição de exibição, mensagens) é exatamente a
   // mesma de antes.
+  async function handlePagarPedidoPendente() {
+    if (!dados || pagandoPendente) return;
+    setPagandoPendente(true);
+    try {
+      const sessao = await retomarCheckoutPendente(dados.pedido.id);
+      if (!redirecionarParaPagamento(sessao)) {
+        toast.error("Não foi possível abrir o pagamento. Tente novamente.");
+        setPagandoPendente(false);
+      }
+    } catch (err) {
+      toast.error(
+        getErrorMessage(err, "Não foi possível retomar o pagamento."),
+      );
+      setPagandoPendente(false);
+      try {
+        setDados(await buscarMeuPedido(dados.pedido.id));
+      } catch {
+        // O toast de retomar já explicou o erro; o detalhe segue como está.
+      }
+    }
+  }
+
   function handleAbrirModalCancelar() {
     setModalCancelarAberto(true);
   }
@@ -493,16 +520,26 @@ export default function MeuPedidoDetalhePage() {
                 })}
               </h1>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <StatusPedidoBadge status={dados.pedido.status} />
               {dados.pedido.status === StatusPedido.PENDENTE && (
-                <FormButton
-                  type="button"
-                  variant="danger"
-                  onClick={handleAbrirModalCancelar}
-                >
-                  Cancelar pedido
-                </FormButton>
+                <>
+                  <FormButton
+                    type="button"
+                    onClick={handlePagarPedidoPendente}
+                    disabled={pagandoPendente}
+                  >
+                    {pagandoPendente ? "Abrindo pagamento..." : "Pagar agora"}
+                  </FormButton>
+                  <FormButton
+                    type="button"
+                    variant="danger"
+                    onClick={handleAbrirModalCancelar}
+                    disabled={pagandoPendente}
+                  >
+                    Cancelar pedido
+                  </FormButton>
+                </>
               )}
               {/* Etapa 5B.7 — ação de reembolso é exclusiva de PAGO: nunca
                   aparece para PENDENTE/CANCELADO (fluxo acima) nem para

@@ -184,6 +184,50 @@ test("B: pedido PENDENTE não mostra reembolso e o cancelamento continua funcion
   await expect(statusBadge(page, "Cancelado")).toBeVisible();
 });
 
+test("B2: pedido PENDENTE mostra Pagar agora e retoma o checkout no Asaas", async ({
+  page,
+}) => {
+  await seedSession(page);
+  const pedidoRef = { current: pedidoBase("PENDENTE") };
+  await mockBuscarMeuPedido(page, pedidoRef);
+
+  const URL_PAGAMENTO =
+    "https://sandbox.asaas.com/checkoutSession/show/chk_pedido_42";
+  await page.route("**/checkout/pendente", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      json: { sessionId: "chk_pedido_42", url: URL_PAGAMENTO },
+    });
+  });
+  await page.route(URL_PAGAMENTO, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<html><body>Asaas Checkout (mock de teste)</body></html>",
+    });
+  });
+
+  const posts: string[] = [];
+  page.on("request", (request) => {
+    if (
+      request.url().includes("/checkout/pendente") &&
+      request.method() === "POST"
+    ) {
+      posts.push(request.postData() ?? "");
+    }
+  });
+
+  await page.goto(PEDIDO_URL);
+  await page.getByRole("button", { name: "Pagar agora" }).click();
+  await page.waitForURL(URL_PAGAMENTO);
+
+  expect(page.url()).toBe(URL_PAGAMENTO);
+  expect(JSON.parse(posts[0] ?? "{}")).toEqual({ pedidoId: PEDIDO_ID });
+});
+
 // Teste C — REEMBOLSO_SOLICITADO: botão não aparece; status correto aparece.
 test("C: pedido REEMBOLSO_SOLICITADO não mostra o botão e exibe o status correto", async ({
   page,

@@ -89,6 +89,19 @@ describe('AsaasService', () => {
     );
   });
 
+  it('consultarCheckout 404: lança AsaasNaoEncontradoError (checkout expirado/purgado)', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+      text: () => Promise.resolve(''),
+    });
+
+    await expect(service.consultarCheckout('chk_sumido')).rejects.toThrow(
+      AsaasNaoEncontradoError,
+    );
+  });
+
   it('resposta não-OK do Asaas: lança BadGatewayException sem repassar o corpo do erro', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: false,

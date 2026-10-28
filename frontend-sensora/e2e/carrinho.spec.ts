@@ -1,10 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
 
-// Task 17 — primeira suíte E2E dedicada a /loja/carrinho. A página não
-// chama nenhuma API (100% CartContext/localStorage) exceto a decisão de
-// destino do CTA de checkout (possuiSessaoValida(), sem rede) — não precisa
-// de mocks de backend, só semear localStorage, mesmo padrão de
-// e2e/checkout.spec.ts.
+// Task 17 — primeira suíte E2E dedicada a /loja/carrinho. O carrinho em si
+// continua 100% CartContext/localStorage; com sessão válida a página também
+// consulta GET /checkout/pendente (banner de pagamento em aberto). Sem
+// sessão, nenhuma API é chamada — a decisão do CTA de checkout ainda é
+// possuiSessaoValida(), sem rede.
 const CARRINHO_URL = "/loja/carrinho";
 const CART_STORAGE_KEY = "sensora_carrinho";
 const TOKEN_KEY = "sensora_token";
@@ -110,6 +110,16 @@ test.beforeEach(async ({ page }) => {
         categories: { essential: true, analytics: false, marketing: false },
       }),
     );
+  });
+  // Sem sessão a página não chama isto; com sessão, o JWT de teste não é
+  // aceito pelo backend real — o default evita 401/logout no interceptor.
+  // Testes do banner registram outra rota depois (Playwright usa a última).
+  await page.route("**/checkout/pendente", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: { pendente: null } });
+      return;
+    }
+    await route.continue();
   });
 });
 
@@ -353,7 +363,7 @@ test.describe("Carrinho — CTA para checkout", () => {
     await seedCart(page, [ITEM_VELA]);
     await page.goto(CARRINHO_URL);
 
-    await page.getByRole("button", { name: "Ir para o checkout →" }).click();
+    await page.getByRole("button", { name: "Ir para o pagamento →" }).click();
 
     const aviso = page.getByRole("dialog", { name: "Você não está logado" });
     await expect(aviso).toBeVisible();
@@ -363,7 +373,7 @@ test.describe("Carrinho — CTA para checkout", () => {
     await expect(aviso).toBeHidden();
     await expect(page).toHaveURL(/\/loja\/carrinho$/);
 
-    await page.getByRole("button", { name: "Ir para o checkout →" }).click();
+    await page.getByRole("button", { name: "Ir para o pagamento →" }).click();
     await aviso.getByRole("button", { name: "Entrar" }).click();
     await expect(page).toHaveURL(/\/login\?redirect=%2Floja%2Fcarrinho/);
   });
@@ -373,7 +383,7 @@ test.describe("Carrinho — CTA para checkout", () => {
     await seedCart(page, [ITEM_VELA]);
     await page.goto(CARRINHO_URL);
 
-    await page.getByRole("button", { name: "Ir para o checkout →" }).click();
+    await page.getByRole("button", { name: "Ir para o pagamento →" }).click();
 
     await expect(page).toHaveURL(/\/loja\/checkout$/);
   });
@@ -438,7 +448,7 @@ test.describe("Carrinho — console e responsividade", () => {
     page.on("pageerror", (err) => erros.push(err.message));
 
     await page.goto(CARRINHO_URL);
-    await page.getByRole("button", { name: "Ir para o checkout →" }).waitFor();
+    await page.getByRole("button", { name: "Ir para o pagamento →" }).waitFor();
 
     expect(erros).toEqual([]);
   });
@@ -454,7 +464,7 @@ test.describe("Carrinho — console e responsividade", () => {
       await seedCart(page, [ITEM_VELA, ITEM_SPRAY]);
 
       await page.goto(CARRINHO_URL);
-      await page.getByRole("button", { name: "Ir para o checkout →" }).waitFor();
+      await page.getByRole("button", { name: "Ir para o pagamento →" }).waitFor();
 
       expect(await hasHorizontalOverflow(page)).toBe(false);
     });
@@ -859,5 +869,121 @@ test.describe("Carrinho — merge visitante → conta no login (correção do bu
       `${CART_STORAGE_KEY}_1`,
     );
     expect(JSON.parse(contaRaw ?? "[]")).toEqual([{ ...ITEM_VELA, quantidade: 3 }]);
+  });
+});
+
+test.describe("Carrinho — pagamento pendente (retomar checkout Asaas)", () => {
+  const PENDENTE = {
+    pedidoId: 42,
+    pedidoNumero: "PED-42",
+    total: 119.8,
+  };
+  const URL_PAGAMENTO =
+    "https://sandbox.asaas.com/checkoutSession/show/chk_retomar_123";
+
+  async function mockPendente(
+    page: Page,
+    pendente: typeof PENDENTE | null,
+  ) {
+    await page.route("**/checkout/pendente", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({ json: { pendente } });
+        return;
+      }
+      if (route.request().method() === "POST") {
+        await route.fulfill({
+          json: { sessionId: "chk_retomar_123", url: URL_PAGAMENTO },
+        });
+        return;
+      }
+      await route.continue();
+    });
+  }
+
+  test("sem sessão: não mostra o banner e não chama /checkout/pendente", async ({
+    page,
+  }) => {
+    const chamadas: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/checkout/pendente")) {
+        chamadas.push(request.url());
+      }
+    });
+    await seedCart(page, [ITEM_VELA]);
+    await page.goto(CARRINHO_URL);
+
+    await expect(
+      page.getByText("Você tem uma compra para pagar"),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Ir para o pagamento →" }),
+    ).toBeVisible();
+    expect(chamadas).toEqual([]);
+  });
+
+  test("com sessão e sem pedido PENDENTE: carrinho segue igual, sem banner", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await seedCart(page, [ITEM_VELA]);
+    await mockPendente(page, null);
+    await page.goto(CARRINHO_URL);
+
+    await expect(
+      page.getByText("Você tem uma compra para pagar"),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Ir para o pagamento →" }),
+    ).toBeVisible();
+  });
+
+  test("carrinho vazio com pedido PENDENTE: mostra o banner em vez do empty state", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await mockPendente(page, PENDENTE);
+    await page.goto(CARRINHO_URL);
+
+    await expect(
+      page.getByRole("heading", { name: "Você tem uma compra para pagar" }),
+    ).toBeVisible();
+    await expect(page.getByText("Pedido PED-42")).toBeVisible();
+    await expect(page.getByText("Ainda não há nada por aqui")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Pagar agora →" }),
+    ).toBeVisible();
+  });
+
+  test("Pagar agora retoma o checkout do pedido existente e vai ao Asaas", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    await seedCart(page, [ITEM_VELA]);
+    await mockPendente(page, PENDENTE);
+    await page.route(URL_PAGAMENTO, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<html><body>Asaas Checkout (mock de teste)</body></html>",
+      });
+    });
+
+    const posts: string[] = [];
+    page.on("request", (request) => {
+      if (
+        request.url().includes("/checkout/pendente") &&
+        request.method() === "POST"
+      ) {
+        posts.push(request.postData() ?? "");
+      }
+    });
+
+    await page.goto(CARRINHO_URL);
+    await page.getByRole("button", { name: "Pagar agora →" }).click();
+    await page.waitForURL(URL_PAGAMENTO);
+
+    expect(page.url()).toBe(URL_PAGAMENTO);
+    expect(posts).toHaveLength(1);
+    expect(JSON.parse(posts[0] ?? "{}")).toEqual({ pedidoId: 42 });
   });
 });

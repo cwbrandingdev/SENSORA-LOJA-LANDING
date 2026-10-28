@@ -79,6 +79,14 @@ import { UsuariosModule } from './usuarios/usuarios.module';
           .max(21)
           .default(10),
         ASAAS_MIN_INSTALLMENT_VALUE: Joi.number().positive().default(100),
+        // Pedido PENDENTE (checkout Asaas não pago) expira sozinho. Mesmo
+        // teto do `minutesToExpire` da API do Asaas (10–1440 min). Default
+        // 24h: o link de pagamento e o pedido caem juntos.
+        CHECKOUT_PENDENTE_EXPIRA_MINUTOS: Joi.number()
+          .integer()
+          .min(10)
+          .max(1440)
+          .default(1440),
         // Etapa 6.5 (Frete) — todas opcionais na validação de boot
         // (diferente de ASAAS_*, que já bloqueiam o startup): MelhorEnvioService
         // valida preguiçosamente (mesmo padrão de AsaasService), lançando só

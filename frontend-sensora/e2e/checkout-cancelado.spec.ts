@@ -65,7 +65,7 @@ test.describe("Checkout cancelado — renderização e conteúdo", () => {
   test("mensagem não inventa número de pedido nem valor em R$", async ({ page }) => {
     await page.goto(CANCELADO_URL);
 
-    const mensagem = page.getByText("O pagamento foi cancelado ou interrompido", {
+    const mensagem = page.getByText("O pagamento foi cancelado, interrompido ou expirou", {
       exact: false,
     });
     await expect(mensagem).toBeVisible();

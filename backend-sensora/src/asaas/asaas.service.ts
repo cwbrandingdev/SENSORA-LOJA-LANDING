@@ -23,10 +23,12 @@ export interface CriarCheckoutPayload {
   billingTypes: AsaasBillingType[];
   chargeTypes: AsaasChargeType[];
   items: AsaasCheckoutItem[];
-  callback: { successUrl: string; cancelUrl: string };
+  callback: { successUrl: string; cancelUrl: string; expiredUrl?: string };
   externalReference: string;
   /** Obrigatório na API Asaas quando `chargeTypes` inclui `INSTALLMENT`. */
   installment?: { maxInstallmentCount: number };
+  /** Expiração do Checkout no Asaas, em minutos (10–1440). */
+  minutesToExpire?: number;
 }
 
 export interface AsaasCheckout {
@@ -247,7 +249,12 @@ export class AsaasService {
   }
 
   async consultarCheckout(id: string): Promise<AsaasCheckout> {
-    return this.request('GET', `/checkouts/${encodeURIComponent(id)}`);
+    return this.request(
+      'GET',
+      `/checkouts/${encodeURIComponent(id)}`,
+      undefined,
+      { mensagemNaoEncontrado: 'Checkout não encontrado no Asaas' },
+    );
   }
 
   // Etapa 5B.3 — resolve o Payment real (pay_xxx) por trás de um Checkout

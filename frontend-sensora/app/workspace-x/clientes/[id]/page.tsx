@@ -122,7 +122,9 @@ export default function ClienteDetalhePage() {
         <>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-brand-navy">{cliente.nome}</h2>
+              <h2 className="text-xl font-semibold text-brand-navy">
+                {cliente.nome}
+              </h2>
               <p className="text-sm text-slate-500">{cliente.email}</p>
             </div>
             <Badge tone={cliente.ativo ? "success" : "neutral"}>
@@ -144,7 +146,9 @@ export default function ClienteDetalhePage() {
                 Telefone
               </p>
               <p className="mt-1 text-sm text-slate-700">
-                {cliente.telefone ? formatarTelefone(cliente.telefone) : "Não informado"}
+                {cliente.telefone
+                  ? formatarTelefone(cliente.telefone)
+                  : "Não informado"}
               </p>
             </div>
             <div>
@@ -160,6 +164,7 @@ export default function ClienteDetalhePage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <MetricCard
               titulo="Pedidos"
+              link="historico-pedidos"
               icon={ClipboardList}
               iconTone="navy"
               valor={String(cliente.resumo.quantidadePedidos)}
@@ -177,9 +182,12 @@ export default function ClienteDetalhePage() {
               iconTone="navy-outline"
               valor={
                 cliente.resumo.ultimoPedidoEm
-                  ? new Date(cliente.resumo.ultimoPedidoEm).toLocaleDateString("pt-BR", {
-                      timeZone: "UTC",
-                    })
+                  ? new Date(cliente.resumo.ultimoPedidoEm).toLocaleDateString(
+                      "pt-BR",
+                      {
+                        timeZone: "UTC",
+                      },
+                    )
                   : "—"
               }
             />
@@ -218,12 +226,16 @@ export default function ClienteDetalhePage() {
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <h3 className="text-sm font-semibold text-brand-navy">Produtos comprados</h3>
+            <h3 className="text-sm font-semibold text-brand-navy">
+              Produtos comprados
+            </h3>
             <p className="mt-1 text-xs text-slate-500">
               Agregado dos pedidos pagos (quantidade total e valor).
             </p>
             {cliente.produtosComprados.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">Nenhum produto em pedido pago.</p>
+              <p className="mt-3 text-sm text-slate-500">
+                Nenhum produto em pedido pago.
+              </p>
             ) : (
               <ul className="mt-3 divide-y divide-slate-100">
                 {cliente.produtosComprados.map((produto) => (
@@ -231,7 +243,9 @@ export default function ClienteDetalhePage() {
                     key={produto.produtoNome}
                     className="flex items-center justify-between gap-4 py-2.5 first:pt-0"
                   >
-                    <span className="text-sm text-slate-800">{produto.produtoNome}</span>
+                    <span className="text-sm text-slate-800">
+                      {produto.produtoNome}
+                    </span>
                     <span className="shrink-0 text-right text-xs text-slate-600">
                       {produto.quantidadeTotal} un. ·{" "}
                       <span className="font-medium tabular-nums text-slate-900">
@@ -244,7 +258,10 @@ export default function ClienteDetalhePage() {
             )}
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div
+            className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm"
+            id="historico-pedidos"
+          >
             <h3 className="px-4 pt-4 text-sm font-semibold text-brand-navy">
               Histórico de pedidos
             </h3>
@@ -273,7 +290,10 @@ export default function ClienteDetalhePage() {
                 <tbody className="divide-y divide-slate-100">
                   {cliente.pedidos.map((pedido) => (
                     <Fragment key={pedido.id}>
-                      <tr key={pedido.id} className="transition-colors hover:bg-slate-50/80">
+                      <tr
+                        key={pedido.id}
+                        className="transition-colors hover:bg-slate-50/80"
+                      >
                         <td className="px-4 py-3 font-medium text-slate-900">
                           <Link
                             href={`${ROUTES.PEDIDOS}/${pedido.id}`}
@@ -297,7 +317,10 @@ export default function ClienteDetalhePage() {
                         </td>
                       </tr>
                       {pedido.itens.length > 0 && (
-                        <tr key={`${pedido.id}-itens`} className="bg-slate-50/50">
+                        <tr
+                          key={`${pedido.id}-itens`}
+                          className="bg-slate-50/50"
+                        >
                           <td colSpan={4} className="px-4 py-2">
                             <ul className="flex flex-col gap-1 text-xs text-slate-600">
                               {pedido.itens.map((item, index) => (

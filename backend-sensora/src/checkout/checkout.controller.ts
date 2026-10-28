@@ -18,7 +18,9 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CheckoutService } from './checkout.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { CotarFreteDto } from './dto/cotar-frete.dto';
+import { RetomarCheckoutDto } from './dto/retomar-checkout.dto';
 import {
+  CheckoutPendenteLookupResponse,
   CheckoutSessionResponse,
   CheckoutSessionStatus,
 } from './entities/checkout-session.entity';
@@ -51,6 +53,31 @@ export class CheckoutController {
     @Req() req: { user: UsuarioAutenticado },
   ): Promise<OpcaoFreteResponse[]> {
     return this.checkoutService.cotarFrete(dto, req.user.id);
+  }
+
+  // Retomar um Pedido PENDENTE já criado (Asaas Checkout ainda ACTIVE, ou
+  // um checkout novo para o MESMO pedido se o Asaas cancelou o anterior
+  // ainda dentro do TTL). Depois do prazo (CHECKOUT_PENDENTE_EXPIRA_MINUTOS)
+  // o pedido vira CANCELADO — GET some o banner, POST recusa. GET só
+  // consulta o banco; a URL de pagamento só sai no POST. Ownership pelo
+  // token, nunca por um id solto na URL.
+  @Get('pendente')
+  @UseGuards(JwtAuthGuard)
+  async getPendente(
+    @CurrentUser() user: UsuarioAutenticado,
+  ): Promise<CheckoutPendenteLookupResponse> {
+    const pendente = await this.checkoutService.buscarPendente(user.id);
+    return { pendente };
+  }
+
+  @Post('pendente')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  retomarPendente(
+    @Body() dto: RetomarCheckoutDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ): Promise<CheckoutSessionResponse> {
+    return this.checkoutService.retomarPendente(user.id, dto?.pedidoId);
   }
 
   // Etapa 2 (Minha Conta / limpeza do carrinho) — passou a ser chamado pelo

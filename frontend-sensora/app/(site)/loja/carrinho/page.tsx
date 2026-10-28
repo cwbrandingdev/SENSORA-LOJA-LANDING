@@ -4,7 +4,7 @@
 // CartContext (estado local, Task 1). Reaproveita RevealOnScroll, Button,
 // EmptyState e o mesmo cabeçalho editorial (eyebrow + h1 serif) já usado em
 // /loja e /loja/produtos — nenhum padrão visual novo, só a composição.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
@@ -12,10 +12,18 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EmptyState from "@/components/ui/EmptyState";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import CartItemRow from "@/components/loja/CartItemRow";
+import CheckoutPendenteCard from "@/components/loja/CheckoutPendenteCard";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { loginComRedirect, possuiSessaoValida } from "@/lib/auth-redirect";
+import { getErrorMessage } from "@/lib/errors";
 import { ROUTES } from "@/lib/routes";
+import {
+  buscarCheckoutPendente,
+  redirecionarParaPagamento,
+  retomarCheckoutPendente,
+} from "@/services/checkout";
+import type { CheckoutPendente } from "@/lib/types/loja";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -27,6 +35,22 @@ export default function CarrinhoPage() {
   const { itens, totalItens, subtotal, limparCarrinho } = useCart();
   const toast = useToast();
   const [avisoLoginAberto, setAvisoLoginAberto] = useState(false);
+  const [pendente, setPendente] = useState<CheckoutPendente | null>(null);
+  const [pagandoPendente, setPagandoPendente] = useState(false);
+
+  useEffect(() => {
+    if (!possuiSessaoValida()) {
+      setPendente(null);
+      return;
+    }
+    let ativo = true;
+    buscarCheckoutPendente().then((resultado) => {
+      if (ativo) setPendente(resultado);
+    });
+    return () => {
+      ativo = false;
+    };
+  }, []);
 
   function handleLimparCarrinho() {
     if (
@@ -50,6 +74,24 @@ export default function CarrinhoPage() {
     setAvisoLoginAberto(true);
   }
 
+  async function handlePagarPendente() {
+    if (pagandoPendente || !pendente) return;
+    setPagandoPendente(true);
+    try {
+      const sessao = await retomarCheckoutPendente(pendente.pedidoId);
+      if (!redirecionarParaPagamento(sessao)) {
+        toast.error("Não foi possível abrir o pagamento. Tente novamente.");
+        setPagandoPendente(false);
+      }
+    } catch (err) {
+      toast.error(
+        getErrorMessage(err, "Não foi possível retomar o pagamento."),
+      );
+      setPendente(await buscarCheckoutPendente());
+      setPagandoPendente(false);
+    }
+  }
+
   return (
     <>
       <section className="relative mx-auto max-w-3xl overflow-hidden px-6 py-8 pb-8 text-center lg:px-10">
@@ -63,7 +105,9 @@ export default function CarrinhoPage() {
           <p className="mt-4 text-base leading-relaxed text-slate-600">
             {totalItens > 0
               ? `${totalItens} ${totalItens === 1 ? "item" : "itens"} prontos para o checkout.`
-              : "Revise os produtos antes de seguir para o pagamento."}
+              : pendente
+                ? "Você tem um pagamento em aberto. Conclua para finalizar a compra."
+                : "Revise os produtos antes de seguir para o pagamento."}
           </p>
         </RevealOnScroll>
       </section>
@@ -71,16 +115,33 @@ export default function CarrinhoPage() {
       {itens.length === 0 ? (
         <div className="mx-auto max-w-7xl px-6 pb-24 sm:pb-32 lg:px-10 lg:pb-40">
           <RevealOnScroll>
-            <EmptyState
-              eyebrow="Carrinho"
-              title="Ainda não há nada por aqui"
-              message="Explore a loja e encontre o aroma perfeito para o seu ambiente."
-            />
-            <div className="flex justify-center">
-              <Button href={ROUTES.LOJA_PRODUTOS} variant="primary">
-                Ver catálogo →
-              </Button>
-            </div>
+            {pendente ? (
+              <div className="mx-auto max-w-md">
+                <CheckoutPendenteCard
+                  pendente={pendente}
+                  pagando={pagandoPendente}
+                  onPagar={handlePagarPendente}
+                />
+                <div className="mt-8 flex justify-center">
+                  <Button href={ROUTES.LOJA_PRODUTOS} variant="primary">
+                    Continuar comprando →
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <EmptyState
+                  eyebrow="Carrinho"
+                  title="Ainda não há nada por aqui"
+                  message="Explore a loja e encontre o aroma perfeito para o seu ambiente."
+                />
+                <div className="flex justify-center">
+                  <Button href={ROUTES.LOJA_PRODUTOS} variant="primary">
+                    Ver catálogo →
+                  </Button>
+                </div>
+              </>
+            )}
           </RevealOnScroll>
         </div>
       ) : (
@@ -116,44 +177,53 @@ export default function CarrinhoPage() {
             </RevealOnScroll>
 
             <RevealOnScroll delayMs={90}>
-              <aside className="rounded-sm border border-slate-200 p-6 lg:sticky lg:top-28">
-                <h2 className="font-serif text-xl font-normal text-brand-navy">
-                  Resumo do pedido
-                </h2>
+              <div className="flex flex-col gap-6 lg:sticky lg:top-28">
+                {pendente && (
+                  <CheckoutPendenteCard
+                    pendente={pendente}
+                    pagando={pagandoPendente}
+                    onPagar={handlePagarPendente}
+                  />
+                )}
+                <aside className="rounded-sm border border-slate-200 p-6">
+                  <h2 className="font-serif text-xl font-normal text-brand-navy">
+                    Resumo do pedido
+                  </h2>
 
-                {/* Total = subtotal por enquanto — frete/desconto entram no
-                    checkout (próxima etapa), não aqui. */}
-                <dl className="mt-6 space-y-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <dt className="text-slate-500">Subtotal</dt>
-                    <dd className="font-medium tabular-nums text-brand-navy">
-                      {formatPrice.format(subtotal)}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-base">
-                    <dt className="font-semibold text-brand-navy">Total</dt>
-                    <dd className="text-lg font-semibold tabular-nums text-brand-navy">
-                      {formatPrice.format(subtotal)}
-                    </dd>
-                  </div>
-                </dl>
+                  {/* Total = subtotal por enquanto — frete/desconto entram no
+                      checkout (próxima etapa), não aqui. */}
+                  <dl className="mt-6 space-y-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <dt className="text-slate-500">Subtotal</dt>
+                      <dd className="font-medium tabular-nums text-brand-navy">
+                        {formatPrice.format(subtotal)}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-base">
+                      <dt className="font-semibold text-brand-navy">Total</dt>
+                      <dd className="text-lg font-semibold tabular-nums text-brand-navy">
+                        {formatPrice.format(subtotal)}
+                      </dd>
+                    </div>
+                  </dl>
 
-                <div className="mt-6 flex flex-col gap-3">
-                  <Button
-                    onClick={handleIrParaCheckout}
-                    variant="primary"
-                    className="w-full"
-                  >
-                    Ir para o pagamento →
-                  </Button>
-                  <Link
-                    href={ROUTES.LOJA_PRODUTOS}
-                    className="text-center text-[13px] uppercase tracking-[0.14em] text-slate-500 transition-colors hover:text-brand-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
-                  >
-                    ← Continuar comprando
-                  </Link>
-                </div>
-              </aside>
+                  <div className="mt-6 flex flex-col gap-3">
+                    <Button
+                      onClick={handleIrParaCheckout}
+                      variant="primary"
+                      className="w-full"
+                    >
+                      Ir para o pagamento →
+                    </Button>
+                    <Link
+                      href={ROUTES.LOJA_PRODUTOS}
+                      className="text-center text-[13px] uppercase tracking-[0.14em] text-slate-500 transition-colors hover:text-brand-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy/40"
+                    >
+                      ← Continuar comprando
+                    </Link>
+                  </div>
+                </aside>
+              </div>
             </RevealOnScroll>
           </div>
         </section>

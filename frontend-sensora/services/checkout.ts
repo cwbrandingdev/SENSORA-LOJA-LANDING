@@ -10,7 +10,10 @@
 // `sessionId` é o id do Asaas Checkout e `url` é a página hospedada de
 // pagamento, mas o frontend não precisa saber disso.
 import api from "./api";
+import { setCheckoutPendente } from "@/lib/storage";
 import type {
+  CheckoutPendente,
+  CheckoutPendenteLookup,
   CheckoutSessionResponse,
   CheckoutSessionStatus,
   CriarSessaoCheckoutPayload,
@@ -53,4 +56,37 @@ export function isUrlDeCheckoutSegura(valor: unknown): valor is string {
   } catch {
     return false;
   }
+}
+
+// GET /checkout/pendente — só o banco, sem falar com o Asaas. Falha de
+// rede/401 nunca deve quebrar o carrinho: o banner simplesmente não aparece.
+export async function buscarCheckoutPendente(): Promise<CheckoutPendente | null> {
+  try {
+    const response = await api.get<CheckoutPendenteLookup>("/checkout/pendente");
+    return response.data?.pendente ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// POST /checkout/pendente — reabre o Asaas Checkout do Pedido já criado
+// (ou gera um checkout novo para o MESMO pedido se o Asaas cancelou o
+// anterior ainda dentro do prazo). Fora do TTL o backend recusa.
+export async function retomarCheckoutPendente(
+  pedidoId?: number,
+): Promise<CheckoutSessionResponse> {
+  const response = await api.post<CheckoutSessionResponse>(
+    "/checkout/pendente",
+    pedidoId !== undefined ? { pedidoId } : {},
+  );
+  return response.data;
+}
+
+// Mesmo redirecionamento de POST /checkout/session: valida a URL, grava o
+// sessionId para /checkout/sucesso e sai para a página hospedada do Asaas.
+export function redirecionarParaPagamento(sessao: CheckoutSessionResponse): boolean {
+  if (!isUrlDeCheckoutSegura(sessao.url)) return false;
+  setCheckoutPendente(sessao.sessionId);
+  window.location.assign(sessao.url);
+  return true;
 }

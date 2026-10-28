@@ -1,16 +1,21 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import Stripe from 'stripe';
 import {
   AsaasChargeType,
+  AsaasNaoEncontradoError,
   AsaasService,
+  CriarCheckoutPayload,
 } from '../asaas/asaas.service';
 import { escaparHtml } from '../common/utils/html.util';
 import { DevolucoesService } from '../devolucoes/devolucoes.service';
@@ -38,6 +43,7 @@ import { garantirCepNaAreaDeEntrega } from './area-entrega';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { CotarFreteDto } from './dto/cotar-frete.dto';
 import {
+  CheckoutPendenteResponse,
   CheckoutSessionResponse,
   CheckoutSessionStatus,
 } from './entities/checkout-session.entity';
@@ -53,6 +59,13 @@ import { OpcaoFreteResponse } from './entities/opcao-frete.entity';
 // EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT em frontend-sensora/app/(site)/loja/
 // checkout/page.tsx, que oculta a mensagem/botão de reenvio no frontend).
 export const EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT = false;
+
+/** Default e limites de CHECKOUT_PENDENTE_EXPIRA_MINUTOS (espelham o Asaas). */
+export const CHECKOUT_PENDENTE_EXPIRA_MINUTOS_PADRAO = 24 * 60;
+const CHECKOUT_PENDENTE_EXPIRA_MINUTOS_MIN = 10;
+const INTERVALO_EXPIRAR_PENDENTES_MS = 15 * 60 * 1000;
+export const MENSAGEM_CHECKOUT_PENDENTE_EXPIRADO =
+  'Este pagamento expirou. Faça um novo pedido.';
 
 type CheckoutGateway = 'asaas' | 'stripe';
 type PedidoCriado = Awaited<ReturnType<PrismaService['pedido']['create']>>;
@@ -80,7 +93,7 @@ function tokensIguais(recebido: string, esperado: string): boolean {
 }
 
 @Injectable()
-export class CheckoutService {
+export class CheckoutService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CheckoutService.name);
   private readonly gateway: CheckoutGateway;
   private readonly frontendUrl: string;
@@ -88,6 +101,10 @@ export class CheckoutService {
   private readonly asaasMaxParcelas: number;
   /** Valor mínimo de cada parcela (R$) — ASAAS_MIN_INSTALLMENT_VALUE. */
   private readonly asaasMinValorParcela: number;
+  /** Pedido PENDENTE sem pagamento vira CANCELADO depois disto. */
+  private readonly expiraMinutos: number;
+  private readonly expiraMs: number;
+  private expiracaoTimer?: NodeJS.Timeout;
   // Legado (Task 21) — só instanciado no modo de rollback
   // (CHECKOUT_GATEWAY="stripe"). Preservado exatamente como na integração
   // original (Task 15): é o caminho que garante que voltar para o Stripe
@@ -126,6 +143,10 @@ export class CheckoutService {
       this.configService.get<number>('ASAAS_MAX_INSTALLMENT_COUNT') ?? 10;
     this.asaasMinValorParcela =
       this.configService.get<number>('ASAAS_MIN_INSTALLMENT_VALUE') ?? 100;
+    this.expiraMinutos =
+      this.configService.get<number>('CHECKOUT_PENDENTE_EXPIRA_MINUTOS') ??
+      CHECKOUT_PENDENTE_EXPIRA_MINUTOS_PADRAO;
+    this.expiraMs = this.expiraMinutos * 60 * 1000;
 
     if (this.gateway === 'stripe') {
       const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
@@ -133,6 +154,21 @@ export class CheckoutService {
         throw new Error('STRIPE_SECRET_KEY não configurada');
       }
       this.stripe = new Stripe(secretKey);
+    }
+  }
+
+  onModuleInit(): void {
+    void this.expirarPedidosPendentes();
+    this.expiracaoTimer = setInterval(
+      () => void this.expirarPedidosPendentes(),
+      INTERVALO_EXPIRAR_PENDENTES_MS,
+    );
+    this.expiracaoTimer.unref();
+  }
+
+  onModuleDestroy(): void {
+    if (this.expiracaoTimer) {
+      clearInterval(this.expiracaoTimer);
     }
   }
 
@@ -469,11 +505,7 @@ export class CheckoutService {
         quantity: item.quantidade,
         value: item.preco,
       })),
-      callback: {
-        successUrl: `${this.frontendUrl}/checkout/sucesso`,
-        cancelUrl: `${this.frontendUrl}/checkout/cancelado`,
-      },
-      externalReference: String(pedido.id),
+      ...this.destinoEExpiracaoAsaas(pedido.id, this.expiraMinutos),
     });
 
     await this.prisma.pedido.update({
@@ -486,6 +518,282 @@ export class CheckoutService {
     }
 
     return { sessionId: checkout.id, url: checkout.link };
+  }
+
+  // Compra iniciada no Asaas e não concluída: o Pedido já existe (PENDENTE)
+  // e não precisa ser recriado. Só consulta o banco — a URL de pagamento
+  // fica no POST (retomarPendente), que é quem fala com o Asaas.
+  async buscarPendente(
+    usuarioId: number,
+  ): Promise<CheckoutPendenteResponse | null> {
+    const pedido = await this.encontrarPedidoPendente(usuarioId);
+    if (!pedido) {
+      return null;
+    }
+    if (await this.expirarSeVencido(pedido)) {
+      return null;
+    }
+    return {
+      pedidoId: pedido.id,
+      pedidoNumero: pedido.numero,
+      total: Number(pedido.total),
+    };
+  }
+
+  async retomarPendente(
+    usuarioId: number,
+    pedidoId?: number,
+  ): Promise<CheckoutSessionResponse> {
+    const pedido = await this.encontrarPedidoPendente(usuarioId, pedidoId);
+    if (!pedido) {
+      throw new NotFoundException('Nenhum pagamento pendente encontrado');
+    }
+    if (await this.expirarSeVencido(pedido)) {
+      throw new BadRequestException(MENSAGEM_CHECKOUT_PENDENTE_EXPIRADO);
+    }
+
+    return this.gateway === 'stripe'
+      ? this.retomarSessaoStripe(pedido)
+      : this.retomarSessaoAsaas(pedido);
+  }
+
+  // Pedido.data é o relógio do TTL (gravado em createSession). Checkout
+  // Asaas ainda não pago nunca baixou estoque — cancelar é só PENDENTE →
+  // CANCELADO, atômico contra o webhook CHECKOUT_PAID.
+  async expirarPedidosPendentes(): Promise<number> {
+    const limite = new Date(Date.now() - this.expiraMs);
+    const resultado = await this.prisma.pedido.updateMany({
+      where: {
+        status: StatusPedido.PENDENTE,
+        data: { lt: limite },
+        OR: [
+          { asaasCheckoutId: { not: null } },
+          { stripeSessionId: { not: null } },
+        ],
+      },
+      data: { status: StatusPedido.CANCELADO },
+    });
+    if (resultado.count > 0) {
+      this.logger.log(
+        `${resultado.count} pedido(s) PENDENTE expirado(s) e cancelado(s).`,
+      );
+    }
+    return resultado.count;
+  }
+
+  private pedidoExpirado(criadoEm: Date): boolean {
+    return Date.now() - criadoEm.getTime() >= this.expiraMs;
+  }
+
+  private minutosRestantes(criadoEm: Date): number {
+    return Math.floor(
+      (criadoEm.getTime() + this.expiraMs - Date.now()) / 60_000,
+    );
+  }
+
+  private minutesToExpireRecriacao(criadoEm: Date): number {
+    return Math.max(
+      CHECKOUT_PENDENTE_EXPIRA_MINUTOS_MIN,
+      Math.min(this.expiraMinutos, this.minutosRestantes(criadoEm)),
+    );
+  }
+
+  private destinoEExpiracaoAsaas(
+    pedidoId: number,
+    minutesToExpire: number,
+  ): Pick<CriarCheckoutPayload, 'callback' | 'externalReference' | 'minutesToExpire'> {
+    return {
+      callback: {
+        successUrl: `${this.frontendUrl}/checkout/sucesso`,
+        cancelUrl: `${this.frontendUrl}/checkout/cancelado`,
+        expiredUrl: `${this.frontendUrl}/checkout/cancelado`,
+      },
+      externalReference: String(pedidoId),
+      minutesToExpire,
+    };
+  }
+
+  private async expirarSeVencido(pedido: {
+    id: number;
+    data: Date;
+  }): Promise<boolean> {
+    if (!this.pedidoExpirado(pedido.data)) {
+      return false;
+    }
+    await this.cancelarPedidoPendente(pedido.id);
+    return true;
+  }
+
+  private async cancelarPedidoPendente(id: number): Promise<void> {
+    const resultado = await this.prisma.pedido.updateMany({
+      where: { id, status: StatusPedido.PENDENTE },
+      data: { status: StatusPedido.CANCELADO },
+    });
+    if (resultado.count > 0) {
+      this.logger.log(`Pedido ${id} PENDENTE cancelado por expiração.`);
+    }
+  }
+
+  private async cancelarPedidoPendentePorCheckout(
+    asaasCheckoutId: string,
+  ): Promise<void> {
+    const resultado = await this.prisma.pedido.updateMany({
+      where: {
+        asaasCheckoutId,
+        status: StatusPedido.PENDENTE,
+      },
+      data: { status: StatusPedido.CANCELADO },
+    });
+    if (resultado.count > 0) {
+      this.logger.log(
+        `Pedido do checkout ${asaasCheckoutId} cancelado (CHECKOUT_EXPIRED).`,
+      );
+    }
+  }
+
+  private async rejeitarCheckoutExpirado(pedido: {
+    id: number;
+    asaasCheckoutId: string | null;
+  }): Promise<never> {
+    if (pedido.asaasCheckoutId) {
+      const payment = await this.asaasService.resolverPaymentIdPorCheckout(
+        pedido.asaasCheckoutId,
+      );
+      if (payment.encontrado) {
+        throw new ConflictException(
+          'Este pedido já foi pago. Aguarde a confirmação.',
+        );
+      }
+    }
+    await this.cancelarPedidoPendente(pedido.id);
+    throw new BadRequestException(MENSAGEM_CHECKOUT_PENDENTE_EXPIRADO);
+  }
+
+  private encontrarPedidoPendente(usuarioId: number, pedidoId?: number) {
+    return this.prisma.pedido.findFirst({
+      where: {
+        usuarioId,
+        status: StatusPedido.PENDENTE,
+        ...(pedidoId !== undefined ? { id: pedidoId } : {}),
+        OR: [
+          { asaasCheckoutId: { not: null } },
+          { stripeSessionId: { not: null } },
+        ],
+      },
+      include: { itens: { include: { produto: true } } },
+      orderBy: { data: 'desc' },
+    });
+  }
+
+  private async retomarSessaoAsaas(
+    pedido: NonNullable<Awaited<ReturnType<CheckoutService['encontrarPedidoPendente']>>>,
+  ): Promise<CheckoutSessionResponse> {
+    if (!pedido.asaasCheckoutId) {
+      return this.recriarSessaoAsaas(pedido);
+    }
+
+    try {
+      const checkout = await this.asaasService.consultarCheckout(
+        pedido.asaasCheckoutId,
+      );
+      if (checkout.status === 'ACTIVE' && checkout.link) {
+        return { sessionId: checkout.id, url: checkout.link };
+      }
+      if (checkout.status === 'PAID') {
+        throw new ConflictException(
+          'Este pedido já foi pago. Aguarde a confirmação.',
+        );
+      }
+      if (checkout.status === 'EXPIRED') {
+        await this.rejeitarCheckoutExpirado(pedido);
+      }
+    } catch (erro) {
+      if (
+        erro instanceof ConflictException ||
+        erro instanceof BadRequestException
+      ) {
+        throw erro;
+      }
+      if (!(erro instanceof AsaasNaoEncontradoError)) {
+        throw erro;
+      }
+      const payment = await this.asaasService.resolverPaymentIdPorCheckout(
+        pedido.asaasCheckoutId,
+      );
+      if (payment.encontrado) {
+        throw new ConflictException(
+          'Este pedido já foi pago. Aguarde a confirmação.',
+        );
+      }
+    }
+
+    return this.recriarSessaoAsaas(pedido);
+  }
+
+  private async recriarSessaoAsaas(
+    pedido: NonNullable<Awaited<ReturnType<CheckoutService['encontrarPedidoPendente']>>>,
+  ): Promise<CheckoutSessionResponse> {
+    const itens = pedido.itens.map((item) => ({
+      name: item.produto.nome,
+      quantity: item.quantidade,
+      value: Number(item.precoUnitario),
+    }));
+    if (pedido.freteValor != null && Number(pedido.freteValor) > 0) {
+      const transportadora = pedido.freteTransportadora ?? '';
+      const servico = pedido.freteServico ?? '';
+      itens.push({
+        name: `Frete - ${transportadora} ${servico}`.replace(/\s+/g, ' ').trim(),
+        quantity: 1,
+        value: Number(pedido.freteValor),
+      });
+    }
+
+    const total = Number(pedido.total);
+    const { chargeTypes, installment } = this.opcoesParcelamentoAsaas(total);
+    const checkout = await this.asaasService.criarCheckout({
+      billingTypes: ['PIX', 'CREDIT_CARD'],
+      chargeTypes,
+      ...(installment ? { installment } : {}),
+      items: itens,
+      ...this.destinoEExpiracaoAsaas(
+        pedido.id,
+        this.minutesToExpireRecriacao(pedido.data),
+      ),
+    });
+
+    await this.prisma.pedido.update({
+      where: { id: pedido.id },
+      data: { asaasCheckoutId: checkout.id },
+    });
+
+    if (!checkout.link) {
+      throw new BadRequestException('Não foi possível iniciar o pagamento');
+    }
+
+    return { sessionId: checkout.id, url: checkout.link };
+  }
+
+  private async retomarSessaoStripe(
+    pedido: NonNullable<Awaited<ReturnType<CheckoutService['encontrarPedidoPendente']>>>,
+  ): Promise<CheckoutSessionResponse> {
+    if (!pedido.stripeSessionId || !this.stripe) {
+      throw new BadRequestException('Não foi possível retomar o pagamento');
+    }
+
+    const session = await this.stripe.checkout.sessions.retrieve(
+      pedido.stripeSessionId,
+    );
+    if (session.status === 'complete' || session.payment_status === 'paid') {
+      throw new ConflictException(
+        'Este pedido já foi pago. Aguarde a confirmação.',
+      );
+    }
+    if (session.status === 'expired' || !session.url) {
+      await this.cancelarPedidoPendente(pedido.id);
+      throw new BadRequestException(MENSAGEM_CHECKOUT_PENDENTE_EXPIRADO);
+    }
+
+    return { sessionId: session.id, url: session.url };
   }
 
   async getSessionStatus(
@@ -648,13 +956,15 @@ export class CheckoutService {
       throw new BadRequestException('Payload do webhook inválido');
     }
 
-    // Único evento que confirma pagamento concluído no fluxo de Asaas
-    // Checkout usado por este projeto — os demais eventos de checkout
-    // (CHECKOUT_CREATED, CHECKOUT_EXPIRED, CHECKOUT_CANCELED) são ignorados
-    // com segurança: não marcam pedido como pago, não alteram estoque.
+    // CHECKOUT_PAID confirma pagamento. CHECKOUT_EXPIRED cancela o Pedido
+    // ainda PENDENTE (updateMany atômico contra a corrida com PAID).
+    // CHECKOUT_CANCELED (cliente fechou a página) NÃO cancela: o TTL e o
+    // job/lazy expire é que encerram; até lá o cliente pode retomar.
     if (body.event === 'CHECKOUT_PAID' && body.checkout?.id) {
       await this.confirmarPagamento({ asaasCheckoutId: body.checkout.id });
       await this.salvarAsaasPaymentId(body.checkout.id);
+    } else if (body.event === 'CHECKOUT_EXPIRED' && body.checkout?.id) {
+      await this.cancelarPedidoPendentePorCheckout(body.checkout.id);
     } else if (
       body.event &&
       CheckoutService.EVENTOS_REEMBOLSO_ASAAS.has(body.event)
