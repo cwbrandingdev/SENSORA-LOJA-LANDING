@@ -11,6 +11,27 @@ import {
   segundaImagemDaGaleria,
 } from "@/lib/loja-imagens";
 
+// Produto do Admin no formato de cartão da vitrine (CollectionShowcase).
+export function produtoParaCartao(produto: ProdutoPublico): ProductItem {
+  return {
+    slug: produto.slug,
+    name: produto.nome,
+    description: produto.descricao ?? "",
+    mood: produto.aroma,
+    // Card de até ~270px: 600px cobre telas de alta densidade.
+    imageSrc: imagemKitRedimensionada(produto.imagemUrl, 600),
+    imageHoverSrc: imagemKitRedimensionada(
+      segundaImagemDaGaleria(produto.imagens, produto.imagemUrl),
+      600,
+    ),
+    imageAlt: produto.nome,
+    preco: produto.preco,
+    ctaLabel: "Conhecer",
+    ctaHref: LOJA_PRODUTO_URL(produto.slug),
+    lojaSlug: produto.slug,
+  };
+}
+
 // Junta a vitrine editorial da coleção (content.ts) com o catálogo do Admin:
 // - produto cadastrado na categoria da coleção e ainda sem card editorial
 //   entra no fim, com nome, aroma e foto do cadastro;
@@ -58,23 +79,7 @@ export function colecaoComProdutosDaLoja(
       (produto) =>
         produto.categoria?.slug === categoriaLoja && !comCard.has(produto.slug),
     )
-    .map((produto) => ({
-      slug: produto.slug,
-      name: produto.nome,
-      description: produto.descricao ?? "",
-      mood: produto.aroma,
-      // Card de até ~270px: 600px cobre telas de alta densidade.
-      imageSrc: imagemKitRedimensionada(produto.imagemUrl, 600),
-      imageHoverSrc: imagemKitRedimensionada(
-        segundaImagemDaGaleria(produto.imagens, produto.imagemUrl),
-        600,
-      ),
-      imageAlt: produto.nome,
-      preco: produto.preco,
-      ctaLabel: "Conhecer",
-      ctaHref: LOJA_PRODUTO_URL(produto.slug),
-      lojaSlug: produto.slug,
-    }));
+    .map(produtoParaCartao);
 
   // Item editorial ainda sem cadastro na Loja (ex.: "Brisa de Inverno")
   // herda o preço da linha para a vitrine não ficar com um cartão sem preço

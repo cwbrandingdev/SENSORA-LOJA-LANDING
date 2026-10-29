@@ -11,7 +11,7 @@ import { z } from "zod";
 import FormButton from "@/components/ui/FormButton";
 import ImageUploader, { MAXIMO_IMAGENS } from "@/components/forms/ImageUploader";
 import RevisorTexto from "@/components/forms/RevisorTexto";
-import type { Categoria, Produto } from "@/lib/types/loja";
+import type { Categoria, CreateProdutoPayload, Produto } from "@/lib/types/loja";
 
 const productSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
@@ -42,6 +42,24 @@ const productSchema = z.object({
 
 type ProductFormInput = z.input<typeof productSchema>;
 export type ProductFormValues = z.output<typeof productSchema>;
+
+// Converte o valor cru do form (categoriaId como string do <select>, "" =
+// sem categoria) para o payload que a API espera (categoriaId?: number).
+// Usado pelas telas de Produtos e de Coleções.
+export function produtoFormParaPayload(data: ProductFormValues): CreateProdutoPayload {
+  return {
+    nome: data.nome,
+    // Sempre enviado (mesmo vazio): apagar o campo no formulário tira o aroma da loja.
+    aroma: data.aroma ?? "",
+    descricao: data.descricao || undefined,
+    preco: data.preco,
+    quantidade: data.quantidade,
+    categoriaId: data.categoriaId ? Number(data.categoriaId) : undefined,
+    imagens: data.imagens,
+    ativo: data.ativo,
+    destaque: data.destaque,
+  };
+}
 
 function toDefaultValues(produto?: Produto): ProductFormInput {
   return {
