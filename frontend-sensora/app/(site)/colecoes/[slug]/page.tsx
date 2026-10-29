@@ -32,9 +32,8 @@ export default async function ColecaoPage({ params }: Props) {
       principal
       collection={{
         slug: colecao.slug,
-        // Vazios no Admin: título = nome do menu, texto acima = "Produtos".
+        // Título vazio no Admin = usa o nome do menu.
         name: colecao.titulo || colecao.nome,
-        eyebrow: colecao.chamada || undefined,
         description: colecao.descricao ?? "",
         items: colecao.produtos.map(produtoParaCartao),
       }}

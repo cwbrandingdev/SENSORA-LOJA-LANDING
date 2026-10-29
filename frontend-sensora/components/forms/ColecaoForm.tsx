@@ -38,7 +38,6 @@ export default function ColecaoForm({
   onTirarProduto,
 }: Props) {
   const [nome, setNome] = useState(initialData?.nome ?? "");
-  const [chamada, setChamada] = useState(initialData?.chamada ?? "");
   const [titulo, setTitulo] = useState(initialData?.titulo ?? "");
   const [descricao, setDescricao] = useState(initialData?.descricao ?? "");
   const [imagemUrl, setImagemUrl] = useState(initialData?.imagemUrl ?? "");
@@ -79,7 +78,6 @@ export default function ColecaoForm({
     try {
       await onSubmit({
         nome: nome.trim(),
-        chamada: chamada.trim(),
         titulo: titulo.trim(),
         descricao: descricao.trim(),
         imagemUrl,
@@ -107,22 +105,6 @@ export default function ColecaoForm({
           className={inputClass}
         />
         <p className="text-xs text-slate-500">Curto: aparece no menu do site e nesta lista do Admin.</p>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label htmlFor="colecao-chamada" className={labelClass}>
-          Texto acima do título <span className="font-normal text-slate-500">(opcional)</span>
-        </label>
-        <input
-          id="colecao-chamada"
-          type="text"
-          value={chamada}
-          onChange={(e) => setChamada(e.target.value)}
-          placeholder="Produtos"
-          maxLength={60}
-          className={inputClass}
-        />
-        <p className="text-xs text-slate-500">Texto pequeno em laranja na página da coleção. Vazio = &quot;Produtos&quot;.</p>
       </div>
 
       <div className="flex flex-col gap-1">
