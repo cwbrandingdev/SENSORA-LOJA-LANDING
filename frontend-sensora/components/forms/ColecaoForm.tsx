@@ -1,13 +1,11 @@
 "use client";
 
-// Criar/editar uma coleção de data festiva: nome, texto, foto de capa e
+// Criar/editar uma coleção de data festiva: nome, título, texto e
 // ligada ou não. Os produtos da coleção são cadastrados/editados com o
 // mesmo formulário da tela de Produtos (ver app/workspace-x/colecoes).
 import { useState } from "react";
-import Image from "next/image";
-import { Pencil, Plus, Upload, X } from "lucide-react";
+import { Pencil, Plus, X } from "lucide-react";
 import FormButton from "@/components/ui/FormButton";
-import { enviarParaImageKit } from "@/components/forms/ImageUploader";
 import { ProductThumb } from "@/components/tables/ProductTable";
 import type { Categoria, Colecao, ColecaoPayload, Produto } from "@/lib/types/loja";
 
@@ -40,30 +38,12 @@ export default function ColecaoForm({
   const [nome, setNome] = useState(initialData?.nome ?? "");
   const [titulo, setTitulo] = useState(initialData?.titulo ?? "");
   const [descricao, setDescricao] = useState(initialData?.descricao ?? "");
-  const [imagemUrl, setImagemUrl] = useState(initialData?.imagemUrl ?? "");
   const [ativo, setAtivo] = useState(initialData?.ativo ?? false);
-  const [enviandoFoto, setEnviandoFoto] = useState(false);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
   function nomeCategoria(produto: Produto): string {
     return categorias.find((c) => c.id === produto.categoriaId)?.nome ?? "Sem categoria";
-  }
-
-  async function enviarFoto(event: React.ChangeEvent<HTMLInputElement>) {
-    const arquivo = event.target.files?.[0];
-    event.target.value = "";
-    if (!arquivo) return;
-
-    setErro("");
-    setEnviandoFoto(true);
-    try {
-      setImagemUrl(await enviarParaImageKit(arquivo, nome || "colecao"));
-    } catch {
-      setErro("Não foi possível enviar a foto. Tente de novo.");
-    } finally {
-      setEnviandoFoto(false);
-    }
   }
 
   async function salvar(event: React.FormEvent) {
@@ -80,7 +60,6 @@ export default function ColecaoForm({
         nome: nome.trim(),
         titulo: titulo.trim(),
         descricao: descricao.trim(),
-        imagemUrl,
         ativo,
       });
     } finally {
@@ -135,29 +114,6 @@ export default function ColecaoForm({
           placeholder="Ex.: Presentes que perfumam a noite mais especial do ano."
           className={inputClass}
         />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <span className={labelClass}>Foto de capa</span>
-        {imagemUrl ? (
-          <div className="relative aspect-16/7 overflow-hidden rounded-md bg-slate-100">
-            <Image src={imagemUrl} alt="Capa da coleção" fill sizes="480px" className="object-cover" />
-            <button
-              type="button"
-              onClick={() => setImagemUrl("")}
-              aria-label="Remover foto"
-              className="absolute right-2 top-2 rounded-full bg-white/90 p-1.5 text-slate-600 shadow hover:bg-white"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        ) : (
-          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-slate-300 px-3 py-6 text-sm text-slate-500 hover:bg-slate-50">
-            <Upload className="h-4 w-4" />
-            {enviandoFoto ? "Enviando..." : "Escolher foto"}
-            <input type="file" accept="image/*" className="sr-only" onChange={enviarFoto} disabled={enviandoFoto} />
-          </label>
-        )}
       </div>
 
       <label className="flex items-center gap-3 rounded-md bg-slate-50 px-3 py-3 text-sm">
@@ -237,7 +193,7 @@ export default function ColecaoForm({
       {erro && <p className="text-sm text-red-600">{erro}</p>}
 
       <div className="flex gap-2">
-        <FormButton type="submit" variant="primary" disabled={salvando || enviandoFoto}>
+        <FormButton type="submit" variant="primary" disabled={salvando}>
           {initialData ? "Salvar edição" : "Criar coleção"}
         </FormButton>
         <FormButton type="button" variant="ghost" onClick={onCancel}>

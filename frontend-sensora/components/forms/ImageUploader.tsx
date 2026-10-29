@@ -46,7 +46,7 @@ function nomeArquivoSeguro(nomeProduto: string | undefined, file: File): string 
 }
 
 // Cada envio pede credenciais novas: o token do ImageKit vale para um upload só.
-export async function enviarParaImageKit(file: File, nomeProduto?: string): Promise<string> {
+async function enviarParaImageKit(file: File, nomeProduto?: string): Promise<string> {
   const auth = await obterAutenticacaoImageKit();
 
   const formData = new FormData();
