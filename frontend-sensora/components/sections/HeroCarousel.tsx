@@ -9,8 +9,6 @@ import {
   type CarouselApi,
   CarouselContent,
   CarouselItem,
-  CarouselPrevious,
-  CarouselNext,
 } from "@/components/ui/carousel";
 import { HERO_SLIDES } from "@/lib/content";
 
@@ -196,14 +194,21 @@ export default function HeroCarousel() {
           ))}
         </CarouselContent>
 
-        <CarouselPrevious
-          aria-label="Slide anterior"
-          className="h-11 w-11 border-white/80 bg-black/30 sm:backdrop-blur-sm hover:border-white hover:bg-black/50"
-        />
-        <CarouselNext
-          aria-label="Próximo slide"
-          className="h-11 w-11 border-white/80 bg-black/30 sm:backdrop-blur-sm hover:border-white hover:bg-black/50"
-        />
+        {/* Pontinhos no lugar das setas: o do slide atual vira um traço. */}
+        <div className="absolute inset-x-0 bottom-5 flex justify-center gap-2 sm:bottom-6">
+          {HERO_SLIDES.map((slide, slideIndex) => (
+            <button
+              key={slide.id}
+              type="button"
+              onClick={() => api?.scrollTo(slideIndex)}
+              aria-label={`Ir para o slide ${slideIndex + 1}`}
+              aria-current={slideIndex === index}
+              className={`h-2.5 rounded-full bg-white shadow-sm transition-all duration-300 ${
+                slideIndex === index ? "w-8" : "w-2.5 opacity-70 hover:opacity-100"
+              }`}
+            />
+          ))}
+        </div>
       </Carousel>
     </section>
   );
