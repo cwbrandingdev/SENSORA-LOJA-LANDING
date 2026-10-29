@@ -28,7 +28,11 @@ const formatPrice = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 
-export default function LatestReleaseCard({ produto }: { produto: ReleaseItem }) {
+export default function LatestReleaseCard({
+  produto,
+}: {
+  produto: ReleaseItem;
+}) {
   const { adicionarItem } = useCart();
   const [adicionado, setAdicionado] = useState(false);
   const [imagemQuebrou, setImagemQuebrou] = useState(false);
@@ -70,7 +74,7 @@ export default function LatestReleaseCard({ produto }: { produto: ReleaseItem })
       ) : (
         <ShoppingBag className="h-3.5 w-3.5" strokeWidth={1.75} />
       )}
-      {esgotado ? "Esgotado" : adicionado ? "Adicionado" : "Adicionar à sacola"}
+      {esgotado ? "Em Breve" : adicionado ? "Adicionado" : "Adicionar à sacola"}
     </>
   );
 
@@ -82,7 +86,10 @@ export default function LatestReleaseCard({ produto }: { produto: ReleaseItem })
             {mostrarImagem ? (
               <>
                 <Image
-                  src={imagemKitRedimensionada(produto.imagemUrl as string, 700)}
+                  src={imagemKitRedimensionada(
+                    produto.imagemUrl as string,
+                    700,
+                  )}
                   alt={produto.nome}
                   fill
                   sizes="(max-width: 639px) 85vw, (max-width: 1023px) 50vw, (max-width: 1152px) 25vw, 270px"
