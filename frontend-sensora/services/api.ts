@@ -1,8 +1,9 @@
 // Portado de frontend/services/api.js — mesma instância axios, mesmo
 // interceptor de Authorization. Baseado em NEXT_PUBLIC_API_URL, igual à
 // Loja original e ao lib/api-publica.ts já existente na Landing.
-import axios, { isAxiosError } from "axios";
+import axios, { isAxiosError, type InternalAxiosRequestConfig } from "axios";
 import { getToken, removeToken } from "@/lib/storage";
+import { renovarSessao } from "@/lib/sessao";
 import { loginComRedirect } from "@/lib/auth-redirect";
 import { ROUTES } from "@/lib/routes";
 
@@ -29,14 +30,20 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Marca a chamada que já foi repetida depois de renovar a sessão — um 2º 401
+// nela não tenta renovar de novo (evita repetir para sempre). O axios copia
+// essa propriedade para a config da repetição.
+type ConfigComRenovacao = InternalAxiosRequestConfig & { _sessaoRenovada?: boolean };
+
 // Sessão expirada/token inválido: qualquer 401 nesta instância (fora do
 // próprio fluxo de /auth/*, onde 401 é resposta normal de credenciais
-// erradas, não de sessão expirada) limpa o token e força volta pro login.
+// erradas, não de sessão expirada) primeiro tenta renovar a sessão e
+// repetir a chamada; só se não der, limpa o token e força volta pro login.
 // Só 401 — 403 (RolesGuard, perfil sem permissão) passa direto, cada tela
 // já trata isso com sua própria mensagem de erro.
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     const url = error.config?.url ?? "";
     const isSessaoExpirada =
       isAxiosError(error) &&
@@ -47,6 +54,15 @@ api.interceptors.response.use(
       // só está navegando a loja. Checkout e Minha Conta continuam
       // redirecionando no 401.
       !url.startsWith("/carrinho");
+
+    // O interceptor de request põe o token novo no Authorization ao repetir.
+    const config = error.config as ConfigComRenovacao | undefined;
+    if (isSessaoExpirada && config && !config._sessaoRenovada) {
+      config._sessaoRenovada = true;
+      if (await renovarSessao()) {
+        return api(config);
+      }
+    }
 
     if (
       isSessaoExpirada &&

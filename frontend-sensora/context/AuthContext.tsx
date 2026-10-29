@@ -7,8 +7,9 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { getToken, removeToken, syncAuthCookieFromStorage } from "@/lib/storage";
+import { getRefreshToken, getToken, removeToken, syncAuthCookieFromStorage } from "@/lib/storage";
 import { decodeToken, isTokenExpired } from "@/lib/jwt";
+import { MARGEM_RENOVACAO_MS, renovarSessao, revogarSessaoNoServidor } from "@/lib/sessao";
 import { ROUTES } from "@/lib/routes";
 import type { PerfilUsuario } from "@/lib/types/loja";
 
@@ -60,21 +61,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setEmail(null);
   }
 
-  // Logout explícito (botão "Sair"): limpa a sessão e leva para o login.
+  // Logout explícito (botão "Sair"): invalida o refresh token no backend,
+  // limpa a sessão e leva para o login.
   function logout() {
+    revogarSessaoNoServidor(getRefreshToken());
     encerrarSessao();
     router.push(ROUTES.LOGIN);
   }
 
-  function sincronizarComToken() {
-    const token = getToken();
-
-    // Token presente mas com `exp` vencido (ou não decodificável) (Task 17).
-    if (token && isTokenExpired(token)) {
+  // Disparado pelo timer um pouco antes do token vencer.
+  async function renovarAntesDeVencer() {
+    if (await renovarSessao()) {
+      sincronizarComToken();
+    } else {
       encerrarSessao();
-      return;
+    }
+  }
+
+  async function sincronizarComToken() {
+    // Token presente mas com `exp` vencido (ou não decodificável) (Task 17):
+    // tenta renovar com o refresh token antes de encerrar a sessão.
+    if (getToken() && isTokenExpired(getToken())) {
+      const renovou = await renovarSessao();
+      if (!renovou) {
+        encerrarSessao();
+        return;
+      }
     }
 
+    const token = getToken();
     const payload = decodeToken(token);
 
     setIsAuthenticated(Boolean(token));
@@ -83,19 +98,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setEmail(payload?.email ?? null);
     syncAuthCookieFromStorage();
 
-    // Agenda o logout automático para o instante exato do `exp` — cobre o
+    // Agenda a renovação automática para um pouco antes do `exp` — cobre o
     // caso do usuário parado numa tela sem disparar nenhuma chamada de API
-    // (a lacuna identificada na auditoria da Task 17).
+    // (a lacuna identificada na auditoria da Task 17). Se não der para
+    // renovar, aí sim a sessão é encerrada.
     limparTimerExpiracao();
     if (token && payload?.exp) {
-      const msRestantes = payload.exp * 1000 - Date.now();
-      expiryTimerRef.current = setTimeout(encerrarSessao, msRestantes);
+      const msAteRenovar = payload.exp * 1000 - Date.now() - MARGEM_RENOVACAO_MS;
+      expiryTimerRef.current = setTimeout(renovarAntesDeVencer, Math.max(0, msAteRenovar));
     }
   }
 
   useEffect(() => {
-    sincronizarComToken();
-    setLoading(false);
+    // `loading` só termina depois de uma eventual renovação — senão as
+    // áreas protegidas mandariam para o login antes do token novo chegar.
+    sincronizarComToken().finally(() => setLoading(false));
 
     return () => {
       limparTimerExpiracao();
