@@ -8,7 +8,8 @@ import { listarColecoesPublicas } from "@/lib/api-publica";
 
 export const metadata: Metadata = {
   title: "Coleções",
-  description: "Coleções especiais da Sensora para as datas mais importantes do ano.",
+  description:
+    "Coleções especiais da Sensora para as datas mais importantes do ano.",
   alternates: { canonical: "/colecoes" },
 };
 
@@ -21,7 +22,9 @@ export default async function ColecoesPage() {
     <>
       <section className="mx-auto max-w-3xl px-6 py-8 text-center lg:px-10">
         <RevealOnScroll>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">Sensora</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-orange">
+            Sensora
+          </p>
           <h1 className="mt-4 font-serif text-4xl font-normal tracking-tight text-brand-navy sm:mt-16 sm:text-5xl">
             Coleções
           </h1>
@@ -33,7 +36,10 @@ export default async function ColecoesPage() {
 
       <div className="mx-auto max-w-7xl px-6 pb-24 sm:pb-32 lg:px-10">
         {colecoes.length === 0 ? (
-          <EmptyState title="Novidades a caminho" message="Em breve, novas coleções especiais por aqui." />
+          <EmptyState
+            title="Novidades a caminho"
+            message="Em breve, novas coleções especiais por aqui."
+          />
         ) : (
           <div className="flex flex-wrap justify-center gap-5">
             {colecoes.map((colecao, index) => (
@@ -58,8 +64,14 @@ export default async function ColecoesPage() {
                     className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent"
                   />
                   <div className="absolute inset-x-0 bottom-0 flex flex-col items-start p-6 text-left sm:p-8">
-                    <h2 className="font-serif text-2xl font-normal text-white sm:text-3xl">{colecao.nome}</h2>
-                    {colecao.descricao && <p className="mt-2 text-sm text-white/75">{colecao.descricao}</p>}
+                    <h2 className="font-serif text-2xl font-normal text-white sm:text-3xl">
+                      {colecao.nome}
+                    </h2>
+                    {colecao.descricao && (
+                      <p className="mt-2 text-sm text-white/75">
+                        {colecao.descricao}
+                      </p>
+                    )}
                     <span className="mt-5 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-orange-light">
                       Ver coleção
                       <ArrowRight

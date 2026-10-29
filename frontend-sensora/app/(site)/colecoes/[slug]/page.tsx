@@ -37,7 +37,7 @@ export default async function ColecaoPage({ params }: Props) {
         description: colecao.descricao ?? "",
         items: colecao.produtos.map(produtoParaCartao),
       }}
-      semItens={<EmptyState compact title="Novidades a caminho" message="" />}
+      semItens={<EmptyState compact title="" message="" />}
     />
   );
 }
