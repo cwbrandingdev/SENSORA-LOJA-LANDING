@@ -24,7 +24,9 @@ export default function AddToCartControls({ produto }: AddToCartControlsProps) {
   // Etapa 6.6 — quantidade inicial nunca acima do limite conhecido: com
   // estoque esgotado (0), começa em 0 (controles desabilitados logo abaixo)
   // em vez do 1 anterior, que já seria uma quantidade maior que o estoque.
-  const [quantidade, setQuantidade] = useState(() => (produto.estoqueConhecido === 0 ? 0 : 1));
+  const [quantidade, setQuantidade] = useState(() =>
+    produto.estoqueConhecido === 0 ? 0 : 1,
+  );
   const [acabouDeAdicionar, setAcabouDeAdicionar] = useState(false);
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -47,7 +49,9 @@ export default function AddToCartControls({ produto }: AddToCartControlsProps) {
   const estoqueConhecido = produto.estoqueConhecido;
   const semEstoque = estoqueConhecido === 0;
   const avisoEstoque =
-    typeof estoqueConhecido === "number" ? mensagemEstoque(estoqueConhecido) : null;
+    typeof estoqueConhecido === "number"
+      ? mensagemEstoque(estoqueConhecido)
+      : null;
 
   function diminuir() {
     setQuantidade((atual) => Math.max(1, atual - 1));
@@ -55,7 +59,9 @@ export default function AddToCartControls({ produto }: AddToCartControlsProps) {
 
   function aumentar() {
     setQuantidade((atual) =>
-      typeof estoqueConhecido === "number" ? Math.min(estoqueConhecido, atual + 1) : atual + 1,
+      typeof estoqueConhecido === "number"
+        ? Math.min(estoqueConhecido, atual + 1)
+        : atual + 1,
     );
   }
 
@@ -104,12 +110,18 @@ export default function AddToCartControls({ produto }: AddToCartControlsProps) {
           // items-center (já no BASE_CLASS) mantém o texto centralizado.
           className="h-11 min-w-[220px]"
         >
-          {semEstoque ? "Esgotado" : acabouDeAdicionar ? "Adicionado ✓" : "Adicionar ao carrinho"}
+          {semEstoque
+            ? "Em breve"
+            : acabouDeAdicionar
+              ? "Adicionado ✓"
+              : "Adicionar ao carrinho"}
         </Button>
       </div>
 
       {avisoEstoque && !semEstoque && (
-        <p className="mt-3 text-[13px] font-medium text-brand-orange">{avisoEstoque}</p>
+        <p className="mt-3 text-[13px] font-medium text-brand-orange">
+          {avisoEstoque}
+        </p>
       )}
 
       {jaNoCarrinho > 0 && (

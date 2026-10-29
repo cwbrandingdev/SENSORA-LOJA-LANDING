@@ -1,6 +1,10 @@
 // Portado de frontend/lib/constants.js — sem mudança de comportamento.
 export const TOKEN_KEY = "sensora_token";
 
+// Refresh token (7 dias, renovado a cada uso) — troca o token de 1h por um
+// novo sem pedir login de novo. Ver lib/sessao.ts.
+export const REFRESH_TOKEN_KEY = "sensora_refresh_token";
+
 // Chave do carrinho local (CartContext) — mesmo namespace de TOKEN_KEY.
 export const CART_STORAGE_KEY = "sensora_carrinho";
 

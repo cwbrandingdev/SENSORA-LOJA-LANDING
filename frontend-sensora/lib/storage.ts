@@ -1,5 +1,5 @@
 // Portado de frontend/lib/storage.js — mesma lógica, só tipado.
-import { CHECKOUT_PENDENTE_KEY, TOKEN_KEY } from "./constants";
+import { CHECKOUT_PENDENTE_KEY, REFRESH_TOKEN_KEY, TOKEN_KEY } from "./constants";
 import { decodeToken, isTokenExpired } from "./jwt";
 
 function setAuthCookie(token: string): void {
@@ -44,10 +44,22 @@ export function setToken(token: string): void {
   setAuthCookie(token);
 }
 
+// Remove a sessão inteira: token de acesso e refresh token.
 export function removeToken(): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(TOKEN_KEY);
+  window.localStorage.removeItem(REFRESH_TOKEN_KEY);
   clearAuthCookie();
+}
+
+export function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function setRefreshToken(refreshToken: string): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 }
 
 // Etapa 2 (Minha Conta / limpeza do carrinho) — ver constants.ts

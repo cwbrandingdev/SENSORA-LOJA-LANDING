@@ -22,6 +22,11 @@ export async function atualizarProduto(id: number, data: UpdateProdutoPayload): 
   return response.data;
 }
 
+export async function alterarAtivoDaCategoria(categoriaId: number, ativo: boolean): Promise<number> {
+  const response = await api.patch<{ alterados: number }>(`/produtos/categoria/${categoriaId}/ativo`, { ativo });
+  return response.data.alterados;
+}
+
 export async function removerProduto(id: number): Promise<void> {
   await api.delete(`/produtos/${id}`);
 }

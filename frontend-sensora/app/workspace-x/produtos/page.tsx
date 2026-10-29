@@ -11,6 +11,7 @@ import {
   criarProduto,
   atualizarProduto,
   removerProduto,
+  alterarAtivoDaCategoria,
 } from "@/services/produtos";
 import { listarCategorias } from "@/services/categorias";
 import { revalidarProdutos } from "@/lib/actions";
@@ -111,6 +112,21 @@ export default function ProdutosPage() {
     }
   }
 
+  async function handleAlterarAtivoCategoria(categoria: Categoria, ativo: boolean) {
+    const acao = ativo ? "Ativar" : "Desativar";
+    if (!window.confirm(`${acao} todos os produtos de "${categoria.nome}"?`)) {
+      return;
+    }
+
+    try {
+      const alterados = await alterarAtivoDaCategoria(categoria.id, ativo);
+      toast.success(`${alterados} produto(s) ${ativo ? "ativado(s)" : "desativado(s)"}.`);
+      await Promise.all([carregarProdutos(), revalidarProdutos()]);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Não foi possível alterar os produtos da categoria."));
+    }
+  }
+
   function handleNovoProduto() {
     setEditingProduct(undefined);
     setShowForm(true);
@@ -138,6 +154,7 @@ export default function ProdutosPage() {
         onRetry={carregarProdutos}
         onEdit={handleEdit}
         onRemove={handleRemove}
+        onAlterarAtivoCategoria={handleAlterarAtivoCategoria}
         formulario={
           showForm ? (
             <ProductForm

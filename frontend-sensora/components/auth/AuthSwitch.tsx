@@ -55,7 +55,7 @@ import { z } from "zod";
 import { isAxiosError } from "axios";
 import { Mail, Lock, User, Phone, Eye, EyeOff, X } from "lucide-react";
 import { login, register as registerUser } from "@/services/auth";
-import { setToken } from "@/lib/storage";
+import { setRefreshToken, setToken } from "@/lib/storage";
 import { isDestinoInternoValido } from "@/lib/auth-redirect";
 import { ROUTES } from "@/lib/routes";
 import {
@@ -185,8 +185,9 @@ function SignInForm({ active }: { active: boolean }) {
     setServerError("");
 
     try {
-      const { access_token } = await login(data);
+      const { access_token, refresh_token } = await login(data);
       setToken(access_token);
+      setRefreshToken(refresh_token);
       markAuthenticated();
 
       // Task 7: se veio de um fluxo protegido (ex.: /loja/checkout), volta

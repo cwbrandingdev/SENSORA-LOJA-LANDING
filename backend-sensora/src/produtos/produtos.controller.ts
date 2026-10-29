@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Put,
   UseGuards,
@@ -15,6 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { STAFF_ROLES } from '../common/constants/roles.constants';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { AlterarAtivoCategoriaDto } from './dto/alterar-ativo-categoria.dto';
 import { CreateProdutoDto } from './dto/create-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
 import { Produto } from './entities/produto.entity';
@@ -48,6 +50,15 @@ export class ProdutosController {
     @Body() updateProdutoDto: UpdateProdutoDto,
   ): Promise<Produto> {
     return this.produtosService.update(id, updateProdutoDto);
+  }
+
+  // Ativa ou desativa de uma vez todos os produtos da categoria.
+  @Patch('categoria/:categoriaId/ativo')
+  alterarAtivoDaCategoria(
+    @Param('categoriaId', ParseIntPipe) categoriaId: number,
+    @Body() dto: AlterarAtivoCategoriaDto,
+  ): Promise<{ alterados: number }> {
+    return this.produtosService.alterarAtivoDaCategoria(categoriaId, dto.ativo);
   }
 
   @Delete(':id')
