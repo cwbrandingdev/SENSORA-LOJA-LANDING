@@ -126,6 +126,8 @@ export type Colecao = {
   id: number;
   nome: string;
   slug: string;
+  chamada?: string;
+  titulo?: string;
   descricao?: string;
   imagemUrl?: string;
   ativo: boolean;
@@ -134,6 +136,8 @@ export type Colecao = {
 
 export type ColecaoPayload = {
   nome: string;
+  chamada?: string;
+  titulo?: string;
   descricao?: string;
   imagemUrl?: string;
   ativo?: boolean;

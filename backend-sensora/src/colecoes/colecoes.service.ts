@@ -15,6 +15,8 @@ type ColecaoComProdutoIds = {
   id: number;
   nome: string;
   slug: string;
+  chamada: string | null;
+  titulo: string | null;
   descricao: string | null;
   imagemUrl: string | null;
   ativo: boolean;
@@ -100,6 +102,8 @@ export class ColecoesService {
       id: colecao.id,
       nome: colecao.nome,
       slug: colecao.slug,
+      chamada: colecao.chamada ?? undefined,
+      titulo: colecao.titulo ?? undefined,
       descricao: colecao.descricao ?? undefined,
       imagemUrl: colecao.imagemUrl ?? undefined,
       ativo: colecao.ativo,

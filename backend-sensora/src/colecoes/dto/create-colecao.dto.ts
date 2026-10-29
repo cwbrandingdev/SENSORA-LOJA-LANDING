@@ -16,6 +16,16 @@ export class CreateColecaoDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(60)
+  chamada?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(150)
+  titulo?: string;
+
+  @IsString()
+  @IsOptional()
   @MaxLength(500)
   descricao?: string;
 
