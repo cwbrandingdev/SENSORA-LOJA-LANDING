@@ -95,6 +95,14 @@ import { UsuariosModule } from './usuarios/usuarios.module';
           .min(10)
           .max(1440)
           .default(60),
+        // Pedido PENDENTE (checkout aberto, ainda não pago) dispara um
+        // lembrete por e-mail. Default 1h, igual à sacola. Complementar
+        // ao de carrinho: aquele pula quem já tem Pedido PENDENTE.
+        CHECKOUT_ABANDONO_MINUTOS: Joi.number()
+          .integer()
+          .min(10)
+          .max(1440)
+          .default(60),
         // Etapa 6.5 (Frete) — todas opcionais na validação de boot
         // (diferente de ASAAS_*, que já bloqueiam o startup): MelhorEnvioService
         // valida preguiçosamente (mesmo padrão de AsaasService), lançando só

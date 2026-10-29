@@ -263,6 +263,11 @@ model Pedido {
   // Lembrete por e-mail para avaliar já enviado (um só por pedido; ver
   // AvaliacoesService.enviarLembretes).
   lembreteAvaliacaoEm DateTime?
+  // Lembrete de checkout PENDENTE não pago (um só por pedido; ver
+  // CheckoutService.enviarLembretesCheckout). Distinto de
+  // Carrinho.lembreteEnviadoEm: aquele cobre a sacola parada; este cobre
+  // quem já abriu o pagamento e não concluiu.
+  lembreteCheckoutEm DateTime?
   // Código de rastreio da ida, colado pelo admin ao marcar como enviado
   // (ou atualizado depois). Não vem do Melhor Envio nesta etapa — a compra
   // de etiqueta de ida continua fora do sistema; isto só guarda o código

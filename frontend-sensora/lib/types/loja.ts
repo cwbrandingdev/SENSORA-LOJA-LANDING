@@ -403,6 +403,34 @@ export type CheckoutPendenteLookup = {
   pendente: CheckoutPendente | null;
 };
 
+// GET /admin/checkout/pendentes — sacola parada e Pedido PENDENTE ainda
+// no prazo, para a equipe acompanhar quem não terminou a compra.
+export type TipoAcompanhamentoAdmin = "CARRINHO" | "CHECKOUT";
+
+export type ItemAcompanhamentoAdmin = {
+  produtoId: number;
+  nome: string;
+  quantidade: number;
+  preco: number;
+};
+
+export type CheckoutPendenteAdmin = {
+  id: string;
+  tipo: TipoAcompanhamentoAdmin;
+  clienteNome: string | null;
+  clienteEmail: string | null;
+  clienteTelefone: string | null;
+  usuarioId: number | null;
+  itens: ItemAcompanhamentoAdmin[];
+  total: number;
+  paradoEm: string;
+  minutosParado: number;
+  lembreteEnviadoEm: string | null;
+  pedidoId: number | null;
+  numero: string | null;
+  minutosRestantes: number | null;
+};
+
 // Espelha CheckoutSessionStatus (backend/src/checkout/entities/checkout-session.entity.ts).
 // Etapa 2 (Minha Conta) — usado por /checkout/sucesso para confirmar o
 // status real antes de esvaziar o carrinho (ver services/checkout.ts).

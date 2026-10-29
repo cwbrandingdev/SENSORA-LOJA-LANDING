@@ -38,6 +38,7 @@ import {
   Search,
   BarChart3,
   Building2,
+  Hourglass,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -64,6 +65,7 @@ const baseGroups: SidebarGroup[] = [
     label: "Vendas",
     links: [
       { href: ROUTES.PEDIDOS, label: "Pedidos", icon: ClipboardList },
+      { href: ROUTES.PAGAMENTOS_EM_ABERTO, label: "Para acompanhar", icon: Hourglass },
       { href: ROUTES.CLIENTES, label: "Clientes", icon: Users },
     ],
   },

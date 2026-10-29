@@ -9,6 +9,7 @@ import { MelhorEnvioModule } from '../melhor-envio/melhor-envio.module';
 import { OcorrenciasModule } from '../ocorrencias/ocorrencias.module';
 import { ProdutosModule } from '../produtos/produtos.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
+import { CheckoutAdminController } from './checkout-admin.controller';
 import { CheckoutController } from './checkout.controller';
 import { CheckoutService } from './checkout.service';
 
@@ -31,7 +32,7 @@ import { CheckoutService } from './checkout.service';
     OcorrenciasModule,
     CarrinhoModule,
   ],
-  controllers: [CheckoutController],
+  controllers: [CheckoutController, CheckoutAdminController],
   providers: [CheckoutService],
 })
 export class CheckoutModule {}

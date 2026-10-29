@@ -44,6 +44,7 @@ import { CarrinhoService } from '../carrinho/carrinho.service';
 import { garantirCepNaAreaDeEntrega } from './area-entrega';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { CotarFreteDto } from './dto/cotar-frete.dto';
+import { CheckoutPendenteAdmin } from './entities/checkout-pendente-admin.entity';
 import {
   CheckoutPendenteResponse,
   CheckoutSessionResponse,
@@ -66,6 +67,9 @@ export const EXIGIR_EMAIL_VERIFICADO_NO_CHECKOUT = false;
 export const CHECKOUT_PENDENTE_EXPIRA_MINUTOS_PADRAO = 24 * 60;
 const CHECKOUT_PENDENTE_EXPIRA_MINUTOS_MIN = 10;
 const INTERVALO_EXPIRAR_PENDENTES_MS = 15 * 60 * 1000;
+export const CHECKOUT_ABANDONO_MINUTOS_PADRAO = 60;
+const LOTE_LEMBRETES_CHECKOUT = 50;
+const CAMINHO_CONTA_PEDIDOS = '/conta/pedidos';
 export const MENSAGEM_CHECKOUT_PENDENTE_EXPIRADO =
   'Este pagamento expirou. Faça um novo pedido.';
 
@@ -106,6 +110,8 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
   /** Pedido PENDENTE sem pagamento vira CANCELADO depois disto. */
   private readonly expiraMinutos: number;
   private readonly expiraMs: number;
+  /** Pedido PENDENTE parado há isto dispara um lembrete (um por pedido). */
+  private readonly abandonoMinutos: number;
   private expiracaoTimer?: NodeJS.Timeout;
   // Legado (Task 21) — só instanciado no modo de rollback
   // (CHECKOUT_GATEWAY="stripe"). Preservado exatamente como na integração
@@ -150,6 +156,9 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
       this.configService.get<number>('CHECKOUT_PENDENTE_EXPIRA_MINUTOS') ??
       CHECKOUT_PENDENTE_EXPIRA_MINUTOS_PADRAO;
     this.expiraMs = this.expiraMinutos * 60 * 1000;
+    this.abandonoMinutos =
+      this.configService.get<number>('CHECKOUT_ABANDONO_MINUTOS') ??
+      CHECKOUT_ABANDONO_MINUTOS_PADRAO;
 
     if (this.gateway === 'stripe') {
       const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
@@ -162,10 +171,11 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     void this.expirarPedidosPendentes();
-    this.expiracaoTimer = setInterval(
-      () => void this.expirarPedidosPendentes(),
-      INTERVALO_EXPIRAR_PENDENTES_MS,
-    );
+    void this.enviarLembretesCheckout();
+    this.expiracaoTimer = setInterval(() => {
+      void this.expirarPedidosPendentes();
+      void this.enviarLembretesCheckout();
+    }, INTERVALO_EXPIRAR_PENDENTES_MS);
     this.expiracaoTimer.unref();
   }
 
@@ -584,6 +594,200 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     return resultado.count;
   }
 
+  // Pedido PENDENTE parado há abandonoMinutos, ainda sem lembrete e ainda
+  // dentro do TTL (CHECKOUT_PENDENTE_EXPIRA_MINUTOS). Distinto do e-mail
+  // de sacola: CarrinhoService.enviarLembretes ignora quem já tem Pedido
+  // PENDENTE, então os dois não se sobrepõem na mesma hora. Marca ANTES
+  // do envio (updateMany condicional) para duas máquinas não duplicarem.
+  // Pedido já expirado / prestes a virar CANCELADO não recebe o e-mail.
+  // Nunca lança.
+  async enviarLembretesCheckout(): Promise<void> {
+    try {
+      const agora = Date.now();
+      const limiteAbandono = new Date(
+        agora - this.abandonoMinutos * 60 * 1000,
+      );
+      const limiteExpiracao = new Date(agora - this.expiraMs);
+      const pedidos = await this.prisma.pedido.findMany({
+        where: {
+          status: StatusPedido.PENDENTE,
+          lembreteCheckoutEm: null,
+          clienteEmail: { not: null },
+          data: { lte: limiteAbandono, gt: limiteExpiracao },
+          OR: [
+            { asaasCheckoutId: { not: null } },
+            { stripeSessionId: { not: null } },
+          ],
+        },
+        orderBy: { data: 'asc' },
+        take: LOTE_LEMBRETES_CHECKOUT,
+        select: {
+          id: true,
+          numero: true,
+          data: true,
+          clienteNome: true,
+          clienteEmail: true,
+        },
+      });
+
+      for (const pedido of pedidos) {
+        if (this.pedidoExpirado(pedido.data)) {
+          continue;
+        }
+        const email = pedido.clienteEmail?.trim() ?? '';
+        const { count } = await this.prisma.pedido.updateMany({
+          where: {
+            id: pedido.id,
+            lembreteCheckoutEm: null,
+            status: StatusPedido.PENDENTE,
+          },
+          data: { lembreteCheckoutEm: new Date() },
+        });
+        if (count !== 1) {
+          continue;
+        }
+        if (!email) {
+          continue;
+        }
+        await this.enviarLembreteCheckout(pedido.id, pedido.numero, {
+          nome: pedido.clienteNome?.trim() || 'cliente',
+          email,
+        });
+      }
+    } catch (erro) {
+      this.logger.error(
+        'Falha ao processar os lembretes de checkout pendente.',
+        erro instanceof Error ? erro.stack : String(erro),
+      );
+    }
+  }
+
+  // Sacola parada + checkout PENDENTE no mesmo painel. Quem já tem Pedido
+  // PENDENTE não entra pela sacola (CarrinhoService já exclui). CANCELADO
+  // / expirado fica de fora — o expire job já trata esses.
+  async listarPendentesAdmin(): Promise<CheckoutPendenteAdmin[]> {
+    const [checkouts, carrinhos] = await Promise.all([
+      this.listarCheckoutsPendentesAdmin(),
+      this.carrinhoService?.listarAbandonadosAdmin?.() ??
+        Promise.resolve([]),
+    ]);
+    const usuariosCheckout = new Set(
+      checkouts
+        .map((item) => item.usuarioId)
+        .filter((id): id is number => id != null),
+    );
+    const sacolas = carrinhos
+      .filter((carrinho) => !usuariosCheckout.has(carrinho.usuarioId))
+      .map(
+        (carrinho): CheckoutPendenteAdmin => ({
+          id: `carrinho-${carrinho.usuarioId}`,
+          tipo: 'CARRINHO',
+          clienteNome: carrinho.clienteNome,
+          clienteEmail: carrinho.clienteEmail,
+          clienteTelefone: carrinho.clienteTelefone,
+          usuarioId: carrinho.usuarioId,
+          itens: carrinho.itens,
+          total: carrinho.total,
+          paradoEm: carrinho.paradoEm,
+          minutosParado: this.minutosParado(carrinho.paradoEm),
+          lembreteEnviadoEm: carrinho.lembreteEnviadoEm,
+          pedidoId: null,
+          numero: null,
+          minutosRestantes: null,
+        }),
+      );
+    return [...checkouts, ...sacolas].sort(
+      (a, b) => a.paradoEm.getTime() - b.paradoEm.getTime(),
+    );
+  }
+
+  private async listarCheckoutsPendentesAdmin(): Promise<
+    CheckoutPendenteAdmin[]
+  > {
+    const agora = Date.now();
+    const limiteExpiracao = new Date(agora - this.expiraMs);
+    const pedidos = await this.prisma.pedido.findMany({
+      where: {
+        status: StatusPedido.PENDENTE,
+        data: { gt: limiteExpiracao },
+        OR: [
+          { asaasCheckoutId: { not: null } },
+          { stripeSessionId: { not: null } },
+        ],
+      },
+      orderBy: { data: 'asc' },
+      take: 200,
+      select: {
+        id: true,
+        numero: true,
+        total: true,
+        data: true,
+        clienteNome: true,
+        clienteEmail: true,
+        usuarioId: true,
+        lembreteCheckoutEm: true,
+        usuario: { select: { telefone: true } },
+        itens: {
+          select: {
+            produtoId: true,
+            quantidade: true,
+            precoUnitario: true,
+            produto: { select: { nome: true } },
+          },
+          orderBy: { id: 'asc' },
+        },
+      },
+    });
+
+    return pedidos
+      .filter((pedido) => !this.pedidoExpirado(pedido.data))
+      .map((pedido) => ({
+        id: `checkout-${pedido.id}`,
+        tipo: 'CHECKOUT' as const,
+        clienteNome: pedido.clienteNome ?? null,
+        clienteEmail: pedido.clienteEmail ?? null,
+        clienteTelefone: pedido.usuario?.telefone ?? null,
+        usuarioId: pedido.usuarioId ?? null,
+        itens: pedido.itens.map((item) => ({
+          produtoId: item.produtoId,
+          nome: item.produto.nome,
+          quantidade: item.quantidade,
+          preco: Number(item.precoUnitario),
+        })),
+        total: Number(pedido.total),
+        paradoEm: pedido.data,
+        minutosParado: this.minutosParado(pedido.data),
+        lembreteEnviadoEm: pedido.lembreteCheckoutEm ?? null,
+        pedidoId: pedido.id,
+        numero: pedido.numero,
+        minutosRestantes: this.minutosRestantes(pedido.data),
+      }));
+  }
+
+  private async enviarLembreteCheckout(
+    pedidoId: number,
+    numero: string,
+    destinatario: { nome: string; email: string },
+  ): Promise<void> {
+    const link = `${this.frontendUrl.replace(/\/$/, '')}${CAMINHO_CONTA_PEDIDOS}/${pedidoId}`;
+    const primeiroNome = escaparHtml(
+      destinatario.nome.trim().split(/\s+/)[0] || 'cliente',
+    );
+    const lojaNome =
+      this.configService.get<string>('LOJA_NOME')?.trim() || 'Sensora';
+
+    await this.mailService.enviarEmail({
+      to: destinatario.email,
+      subject: `Você deixou um pagamento em aberto — ${lojaNome}`,
+      html:
+        `<p>Olá, ${primeiroNome}.</p>` +
+        `<p>Você iniciou o pagamento do pedido <strong>${escaparHtml(numero)}</strong> e ainda não concluiu.</p>` +
+        '<p>O pagamento continua disponível por algumas horas. Depois disso o pedido é cancelado.</p>' +
+        `<p><a href="${escaparHtml(link)}">Retomar o pagamento</a></p>` +
+        `<p>${escaparHtml(lojaNome)}</p>`,
+    });
+  }
+
   private pedidoExpirado(criadoEm: Date): boolean {
     return Date.now() - criadoEm.getTime() >= this.expiraMs;
   }
@@ -592,6 +796,10 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     return Math.floor(
       (criadoEm.getTime() + this.expiraMs - Date.now()) / 60_000,
     );
+  }
+
+  private minutosParado(desde: Date): number {
+    return Math.max(0, Math.round((Date.now() - desde.getTime()) / 60_000));
   }
 
   private minutesToExpireRecriacao(criadoEm: Date): number {

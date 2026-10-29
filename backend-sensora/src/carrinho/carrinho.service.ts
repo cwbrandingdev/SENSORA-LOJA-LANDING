@@ -10,6 +10,7 @@ import { MailService } from '../mail/mail.service';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalvarCarrinhoDto } from './dto/salvar-carrinho.dto';
+import { CarrinhoAbandonadoAdmin } from './entities/carrinho-abandonado-admin.entity';
 import { Carrinho, ItemCarrinho } from './entities/carrinho.entity';
 
 export const CARRINHO_ABANDONO_MINUTOS_PADRAO = 60;
@@ -185,6 +186,79 @@ export class CarrinhoService implements OnModuleInit, OnModuleDestroy {
         erro instanceof Error ? erro.stack : String(erro),
       );
     }
+  }
+
+  // Sacolas no prazo do lembrete (ou já lembradas), sem Pedido PENDENTE —
+  // quem está no checkout aparece na lista de pagamento, não aqui.
+  async listarAbandonadosAdmin(): Promise<CarrinhoAbandonadoAdmin[]> {
+    const limite = new Date(
+      Date.now() - this.abandonoMinutos * 60 * 1000,
+    );
+    const carrinhos = await this.prisma.carrinho.findMany({
+      where: {
+        itens: { some: { produto: { ativo: true } } },
+        OR: [
+          { lembreteEnviadoEm: { not: null } },
+          { atualizadoEm: { lte: limite } },
+        ],
+      },
+      orderBy: { atualizadoEm: 'asc' },
+      take: 200,
+      include: {
+        usuario: { select: { nome: true, email: true, telefone: true } },
+        itens: {
+          include: {
+            produto: {
+              select: { id: true, nome: true, preco: true, ativo: true },
+            },
+          },
+          orderBy: { id: 'asc' },
+        },
+      },
+    });
+    const usuarioIds = carrinhos.map((carrinho) => carrinho.usuarioId);
+    const pendentes =
+      usuarioIds.length === 0
+        ? []
+        : await this.prisma.pedido.findMany({
+            where: {
+              usuarioId: { in: usuarioIds },
+              status: StatusPedido.PENDENTE,
+            },
+            select: { usuarioId: true },
+          });
+    const comCheckout = new Set(
+      pendentes
+        .map((pedido) => pedido.usuarioId)
+        .filter((id): id is number => id != null),
+    );
+
+    return carrinhos
+      .filter((carrinho) => !comCheckout.has(carrinho.usuarioId))
+      .map((carrinho) => {
+        const itens = carrinho.itens
+          .filter((item) => item.produto.ativo)
+          .map((item) => ({
+            produtoId: item.produtoId,
+            nome: item.produto.nome,
+            quantidade: item.quantidade,
+            preco: Number(item.produto.preco),
+          }));
+        return {
+          usuarioId: carrinho.usuarioId,
+          clienteNome: carrinho.usuario.nome,
+          clienteEmail: carrinho.usuario.email,
+          clienteTelefone: carrinho.usuario.telefone,
+          itens,
+          total: itens.reduce(
+            (soma, item) => soma + item.preco * item.quantidade,
+            0,
+          ),
+          paradoEm: carrinho.atualizadoEm,
+          lembreteEnviadoEm: carrinho.lembreteEnviadoEm,
+        };
+      })
+      .filter((carrinho) => carrinho.itens.length > 0);
   }
 
   // Sacolas com itens parados há abandonoMinutos, ainda sem lembrete. Marca

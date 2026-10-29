@@ -13,6 +13,7 @@ import api from "./api";
 import { setCheckoutPendente } from "@/lib/storage";
 import type {
   CheckoutPendente,
+  CheckoutPendenteAdmin,
   CheckoutPendenteLookup,
   CheckoutSessionResponse,
   CheckoutSessionStatus,
@@ -84,6 +85,12 @@ export async function retomarCheckoutPendente(
 
 // Mesmo redirecionamento de POST /checkout/session: valida a URL, grava o
 // sessionId para /checkout/sucesso e sai para a página hospedada do Asaas.
+// GET /admin/checkout/pendentes — sacola parada + checkout PENDENTE.
+export async function listarCheckoutsPendentesAdmin(): Promise<CheckoutPendenteAdmin[]> {
+  const response = await api.get<CheckoutPendenteAdmin[]>("/admin/checkout/pendentes");
+  return response.data;
+}
+
 export function redirecionarParaPagamento(sessao: CheckoutSessionResponse): boolean {
   if (!isUrlDeCheckoutSegura(sessao.url)) return false;
   setCheckoutPendente(sessao.sessionId);

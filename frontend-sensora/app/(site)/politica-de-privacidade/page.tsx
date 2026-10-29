@@ -108,10 +108,15 @@ export default function PoliticaDePrivacidadePage() {
             de contrato. Não é mala direta de novidade.
           </li>
           <li>
+            Enviar um lembrete se você iniciar o pagamento e não concluir:
+            execução de contrato. Não é mala direta de novidade.
+          </li>
+          <li>
             Mensagens transacionais (confirmação de conta, senha, pedido,
-            devolução, carrinho não finalizado). Mala direta ou e-mail de
-            novidade, se um dia existirem, só com um aceite separado.
-            Comprar ou criar conta não inscreve você em lista promocional.
+            devolução, carrinho não finalizado, pagamento em aberto). Mala
+            direta ou e-mail de novidade, se um dia existirem, só com um
+            aceite separado. Comprar ou criar conta não inscreve você em
+            lista promocional.
           </li>
         </ul>
       </Secao>
@@ -134,8 +139,8 @@ export default function PoliticaDePrivacidadePage() {
           </li>
           <li>
             Provedor de e-mail (Resend ou SMTP configurado), para confirmação
-            de conta, recuperação de senha e avisos de pedido, devolução e
-            carrinho não finalizado.
+            de conta, recuperação de senha e avisos de pedido, devolução,
+            carrinho não finalizado e pagamento em aberto.
           </li>
           <li>
             Hospedagem do site e, se você aceitar analytics, a ferramenta

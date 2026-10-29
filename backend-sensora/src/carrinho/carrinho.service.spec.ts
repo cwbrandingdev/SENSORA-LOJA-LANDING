@@ -33,7 +33,7 @@ describe('CarrinhoService', () => {
       createMany: jest.Mock;
     };
     produto: { findMany: jest.Mock };
-    pedido: { findFirst: jest.Mock };
+    pedido: { findFirst: jest.Mock; findMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let enviarEmail: jest.Mock;
@@ -55,7 +55,10 @@ describe('CarrinhoService', () => {
       produto: {
         findMany: jest.fn().mockResolvedValue([{ id: 10 }]),
       },
-      pedido: { findFirst: jest.fn().mockResolvedValue(null) },
+      pedido: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       $transaction: jest.fn(async (ops: Promise<unknown>[]) =>
         Promise.all(ops),
       ),
@@ -325,6 +328,86 @@ describe('CarrinhoService', () => {
     it('falha na busca não lança', async () => {
       prisma.carrinho.findMany.mockRejectedValueOnce(new Error('banco fora'));
       await expect(service.enviarLembretes()).resolves.toBeUndefined();
+    });
+  });
+
+  describe('listarAbandonadosAdmin', () => {
+    const paradoEm = new Date(Date.now() - 90 * 60 * 1000);
+    const carrinhoAdmin = {
+      id: 1,
+      usuarioId: 7,
+      atualizadoEm: paradoEm,
+      lembreteEnviadoEm: new Date('2026-10-28T15:00:00.000Z'),
+      usuario: {
+        nome: 'Ana Souza',
+        email: 'ana@sensora.dev',
+        telefone: '41999998888',
+      },
+      itens: [
+        {
+          produtoId: 10,
+          quantidade: 2,
+          produto: {
+            id: 10,
+            nome: 'Vela Lavanda',
+            preco: 59.9,
+            ativo: true,
+          },
+        },
+      ],
+    };
+
+    it('devolve sacola parada com itens, e-mail e telefone', async () => {
+      prisma.carrinho.findMany.mockResolvedValueOnce([carrinhoAdmin]);
+
+      const lista = await service.listarAbandonadosAdmin();
+
+      expect(lista).toHaveLength(1);
+      expect(lista[0]).toMatchObject({
+        usuarioId: 7,
+        clienteNome: 'Ana Souza',
+        clienteEmail: 'ana@sensora.dev',
+        clienteTelefone: '41999998888',
+        total: 119.8,
+        lembreteEnviadoEm: carrinhoAdmin.lembreteEnviadoEm,
+      });
+      expect(lista[0].itens).toEqual([
+        {
+          produtoId: 10,
+          nome: 'Vela Lavanda',
+          quantidade: 2,
+          preco: 59.9,
+        },
+      ]);
+    });
+
+    it('Pedido PENDENTE: a sacola não entra (já aparece no checkout)', async () => {
+      prisma.carrinho.findMany.mockResolvedValueOnce([carrinhoAdmin]);
+      prisma.pedido.findMany.mockResolvedValueOnce([{ usuarioId: 7 }]);
+
+      await expect(service.listarAbandonadosAdmin()).resolves.toEqual([]);
+    });
+
+    it('só produtos inativos: fica de fora', async () => {
+      prisma.carrinho.findMany.mockResolvedValueOnce([
+        {
+          ...carrinhoAdmin,
+          itens: [
+            {
+              produtoId: 99,
+              quantidade: 1,
+              produto: {
+                id: 99,
+                nome: 'Fora de linha',
+                preco: 10,
+                ativo: false,
+              },
+            },
+          ],
+        },
+      ]);
+
+      await expect(service.listarAbandonadosAdmin()).resolves.toEqual([]);
     });
   });
 });
