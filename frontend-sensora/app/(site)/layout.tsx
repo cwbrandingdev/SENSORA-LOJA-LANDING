@@ -17,6 +17,7 @@ import {
   COOKIE_CONSENT_VERSION,
 } from "@/lib/cookieConsent";
 import JsonLd from "@/components/seo/JsonLd";
+import { listarColecoesPublicas } from "@/lib/api-publica";
 import { EMPRESA } from "@/lib/empresa";
 import { OPEN_GRAPH_PADRAO, SITE_URL, urlAbsoluta } from "@/lib/seo";
 
@@ -87,11 +88,14 @@ const organizacaoJsonLd = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Coleções festivas ligadas no Admin viram itens do menu.
+  const colecoes = await listarColecoesPublicas();
+
   return (
     <html
       lang="pt-BR"
@@ -119,7 +123,7 @@ export default function RootLayout({
                   redirect com um /login sem o parâmetro, perdendo o destino
                   de retorno. */}
               <AuthProvider>
-                <Navbar />
+                <Navbar colecoes={colecoes} />
               </AuthProvider>
               <SiteMain>{children}</SiteMain>
               <SiteFooter />

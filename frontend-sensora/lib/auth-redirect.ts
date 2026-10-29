@@ -9,11 +9,19 @@
 // efeito colateral.
 import { isTokenExpired } from "@/lib/jwt";
 import { getToken } from "@/lib/storage";
+import { renovarSessao } from "@/lib/sessao";
 import { ROUTES } from "@/lib/routes";
 
 export function possuiSessaoValida(): boolean {
   const token = getToken();
   return Boolean(token) && !isTokenExpired(token);
+}
+
+// Como possuiSessaoValida, mas com o token de 1h vencido tenta renovar
+// pelo refresh token antes de dizer que não há sessão — quem volta dias
+// depois direto no checkout não é mandado para o login à toa.
+export async function garantirSessaoValida(): Promise<boolean> {
+  return possuiSessaoValida() || renovarSessao();
 }
 
 // Só aceita caminhos internos começando com "/" — nunca uma URL absoluta

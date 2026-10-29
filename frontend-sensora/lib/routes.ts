@@ -25,6 +25,7 @@ export const ROUTES = {
   DASHBOARD: ADMIN_ROUTE,
   PRODUTOS: `${ADMIN_ROUTE}/produtos`,
   CATEGORIAS: `${ADMIN_ROUTE}/categorias`,
+  COLECOES: `${ADMIN_ROUTE}/colecoes`,
   CLIENTES: `${ADMIN_ROUTE}/clientes`,
   PEDIDOS: `${ADMIN_ROUTE}/pedidos`,
   // Sacola parada + checkouts PENDENTE — equipe fala com o cliente.

@@ -188,6 +188,20 @@ model Produto {
   itensCarrinho  ItemCarrinho[]
   categoria      Categoria?     @relation(fields: [categoriaId], references: [id])
   avaliacoes     Avaliacao[]
+  colecoes       Colecao[]
+}
+
+// Coleção de data festiva (Natal, Páscoa...): criada uma vez no Admin e
+// ligada/desligada a cada ano. Só aparece na loja enquanto `ativo`. Um
+// produto pode estar em várias coleções sem sair da categoria dele.
+model Colecao {
+  id        Int       @id @default(autoincrement())
+  nome      String
+  slug      String    @unique
+  descricao String?
+  imagemUrl String?
+  ativo     Boolean   @default(false)
+  produtos  Produto[]
 }
 
 model Pedido {

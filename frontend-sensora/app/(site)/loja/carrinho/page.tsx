@@ -15,7 +15,7 @@ import CartItemRow from "@/components/loja/CartItemRow";
 import CheckoutPendenteCard from "@/components/loja/CheckoutPendenteCard";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
-import { loginComRedirect, possuiSessaoValida } from "@/lib/auth-redirect";
+import { garantirSessaoValida, loginComRedirect } from "@/lib/auth-redirect";
 import { getErrorMessage } from "@/lib/errors";
 import { ROUTES } from "@/lib/routes";
 import {
@@ -39,12 +39,9 @@ export default function CarrinhoPage() {
   const [pagandoPendente, setPagandoPendente] = useState(false);
 
   useEffect(() => {
-    if (!possuiSessaoValida()) {
-      setPendente(null);
-      return;
-    }
     let ativo = true;
-    buscarCheckoutPendente().then((resultado) => {
+    garantirSessaoValida().then(async (valida) => {
+      const resultado = valida ? await buscarCheckoutPendente() : null;
       if (ativo) setPendente(resultado);
     });
     return () => {
@@ -66,8 +63,8 @@ export default function CarrinhoPage() {
   // aviso e escolhe entrar (o retorno pós-login é /loja/carrinho, não
   // direto para /loja/checkout — precisa clicar em "Ir para o checkout"
   // de novo depois de logar) ou ficar na loja. O carrinho não é alterado.
-  function handleIrParaCheckout() {
-    if (possuiSessaoValida()) {
+  async function handleIrParaCheckout() {
+    if (await garantirSessaoValida()) {
       router.push(ROUTES.LOJA_CHECKOUT);
       return;
     }

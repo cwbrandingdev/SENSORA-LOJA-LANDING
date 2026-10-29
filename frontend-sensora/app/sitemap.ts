@@ -19,7 +19,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/loja",
     "/loja/produtos",
     ...CATEGORIES.map((category) => getCategoryHref(category.slug)),
-    "/colecoes",
+    "/kits",
     ...COLLECTIONS.map(
       (collection) => `${getCategoryHref(collection.categorySlug)}/${collection.slug}`,
     ),

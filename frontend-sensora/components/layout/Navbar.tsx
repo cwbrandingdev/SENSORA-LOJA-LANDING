@@ -18,7 +18,7 @@ const ROTULOS_CURTOS: Record<string, string> = {
   "/velas": "Velas",
   "/sprays": "Sprays",
   "/difusores": "Difusores",
-  "/colecoes": "Kits",
+  "/kits": "Kits",
 };
 
 const CATEGORY_LINKS = [
@@ -28,8 +28,8 @@ const CATEGORY_LINKS = [
   })),
 ];
 
-const DESKTOP_LINKS = [
-  ...CATEGORY_LINKS,
+// Depois das categorias (e das coleções ativas, ver CategoryNav).
+const LINKS_FINAIS = [
   { label: "Ver tudo", href: ROUTES.LOJA_PRODUTOS },
   { label: "Corporativo", href: ROUTES.PARA_EMPRESAS },
 ];
@@ -69,11 +69,22 @@ function IconLink({
   );
 }
 
-function CategoryNav({ isActive }: { isActive: (href: string) => boolean }) {
+type NavLink = { label: string; href: string };
+
+function CategoryNav({
+  isActive,
+  linksColecoes,
+}: {
+  isActive: (href: string) => boolean;
+  linksColecoes: NavLink[];
+}) {
+  // Coleções ativas (Natal, Páscoa...) entram depois das categorias.
+  const links = [...CATEGORY_LINKS, ...linksColecoes, ...LINKS_FINAIS];
+
   return (
     <nav aria-label="Categorias de produtos">
       <ul className="flex items-center gap-3">
-        {DESKTOP_LINKS.map((item) => {
+        {links.map((item) => {
           return (
             <li key={item.label}>
               <Link
@@ -151,7 +162,12 @@ function UtilityCluster({
   );
 }
 
-export default function Navbar() {
+// `colecoes`: coleções de datas festivas ligadas no Admin (vêm do layout).
+export default function Navbar({ colecoes = [] }: { colecoes?: { nome: string; slug: string }[] }) {
+  const linksColecoes: NavLink[] = colecoes.map((colecao) => ({
+    label: colecao.nome,
+    href: `/colecoes/${colecao.slug}`,
+  }));
   const [menuOpen, setMenuOpen] = useState(false);
   const { totalItens, abrirSacola } = useCart();
   const onAbrirSacola = abrirSacolaNoClique(abrirSacola);
@@ -264,7 +280,7 @@ export default function Navbar() {
               className="h-[calc(100dvh-3.5rem)] overflow-y-auto bg-background px-6 py-8"
             >
               <ul className="flex flex-col">
-                {CATEGORY_LINKS.map((item) => (
+                {[...CATEGORY_LINKS, ...linksColecoes].map((item) => (
                   <li key={item.label}>
                     <Link
                       href={item.href}
@@ -366,7 +382,7 @@ export default function Navbar() {
             </Link>
 
             <div className="mt-1 flex items-center justify-center gap-4">
-              <CategoryNav isActive={isActive} />
+              <CategoryNav isActive={isActive} linksColecoes={linksColecoes} />
               <UtilityCluster
                 cartLabel={cartLabel}
                 totalItens={totalItens}

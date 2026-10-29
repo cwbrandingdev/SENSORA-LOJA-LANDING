@@ -25,7 +25,7 @@ const GRUPOS = [
   { id: "velas", prefixo: "vela", label: getCategory("velas")?.label ?? "Velas", href: getCategoryHref("velas") },
   { id: "sprays", prefixo: "spray", label: getCategory("sprays")?.label ?? "Sprays", href: getCategoryHref("sprays") },
   { id: "difusores", prefixo: "difus", label: getCategory("difusores")?.label ?? "Difusores", href: getCategoryHref("difusores") },
-  { id: "kits", prefixo: "kit", label: "Kits", href: "/colecoes" },
+  { id: "kits", prefixo: "kit", label: "Kits", href: "/kits" },
 ];
 
 // Cards editoriais que completam a fileira enquanto o produto ainda não

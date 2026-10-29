@@ -1,5 +1,5 @@
 // Home da vitrine da Loja — mesmo padrão editorial das páginas de categoria
-// ([category]/page.tsx, colecoes/page.tsx): hero compacto de texto (eyebrow +
+// ([category]/page.tsx, kits/page.tsx): hero compacto de texto (eyebrow +
 // H1 + descrição), sem hero full-bleed próprio. Reaproveita RevealOnScroll,
 // ImageReveal, TextReveal, PlaceholderImage, ProductGrid, Button — nenhuma
 // imagem nova, nenhuma dependência nova.

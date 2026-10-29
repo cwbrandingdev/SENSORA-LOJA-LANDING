@@ -121,6 +121,25 @@ export type Categoria = {
   descricao?: string | null;
 };
 
+// Coleção de data festiva (Natal, Páscoa...) — só aparece na loja quando ativa.
+export type Colecao = {
+  id: number;
+  nome: string;
+  slug: string;
+  descricao?: string;
+  imagemUrl?: string;
+  ativo: boolean;
+  produtoIds: number[];
+};
+
+export type ColecaoPayload = {
+  nome: string;
+  descricao?: string;
+  imagemUrl?: string;
+  ativo?: boolean;
+  produtoIds?: number[];
+};
+
 export type CreateCategoriaPayload = {
   nome: string;
   descricao?: string;
