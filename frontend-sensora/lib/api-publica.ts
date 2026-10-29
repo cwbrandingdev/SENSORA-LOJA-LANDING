@@ -48,6 +48,8 @@ export type ColecaoPublica = {
   id: number;
   nome: string;
   slug: string;
+  chamada?: string;
+  titulo?: string;
   descricao?: string;
   imagemUrl?: string;
 };

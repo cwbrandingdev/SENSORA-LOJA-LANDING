@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!colecao) return {};
 
   return {
-    title: colecao.nome,
+    title: colecao.titulo || colecao.nome,
     description: colecao.descricao || `Coleção ${colecao.nome} da Sensora.`,
     alternates: { canonical: `/colecoes/${colecao.slug}` },
   };
@@ -32,7 +32,9 @@ export default async function ColecaoPage({ params }: Props) {
       principal
       collection={{
         slug: colecao.slug,
-        name: colecao.nome,
+        // Vazios no Admin: título = nome do menu, texto acima = "Produtos".
+        name: colecao.titulo || colecao.nome,
+        eyebrow: colecao.chamada || undefined,
         description: colecao.descricao ?? "",
         items: colecao.produtos.map(produtoParaCartao),
       }}

@@ -114,6 +114,8 @@ export class PublicService {
       id: colecao.id,
       nome: colecao.nome,
       slug: colecao.slug,
+      chamada: colecao.chamada ?? undefined,
+      titulo: colecao.titulo ?? undefined,
       descricao: colecao.descricao ?? undefined,
       imagemUrl: colecao.imagemUrl ?? undefined,
     };

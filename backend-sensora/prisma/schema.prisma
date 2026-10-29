@@ -197,8 +197,13 @@ model Produto {
 // produto pode estar em várias coleções sem sair da categoria dele.
 model Colecao {
   id        Int       @id @default(autoincrement())
+  // Nome curto: item do menu da loja e lista do Admin.
   nome      String
   slug      String    @unique
+  // Página da coleção: texto pequeno acima do título (vazio = "Produtos")
+  // e título grande (vazio = `nome`).
+  chamada   String?
+  titulo    String?
   descricao String?
   imagemUrl String?
   ativo     Boolean   @default(false)
