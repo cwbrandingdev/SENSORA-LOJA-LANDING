@@ -74,9 +74,11 @@ type NavLink = { label: string; href: string };
 function CategoryNav({
   isActive,
   linksColecoes,
+  azul,
 }: {
   isActive: (href: string) => boolean;
   linksColecoes: NavLink[];
+  azul: boolean;
 }) {
   // Coleções ativas (Natal, Páscoa...) entram depois das categorias.
   const links = [...CATEGORY_LINKS, ...linksColecoes, ...LINKS_FINAIS];
@@ -90,8 +92,8 @@ function CategoryNav({
               <Link
                 href={item.href}
                 className={cn(
-                  "flex w-24 flex-col items-center gap-1 rounded-2xl py-1.5 transition-colors",
-                  "text-brand-navy hover:bg-stone-100",
+                  "flex w-24 flex-col items-center gap-1 rounded-2xl py-1.5 transition-colors duration-500",
+                  azul ? "text-white hover:bg-white/10" : "text-brand-navy hover:bg-stone-100",
                   isActive(item.href) && "text-brand-orange",
                 )}
               >
@@ -200,6 +202,19 @@ export default function Navbar({ colecoes = [] }: { colecoes?: { nome: string; s
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
+
+  // Teste: na home, menu azul enquanto o banner está na tela; branco
+  // depois que a pessoa rola até a seção seguinte.
+  const [passouDoBanner, setPassouDoBanner] = useState(false);
+  useEffect(() => {
+    function aoRolar() {
+      setPassouDoBanner(window.scrollY > window.innerHeight * 0.6);
+    }
+    aoRolar();
+    window.addEventListener("scroll", aoRolar, { passive: true });
+    return () => window.removeEventListener("scroll", aoRolar);
+  }, []);
+  const menuAzul = pathname === "/" && !passouDoBanner;
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -366,7 +381,12 @@ export default function Navbar({ colecoes = [] }: { colecoes?: { nome: string; s
           )}
         </div>
 
-        <div className="pointer-events-auto hidden border-b border-stone-200/80 bg-white lg:block">
+        <div
+          className={cn(
+            "pointer-events-auto hidden border-b transition-colors duration-500 lg:block",
+            menuAzul ? "border-white/10 bg-brand-navy" : "border-stone-200/80 bg-white",
+          )}
+        >
           <div className="mx-auto flex h-[calc(var(--navbar-height)-1px)] max-w-384 flex-col items-center justify-center px-8">
             <Link
               href="/"
@@ -374,7 +394,7 @@ export default function Navbar({ colecoes = [] }: { colecoes?: { nome: string; s
               className="flex shrink-0 items-center"
             >
               <Logo
-                variant="dark"
+                variant={menuAzul ? "light" : "dark"}
                 showTagline={false}
                 className="h-9"
                 imageClassName="h-9 w-auto"
@@ -382,7 +402,7 @@ export default function Navbar({ colecoes = [] }: { colecoes?: { nome: string; s
             </Link>
 
             <div className="mt-1 flex items-center justify-center gap-4">
-              <CategoryNav isActive={isActive} linksColecoes={linksColecoes} />
+              <CategoryNav isActive={isActive} linksColecoes={linksColecoes} azul={menuAzul} />
               <UtilityCluster
                 cartLabel={cartLabel}
                 totalItens={totalItens}
