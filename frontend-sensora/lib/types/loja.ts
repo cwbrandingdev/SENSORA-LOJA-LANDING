@@ -238,6 +238,8 @@ export type Pedido = {
   freteTransportadora?: string | null;
   freteServico?: string | null;
   fretePrazoDias?: number | null;
+  cupomCodigo?: string | null;
+  desconto?: number | null;
   // Etapa 6.6 (Status de Envio) — `statusEnvio` sempre presente (default
   // NAO_ENVIADO no backend, ver schema.prisma); `enviadoEm` só é preenchido
   // depois de POST /pedidos/:id/marcar-enviado (services/pedidos.ts). Ao
@@ -307,6 +309,7 @@ export type CriarSessaoCheckoutPayload = {
   cpf: string;
   enderecoId: number;
   freteServicoId: number;
+  codigoCupom?: string;
 };
 
 // Etapa 6.5 (Frete) — payload de POST /checkout/frete/cotacao. Espelha
@@ -1124,4 +1127,59 @@ export type AvaliacaoAdmin = {
   status: StatusAvaliacao;
   criadaEm: string;
   atualizadaEm: string;
+};
+
+export type TipoDescontoCupom = "PERCENTUAL" | "FIXO";
+export type PublicoCupom = "TODOS" | "NOVOS_CLIENTES" | "USUARIOS";
+
+export type CupomCliente = {
+  id: number;
+  nome: string;
+  email: string;
+};
+
+export type Cupom = {
+  id: number;
+  codigo: string;
+  mensagem: string;
+  tipoDesconto: TipoDescontoCupom;
+  valor: number;
+  publico: PublicoCupom;
+  ativo: boolean;
+  mostrarNoTopo: boolean;
+  valorMinimo: number | null;
+  limiteUsos: number | null;
+  usos: number;
+  inicioEm: string | null;
+  fimEm: string | null;
+  usuarios: CupomCliente[];
+};
+
+export type SalvarCupomPayload = {
+  codigo: string;
+  mensagem: string;
+  tipoDesconto: TipoDescontoCupom;
+  valor: number;
+  publico: PublicoCupom;
+  usuarioIds: number[];
+  ativo: boolean;
+  mostrarNoTopo: boolean;
+  valorMinimo: number | null;
+  limiteUsos: number | null;
+  inicioEm: string | null;
+  fimEm: string | null;
+};
+
+export type FaixaCupom = {
+  codigo: string;
+  mensagem: string;
+  tipoDesconto: TipoDescontoCupom;
+  valor: number;
+};
+
+export type CupomAplicado = {
+  cupomId: number;
+  codigo: string;
+  desconto: number;
+  mensagem: string;
 };

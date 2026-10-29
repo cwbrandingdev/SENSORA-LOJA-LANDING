@@ -42,6 +42,7 @@ import {
   isUrlDeCheckoutSegura,
 } from "@/services/checkout";
 import { cotarFrete } from "@/services/frete";
+import { buscarFaixaCupom, simularCupom } from "@/services/cupons";
 import { resendVerification } from "@/services/auth";
 import type {
   CheckoutSessionResponse,
@@ -111,6 +112,14 @@ export default function CheckoutPage() {
   // ficar clicável.
   const [criandoSessao, setCriandoSessao] = useState(false);
   const [aceiteTermos, setAceiteTermos] = useState(false);
+  const [codigoCupom, setCodigoCupom] = useState("");
+  const [cupomAplicado, setCupomAplicado] = useState<{
+    codigo: string;
+    desconto: number;
+  } | null>(null);
+  const [aplicandoCupom, setAplicandoCupom] = useState(false);
+  const [erroCupom, setErroCupom] = useState<string | null>(null);
+  const [sugestaoCupom, setSugestaoCupom] = useState<string | null>(null);
 
   // Etapa 6.4 (Confirmação de e-mail) — backend responde 403 (não 401: a
   // sessão continua válida, é o estado da conta que bloqueia) quando o
@@ -128,6 +137,56 @@ export default function CheckoutPage() {
       router.replace(loginComRedirect(ROUTES.LOJA_CHECKOUT));
     }
   }, [router]);
+
+  useEffect(() => {
+    buscarFaixaCupom()
+      .then((faixa) => setSugestaoCupom(faixa?.codigo ?? null))
+      .catch(() => setSugestaoCupom(null));
+  }, []);
+
+  const codigoAplicado = cupomAplicado?.codigo;
+  useEffect(() => {
+    if (!codigoAplicado) return;
+    let vivo = true;
+    simularCupom(codigoAplicado, subtotal)
+      .then((aplicado) => {
+        if (!vivo) return;
+        setCupomAplicado({
+          codigo: aplicado.codigo,
+          desconto: aplicado.desconto,
+        });
+      })
+      .catch((err) => {
+        if (!vivo) return;
+        setCupomAplicado(null);
+        setErroCupom(
+          getErrorMessage(err, "O cupom não vale mais para este pedido."),
+        );
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [codigoAplicado, subtotal]);
+
+  async function aplicarCupom(codigo: string) {
+    const limpo = codigo.trim();
+    if (!limpo) return;
+    setAplicandoCupom(true);
+    setErroCupom(null);
+    try {
+      const aplicado = await simularCupom(limpo, subtotal);
+      setCodigoCupom(aplicado.codigo);
+      setCupomAplicado({
+        codigo: aplicado.codigo,
+        desconto: aplicado.desconto,
+      });
+    } catch (err) {
+      setCupomAplicado(null);
+      setErroCupom(getErrorMessage(err, "Não foi possível aplicar o cupom."));
+    } finally {
+      setAplicandoCupom(false);
+    }
+  }
 
   const carregarEnderecos = useCallback(async () => {
     setCarregando(true);
@@ -354,6 +413,7 @@ export default function CheckoutPage() {
         cpf,
         enderecoId: enderecoSelecionadoId,
         freteServicoId: freteSelecionadoId,
+        ...(cupomAplicado ? { codigoCupom: cupomAplicado.codigo } : {}),
       });
     } catch (err) {
       setCriandoSessao(false);
@@ -552,7 +612,7 @@ export default function CheckoutPage() {
         <section className="relative pb-24 sm:pb-32 lg:pb-0">
           {/* Começa logo abaixo do menu fixo: antes ficava atrás dele e o
               topo das fotos (ex.: o gatilho do spray) sumia. */}
-          <div className="fixed right-0 bottom-0 top-[var(--navbar-height)] z-0 hidden w-[min(480px,42vw)] lg:block xl:w-[min(520px,38vw)]">
+          <div className="fixed right-0 bottom-0 top-[calc(var(--navbar-height)+var(--faixa-cupom))] z-0 hidden w-[min(480px,42vw)] lg:block xl:w-[min(520px,38vw)]">
             <CheckoutItemsShowcase itens={itens} className="h-full" />
           </div>
 
@@ -741,40 +801,104 @@ export default function CheckoutPage() {
                     </p>
                   </div>
 
-                  {/* Etapa 6.5 (Frete) — Total = subtotal + frete (só quando
-                    uma opção já foi escolhida; até lá, mostra um placeholder
-                    em vez de um valor incompleto/enganoso). Cupom/desconto
-                    continuam fora do escopo. */}
+                  {/* Total = subtotal dos produtos − cupom + frete. O valor
+                    cobrado é recalculado no backend ao criar a sessão. */}
                   {(() => {
                     const opcaoFreteEscolhida = freteOpcoes.find(
                       (opcao) => opcao.id === freteSelecionadoId,
                     );
-                    const total = subtotal + (opcaoFreteEscolhida?.preco ?? 0);
+                    const desconto = cupomAplicado?.desconto ?? 0;
+                    const total =
+                      subtotal - desconto + (opcaoFreteEscolhida?.preco ?? 0);
                     return (
-                      <dl className="mt-4 space-y-3 border-t border-slate-200 pt-4 text-sm">
-                        <div className="flex items-center justify-between">
-                          <dt className="text-slate-500">Subtotal</dt>
-                          <dd className="font-medium tabular-nums text-brand-navy">
-                            {formatPrice.format(subtotal)}
-                          </dd>
+                      <>
+                        <div className="mt-5">
+                          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                            Cupom
+                          </p>
+                          <div className="mt-2 flex gap-2">
+                            <input
+                              value={codigoCupom}
+                              onChange={(event) =>
+                                setCodigoCupom(event.target.value.toUpperCase())
+                              }
+                              disabled={cupomAplicado !== null || aplicandoCupom}
+                              placeholder="Código"
+                              aria-label="Código do cupom"
+                              className="h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm uppercase tracking-wide text-brand-navy placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-navy/40 disabled:bg-slate-50"
+                            />
+                            {cupomAplicado ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCupomAplicado(null);
+                                  setCodigoCupom("");
+                                  setErroCupom(null);
+                                }}
+                                className="shrink-0 rounded-lg border border-slate-300 px-3 text-sm text-slate-600 hover:bg-slate-50"
+                              >
+                                Remover
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => aplicarCupom(codigoCupom)}
+                                disabled={aplicandoCupom || codigoCupom.trim() === ""}
+                                className="shrink-0 rounded-lg bg-brand-navy px-4 text-sm text-white hover:bg-brand-navy-light disabled:opacity-50"
+                              >
+                                {aplicandoCupom ? "Aplicando…" : "Aplicar"}
+                              </button>
+                            )}
+                          </div>
+                          {sugestaoCupom &&
+                            cupomAplicado?.codigo !== sugestaoCupom && (
+                              <button
+                                type="button"
+                                onClick={() => aplicarCupom(sugestaoCupom)}
+                                className="mt-2 text-sm text-brand-navy underline underline-offset-4"
+                              >
+                                Usar {sugestaoCupom}
+                              </button>
+                            )}
+                          {erroCupom && (
+                            <p className="mt-2 text-sm text-red-600">{erroCupom}</p>
+                          )}
                         </div>
-                        <div className="flex items-center justify-between">
-                          <dt className="text-slate-500">Frete</dt>
-                          <dd className="font-medium tabular-nums text-brand-navy">
-                            {opcaoFreteEscolhida
-                              ? formatPrice.format(opcaoFreteEscolhida.preco)
-                              : "A calcular"}
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-base">
-                          <dt className="font-semibold text-brand-navy">
-                            Total
-                          </dt>
-                          <dd className="text-lg font-semibold tabular-nums text-brand-navy">
-                            {formatPrice.format(total)}
-                          </dd>
-                        </div>
-                      </dl>
+                        <dl className="mt-4 space-y-3 border-t border-slate-200 pt-4 text-sm">
+                          <div className="flex items-center justify-between">
+                            <dt className="text-slate-500">Subtotal</dt>
+                            <dd className="font-medium tabular-nums text-brand-navy">
+                              {formatPrice.format(subtotal)}
+                            </dd>
+                          </div>
+                          {desconto > 0 && (
+                            <div className="flex items-center justify-between">
+                              <dt className="text-slate-500">
+                                Cupom {cupomAplicado?.codigo}
+                              </dt>
+                              <dd className="font-medium tabular-nums text-emerald-700">
+                                −{formatPrice.format(desconto)}
+                              </dd>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between">
+                            <dt className="text-slate-500">Frete</dt>
+                            <dd className="font-medium tabular-nums text-brand-navy">
+                              {opcaoFreteEscolhida
+                                ? formatPrice.format(opcaoFreteEscolhida.preco)
+                                : "A calcular"}
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-base">
+                            <dt className="font-semibold text-brand-navy">
+                              Total
+                            </dt>
+                            <dd className="text-lg font-semibold tabular-nums text-brand-navy">
+                              {formatPrice.format(total)}
+                            </dd>
+                          </div>
+                        </dl>
+                      </>
                     );
                   })()}
 

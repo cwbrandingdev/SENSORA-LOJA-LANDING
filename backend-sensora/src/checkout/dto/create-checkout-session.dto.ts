@@ -3,13 +3,14 @@ import {
   IsEmail,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsPositive,
   IsString,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class CheckoutItemDto {
   @IsInt()
@@ -58,4 +59,14 @@ export class CreateCheckoutSessionDto {
   @IsInt()
   @IsPositive()
   freteServicoId: number;
+
+  // Opcional. O desconto é recalculado no backend (CuponsService.aplicar);
+  // este campo é só o código, nunca um valor em reais.
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  )
+  @IsString()
+  @MaxLength(20)
+  codigoCupom?: string;
 }

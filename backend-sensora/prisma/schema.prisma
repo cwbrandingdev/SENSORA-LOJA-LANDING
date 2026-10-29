@@ -84,6 +84,7 @@ model Usuario {
   // Solicitações de suporte abertas pelo próprio usuário (cliente).
   solicitacoesSuporte     SolicitacaoSuporte[]
   avaliacoes              Avaliacao[]
+  cupons                  CupomUsuario[]
 }
 
 // Task 8 (Carrinho/Checkout) — endereços de entrega do próprio usuário
@@ -304,6 +305,14 @@ model Pedido {
 
   avaliacoes Avaliacao[]
 
+  // Cupom aplicado nesta compra. O desconto é um valor em reais (nunca
+  // recalculado depois): o total do pedido é itens + frete − desconto.
+  // `cupomCodigo` fica gravado mesmo se o cupom for excluído depois.
+  cupomId     Int?
+  cupomCodigo String?
+  desconto    Decimal  @default(0) @db.Decimal(10, 2)
+  cupom       Cupom?   @relation(fields: [cupomId], references: [id], onDelete: SetNull)
+
   // Vistoria do Dashboard operacional (Admin) — DashboardService agora
   // agrega Pedido por status (contagem/soma de total) e ordena/filtra por
   // data para as métricas do painel, além do uso já existente de `status`
@@ -314,6 +323,51 @@ model Pedido {
   // existente, só acelera o plano de execução do Postgres.
   @@index([status])
   @@index([data])
+  @@index([cupomId])
+}
+
+// Desconto criado no Admin. `publico` decide quem pode usar e quem vê a
+// faixa acima do menu: todo mundo, só quem ainda não comprou, ou uma lista
+// de clientes. O preço cobrado nunca vem da faixa — o checkout recalcula.
+model Cupom {
+  id            Int               @id @default(autoincrement())
+  codigo        String            @unique
+  mensagem      String
+  tipoDesconto  TipoDescontoCupom
+  valor         Decimal           @db.Decimal(10, 2)
+  publico       PublicoCupom
+  ativo         Boolean           @default(true)
+  mostrarNoTopo Boolean           @default(true)
+  valorMinimo   Decimal?          @db.Decimal(10, 2)
+  limiteUsos    Int?
+  inicioEm      DateTime?
+  fimEm         DateTime?
+  criadoEm      DateTime          @default(now())
+  atualizadoEm  DateTime          @updatedAt
+  usuarios      CupomUsuario[]
+  pedidos       Pedido[]
+
+  @@index([ativo, mostrarNoTopo])
+}
+
+model CupomUsuario {
+  cupomId   Int
+  usuarioId Int
+  cupom     Cupom   @relation(fields: [cupomId], references: [id], onDelete: Cascade)
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([cupomId, usuarioId])
+}
+
+enum TipoDescontoCupom {
+  PERCENTUAL
+  FIXO
+}
+
+enum PublicoCupom {
+  TODOS
+  NOVOS_CLIENTES
+  USUARIOS
 }
 
 model ItemPedido {

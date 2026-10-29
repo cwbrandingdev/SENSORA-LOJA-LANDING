@@ -38,6 +38,10 @@ export class Pedido {
   freteTransportadora?: string;
   freteServico?: string;
   fretePrazoDias?: number;
+  // Cupom aplicado no checkout. `desconto` é o valor em reais já calculado
+  // (não a porcentagem). Ausente em pedidos sem cupom.
+  cupomCodigo?: string;
+  desconto?: number;
 
   // Etapa 6.6 (Status de Envio) — eixo logístico, independente de `status`
   // (financeiro/Asaas). `statusEnvio` sempre presente (default NAO_ENVIADO

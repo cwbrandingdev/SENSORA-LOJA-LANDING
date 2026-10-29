@@ -28,3 +28,7 @@ export async function revalidarCategorias(): Promise<void> {
   // for revalidada.
   updateTag("produtos");
 }
+
+export async function revalidarCupons(): Promise<void> {
+  updateTag("cupons");
+}

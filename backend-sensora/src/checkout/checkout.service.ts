@@ -30,6 +30,8 @@ import {
 } from '../ocorrencias/ocorrencias.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
+import { CuponsService } from '../cupons/cupons.service';
+import { ratearDesconto } from '../cupons/cupom-desconto';
 import { EnderecosService } from '../enderecos/enderecos.service';
 import { Endereco } from '../enderecos/entities/endereco.entity';
 import { UsuariosService } from '../usuarios/usuarios.service';
@@ -156,6 +158,7 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     private readonly mailService: MailService,
     private readonly ocorrenciasService: OcorrenciasService,
     @Optional() private readonly carrinhoService?: CarrinhoService,
+    @Optional() private readonly cuponsService?: CuponsService,
   ) {
     this.gateway =
       (this.configService.get<string>('CHECKOUT_GATEWAY') as
@@ -322,12 +325,41 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
       subtotal,
       quantidadeTotal,
     );
-    itensSelecionados.push({
+
+    let desconto = 0;
+    let cupomId: number | undefined;
+    let cupomCodigo: string | undefined;
+    const codigoCupom = dto.codigoCupom?.trim();
+    if (codigoCupom) {
+      if (!this.cuponsService) {
+        throw new BadRequestException('Não foi possível aplicar o cupom.');
+      }
+      const aplicado = await this.cuponsService.aplicar(
+        codigoCupom,
+        usuarioId,
+        subtotal,
+      );
+      desconto = aplicado.desconto;
+      cupomId = aplicado.cupomId;
+      cupomCodigo = aplicado.codigo;
+    }
+
+    // Sem cupom, as linhas seguem com o preço de catálogo (o mesmo caminho
+    // de antes). Com cupom, só o payload do gateway é rateado — ItemPedido
+    // continua com o preço cheio, e Pedido.desconto guarda a diferença.
+    const itensGateway =
+      desconto > 0
+        ? ratearDesconto(itensSelecionados, desconto)
+        : [...itensSelecionados];
+    itensGateway.push({
       nome: `Frete - ${opcaoFrete.transportadora} ${opcaoFrete.servico}`,
       preco: opcaoFrete.preco,
       quantidade: 1,
     });
-    const total = subtotal + opcaoFrete.preco;
+    const total =
+      desconto > 0
+        ? Math.round((subtotal - desconto + opcaoFrete.preco) * 100) / 100
+        : subtotal + opcaoFrete.preco;
 
     const numero = `PED-${Date.now()}`;
     const pedido = await this.prisma.pedido.create({
@@ -359,6 +391,9 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
         freteServico: opcaoFrete.servico,
         fretePrazoDias: opcaoFrete.prazoDias,
         freteServicoId: opcaoFrete.id,
+        ...(cupomId !== undefined
+          ? { cupomId, cupomCodigo, desconto }
+          : {}),
         itens: {
           create: itensPedido,
         },
@@ -366,8 +401,8 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     });
 
     return this.gateway === 'stripe'
-      ? this.criarSessaoStripe(dto, pedido, itensSelecionados)
-      : this.criarSessaoAsaas(pedido, itensSelecionados, total);
+      ? this.criarSessaoStripe(dto, pedido, itensGateway)
+      : this.criarSessaoAsaas(pedido, itensGateway, total);
   }
 
   // Etapa 6.5 (Frete), Parte 3 — POST /checkout/frete/cotacao. Mesmo
@@ -965,10 +1000,18 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
   private async recriarSessaoAsaas(
     pedido: NonNullable<Awaited<ReturnType<CheckoutService['encontrarPedidoPendente']>>>,
   ): Promise<CheckoutSessionResponse> {
-    const itens = pedido.itens.map((item) => ({
+    const produtos = pedido.itens.map((item) => ({
       name: item.produto.nome,
+      preco: Number(item.precoUnitario),
+      quantidade: item.quantidade,
+    }));
+    const desconto = Number(pedido.desconto ?? 0);
+    const comDesconto =
+      desconto > 0 ? ratearDesconto(produtos, desconto) : produtos;
+    const itens = comDesconto.map((item) => ({
+      name: item.name,
       quantity: item.quantidade,
-      value: Number(item.precoUnitario),
+      value: item.preco,
     }));
     if (pedido.freteValor != null && Number(pedido.freteValor) > 0) {
       const transportadora = pedido.freteTransportadora ?? '';

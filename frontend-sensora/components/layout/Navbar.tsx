@@ -202,7 +202,7 @@ export default function Navbar() {
     <>
       <header
         className={cn(
-          "pointer-events-none fixed inset-x-0 top-0 z-50 font-rounded",
+          "pointer-events-none fixed inset-x-0 top-[var(--faixa-cupom)] z-50 font-rounded",
           // Menu mobile aberto precisa ficar acima do CookieConsentBanner
           // (também z-50, renderizado depois no DOM — empataria e o banner
           // venceria). max-lg: mantém o desktop em z-50, sem qualquer mudança,
@@ -261,7 +261,7 @@ export default function Navbar() {
           {menuOpen && (
             <nav
               aria-label="Menu"
-              className="h-[calc(100dvh-3.5rem)] overflow-y-auto bg-background px-6 py-8"
+              className="h-[calc(100dvh-var(--navbar-height)-var(--faixa-cupom))] overflow-y-auto bg-background px-6 py-8"
             >
               <ul className="flex flex-col">
                 {CATEGORY_LINKS.map((item) => (
