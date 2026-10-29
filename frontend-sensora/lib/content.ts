@@ -1,4 +1,5 @@
 import { LOJA_URL } from "@/lib/config";
+import { banner_natal } from "./banner_natal";
 
 export type CategorySlug = "velas" | "sprays" | "difusores";
 
@@ -22,6 +23,12 @@ export type HeroSlide = {
   imageSrcMobile?: string;
   /** Usar quando a arte do slide já traz título/subtítulo desenhados nela. */
   hideOverlayHeading?: boolean;
+  /** A arte já traz o botão desenhado: sem degradê nem o nosso botão, e o
+   *  banner inteiro vira o link para `ctaHref` (título/texto continuam). */
+  arteCompleta?: boolean;
+  /** Classes extras da imagem abaixo de `lg`, para adaptar no celular uma
+   *  arte larga enquanto não existe `imageSrcMobile` (ex.: mostrar inteira). */
+  ajusteMobile?: string;
 };
 
 export type ProductCategory = {
@@ -455,6 +462,19 @@ export const PRODUCT_CATEGORIES: ProductCategory[] = [
 // ---------------------------------------------------------------------------
 
 export const HERO_SLIDES: HeroSlide[] = [
+  {
+    id: "banner-natal",
+    title: "",
+    subtitle: banner_natal.description,
+    ctaLabel: "Compre agora",
+    ctaHref: "/colecoes/colecao-natal",
+    arteCompleta: true,
+    imageAlt: "Banner natal sensora",
+    imageSrc: "/images/hero/banner_natal.webp",
+    // Provisório até a arte de celular: mostra a arte inteira, com faixas
+    // da cor das bordas dela em cima e embaixo.
+    ajusteMobile: "max-lg:object-contain max-lg:bg-[#8c382b]",
+  },
   {
     id: "velas-4-estacoes",
     title: "Kit 4 Estações",

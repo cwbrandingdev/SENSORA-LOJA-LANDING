@@ -118,15 +118,26 @@ export default function HeroCarousel() {
                       alt={slide.imageAlt}
                       label={slide.title}
                       priority={slideIndex === 0}
-                      className="h-full w-full object-cover"
+                      className={`h-full w-full object-cover ${slide.ajusteMobile ?? ""}`}
                       sizes={slideIndex === 0 ? "100vw" : undefined}
                     />
                   )}
                 </div>
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/75 via-black/25 to-transparent"
-                />
+                {/* Arte com botão desenhado: o banner inteiro é o link, sem
+                    degradê e sem o nosso botão (o texto continua por cima). */}
+                {slide.arteCompleta && (
+                  <Link
+                    href={slide.ctaHref}
+                    aria-label={`${slide.title} — ${slide.ctaLabel}`}
+                    className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/80"
+                  />
+                )}
+                {!slide.arteCompleta && (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/75 via-black/25 to-transparent"
+                  />
+                )}
                 <div
                   className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center text-center text-white ${
                     slide.id === "velas-4-estacoes"
@@ -160,21 +171,25 @@ export default function HeroCarousel() {
                       {slide.subtitle}
                     </p>
                   )}
-                  <Link
-                    href={slide.ctaHref}
-                    aria-label={`${slide.title} — ${slide.ctaLabel}`}
-                    className={`group/cta pointer-events-auto inline-flex items-center gap-3 border border-white/70 px-9 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-white transition-[color,background-color,border-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-brand-orange hover:bg-brand-orange focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy motion-reduce:transition-colors ${
-                      slide.id === "velas-4-estacoes" ? "mt-5 sm:mt-8" : "mt-8"
-                    }`}
-                  >
-                    {slide.ctaLabel}
-                    <span
-                      aria-hidden
-                      className="transition-transform duration-300 group-hover/cta:translate-x-1"
+                  {!slide.arteCompleta && (
+                    <Link
+                      href={slide.ctaHref}
+                      aria-label={`${slide.title} — ${slide.ctaLabel}`}
+                      className={`group/cta pointer-events-auto inline-flex items-center gap-3 border border-white/70 px-9 py-3.5 text-xs font-semibold uppercase tracking-[0.25em] text-white transition-[color,background-color,border-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-brand-orange hover:bg-brand-orange focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy motion-reduce:transition-colors ${
+                        slide.id === "velas-4-estacoes"
+                          ? "mt-5 sm:mt-8"
+                          : "mt-8"
+                      }`}
                     >
-                      →
-                    </span>
-                  </Link>
+                      {slide.ctaLabel}
+                      <span
+                        aria-hidden
+                        className="transition-transform duration-300 group-hover/cta:translate-x-1"
+                      >
+                        →
+                      </span>
+                    </Link>
+                  )}
                 </div>
               </div>
             </CarouselItem>
