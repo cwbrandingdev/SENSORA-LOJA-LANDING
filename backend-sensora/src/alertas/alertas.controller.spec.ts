@@ -6,6 +6,8 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { AlertasController } from './alertas.controller';
 import { AlertasService } from './alertas.service';
 
+const ADMIN = { id: 7, email: 'admin@sensora.dev', perfil: 'ADMIN' as const };
+
 // Vistoria de Alertas Operacionais (Admin) — mesmo raciocínio de
 // dashboard.controller.spec.ts/asaas.controller.spec.ts: prova que o
 // endpoint é um thin wrapper (nunca reimplementa a agregação, só chama o
@@ -29,8 +31,8 @@ describe('AlertasController — GET /alertas', () => {
       alertasService as unknown as AlertasService,
     );
 
-    await expect(controller.obterAlertas()).resolves.toEqual(alertasFake);
-    expect(alertasService.obterAlertas).toHaveBeenCalledTimes(1);
+    await expect(controller.obterAlertas(ADMIN)).resolves.toEqual(alertasFake);
+    expect(alertasService.obterAlertas).toHaveBeenCalledWith(ADMIN.id);
   });
 
   it('lista vazia (sem alertas) é devolvida tal como veio do service', async () => {
@@ -39,7 +41,23 @@ describe('AlertasController — GET /alertas', () => {
       alertasService as unknown as AlertasService,
     );
 
-    await expect(controller.obterAlertas()).resolves.toEqual([]);
+    await expect(controller.obterAlertas(ADMIN)).resolves.toEqual([]);
+  });
+
+  it('DELETE /alertas/:tipo delega excluirAlerta com o id do token', async () => {
+    const alertasService = {
+      excluirAlerta: jest.fn().mockResolvedValue(undefined),
+    };
+    const controller = new AlertasController(
+      alertasService as unknown as AlertasService,
+    );
+
+    await controller.excluirAlerta(ADMIN, { tipo: 'ESTOQUE_BAIXO' });
+
+    expect(alertasService.excluirAlerta).toHaveBeenCalledWith(
+      ADMIN.id,
+      'ESTOQUE_BAIXO',
+    );
   });
 
   it('rota protegida por JwtAuthGuard + RolesGuard, restrita a ADMIN_ONLY_ROLES', () => {

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { TipoAlertaAdmin } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LIMIAR_ESTOQUE_BAIXO } from '../dashboard/constants/dashboard.constants';
 import { MelhorEnvioService } from '../melhor-envio/melhor-envio.service';
@@ -16,7 +17,7 @@ import {
   LINK_SUPORTE,
   LINK_AVALIACOES,
 } from './constants/alertas.constants';
-import { Alerta } from './entities/alerta.entity';
+import { Alerta, AlertaTipo } from './entities/alerta.entity';
 
 @Injectable()
 export class AlertasService {
@@ -36,7 +37,61 @@ export class AlertasService {
   // separada desta). Um alerta só entra na resposta quando há algo a tratar
   // (quantidade >= 1) — lista vazia é o estado normal e esperado ("sem
   // alertas no momento"), nunca um erro.
-  async obterAlertas(): Promise<Alerta[]> {
+  async obterAlertas(usuarioId: number): Promise<Alerta[]> {
+    const alertas = await this.montarAlertas();
+    return this.filtrarExcluidos(usuarioId, alertas);
+  }
+
+  // Dispensa um alerta para este admin até a causa operacional sumir (quando
+  // o tipo deixa de aparecer na agregação, o registro é apagado sozinho).
+  async excluirAlerta(usuarioId: number, tipo: AlertaTipo): Promise<void> {
+    await this.prisma.estadoAlertaAdmin.upsert({
+      where: {
+        usuarioId_tipo: {
+          usuarioId,
+          tipo: tipo as TipoAlertaAdmin,
+        },
+      },
+      create: {
+        usuarioId,
+        tipo: tipo as TipoAlertaAdmin,
+      },
+      update: {
+        excluidoEm: new Date(),
+      },
+    });
+  }
+
+  private async filtrarExcluidos(
+    usuarioId: number,
+    alertas: Alerta[],
+  ): Promise<Alerta[]> {
+    const tiposAtivos = alertas.map((alerta) => alerta.tipo as TipoAlertaAdmin);
+
+    if (tiposAtivos.length === 0) {
+      await this.prisma.estadoAlertaAdmin.deleteMany({ where: { usuarioId } });
+      return [];
+    }
+
+    await this.prisma.estadoAlertaAdmin.deleteMany({
+      where: {
+        usuarioId,
+        tipo: { notIn: tiposAtivos },
+      },
+    });
+
+    const excluidos = await this.prisma.estadoAlertaAdmin.findMany({
+      where: { usuarioId, tipo: { in: tiposAtivos } },
+      select: { tipo: true },
+    });
+    const ocultar = new Set(excluidos.map((estado) => estado.tipo));
+
+    return alertas.filter(
+      (alerta) => !ocultar.has(alerta.tipo as TipoAlertaAdmin),
+    );
+  }
+
+  private async montarAlertas(): Promise<Alerta[]> {
     const { dataAte, limiteEnvio } = this.calcularLimiteEnvio();
     const [
       produtosSemEstoque,

@@ -19,6 +19,11 @@ function criarPrismaMock(overrides: {
   pedidoCount?: jest.Mock;
   devolucaoCount?: jest.Mock;
   suporteCount?: jest.Mock;
+  estadoAlertaAdmin?: {
+    findMany?: jest.Mock;
+    deleteMany?: jest.Mock;
+    upsert?: jest.Mock;
+  };
 }) {
   return {
     // Por padrão nenhuma avaliação pendente.
@@ -33,6 +38,16 @@ function criarPrismaMock(overrides: {
     devolucao: {
       count: overrides.devolucaoCount ?? jest.fn().mockResolvedValue(0),
     },
+    estadoAlertaAdmin: {
+      findMany:
+        overrides.estadoAlertaAdmin?.findMany ?? jest.fn().mockResolvedValue([]),
+      deleteMany:
+        overrides.estadoAlertaAdmin?.deleteMany ??
+        jest.fn().mockResolvedValue({ count: 0 }),
+      upsert:
+        overrides.estadoAlertaAdmin?.upsert ??
+        jest.fn().mockResolvedValue(undefined),
+    },
   };
 }
 
@@ -42,6 +57,11 @@ async function criarService(opts: {
   estaConectado: jest.Mock;
   devolucaoCount?: jest.Mock;
   suporteCount?: jest.Mock;
+  estadoAlertaAdmin?: {
+    findMany?: jest.Mock;
+    deleteMany?: jest.Mock;
+    upsert?: jest.Mock;
+  };
 }): Promise<AlertasService> {
   const module: TestingModule = await Test.createTestingModule({
     providers: [
@@ -53,6 +73,7 @@ async function criarService(opts: {
           pedidoCount: opts.pedidoCount,
           devolucaoCount: opts.devolucaoCount,
           suporteCount: opts.suporteCount,
+          estadoAlertaAdmin: opts.estadoAlertaAdmin,
         }),
       },
       {
@@ -76,7 +97,7 @@ describe('AlertasService — obterAlertas', () => {
       estaConectado: jest.fn().mockResolvedValue(true),
     });
 
-    await expect(service.obterAlertas()).resolves.toEqual([]);
+    await expect(service.obterAlertas(1)).resolves.toEqual([]);
   });
 
   describe('ESTOQUE_BAIXO', () => {
@@ -91,7 +112,7 @@ describe('AlertasService — obterAlertas', () => {
         estaConectado: jest.fn().mockResolvedValue(true),
       });
 
-      const alertas = await service.obterAlertas();
+      const alertas = await service.obterAlertas(1);
 
       expect(alertas).toEqual([
         {
@@ -122,7 +143,7 @@ describe('AlertasService — obterAlertas', () => {
         estaConectado: jest.fn().mockResolvedValue(true),
       });
 
-      const alertas = await service.obterAlertas();
+      const alertas = await service.obterAlertas(1);
 
       expect(alertas).toHaveLength(1);
       expect(alertas[0]).toMatchObject({
@@ -139,7 +160,7 @@ describe('AlertasService — obterAlertas', () => {
         estaConectado: jest.fn().mockResolvedValue(true),
       });
 
-      const alertas = await service.obterAlertas();
+      const alertas = await service.obterAlertas(1);
 
       expect(alertas.find((a) => a.tipo === 'ESTOQUE_BAIXO')).toBeUndefined();
     });
@@ -157,7 +178,7 @@ describe('AlertasService — obterAlertas', () => {
         estaConectado: jest.fn().mockResolvedValue(true),
       });
 
-      const alertas = await service.obterAlertas();
+      const alertas = await service.obterAlertas(1);
 
       expect(alertas).toEqual([
         {
@@ -201,7 +222,7 @@ describe('AlertasService — obterAlertas', () => {
           estaConectado: jest.fn().mockResolvedValue(true),
         });
 
-        const alertas = await service.obterAlertas();
+        const alertas = await service.obterAlertas(1);
 
         expect(alertas).toEqual([
           {
@@ -239,7 +260,7 @@ describe('AlertasService — obterAlertas', () => {
         estaConectado: jest.fn().mockResolvedValue(true),
       });
 
-      const alertas = await service.obterAlertas();
+      const alertas = await service.obterAlertas(1);
 
       expect(alertas[0]).toEqual({
         tipo: 'PEDIDO_NOVO',
@@ -274,7 +295,7 @@ describe('AlertasService — obterAlertas', () => {
         estaConectado,
       });
 
-      const alertas = await service.obterAlertas();
+      const alertas = await service.obterAlertas(1);
 
       expect(alertas).toEqual([
         {
@@ -295,7 +316,7 @@ describe('AlertasService — obterAlertas', () => {
         estaConectado: jest.fn().mockResolvedValue(true),
       });
 
-      const alertas = await service.obterAlertas();
+      const alertas = await service.obterAlertas(1);
 
       expect(
         alertas.find((a) => a.tipo === 'MELHOR_ENVIO_DESCONECTADO'),
@@ -316,7 +337,7 @@ describe('AlertasService — obterAlertas', () => {
       estaConectado: jest.fn().mockResolvedValue(false),
     });
 
-    const alertas = await service.obterAlertas();
+    const alertas = await service.obterAlertas(1);
 
     expect(alertas).toHaveLength(4);
     expect(alertas.map((a) => a.tipo).sort()).toEqual(
@@ -340,7 +361,7 @@ describe('AlertasService — obterAlertas', () => {
         devolucaoCount,
       });
 
-      await expect(service.obterAlertas()).resolves.toEqual([
+      await expect(service.obterAlertas(1)).resolves.toEqual([
         {
           tipo: 'DEVOLUCAO_SOLICITADA',
           severidade: 'warning',
@@ -362,7 +383,7 @@ describe('AlertasService — obterAlertas', () => {
         devolucaoCount: jest.fn().mockResolvedValue(0),
       });
 
-      const alertas = await service.obterAlertas();
+      const alertas = await service.obterAlertas(1);
 
       expect(alertas.map((a) => a.tipo)).not.toContain('DEVOLUCAO_SOLICITADA');
     });
@@ -378,7 +399,7 @@ describe('AlertasService — obterAlertas', () => {
         suporteCount,
       });
 
-      await expect(service.obterAlertas()).resolves.toEqual([
+      await expect(service.obterAlertas(1)).resolves.toEqual([
         {
           tipo: 'SUPORTE_ABERTO',
           severidade: 'info',
@@ -390,6 +411,46 @@ describe('AlertasService — obterAlertas', () => {
       expect(suporteCount).toHaveBeenCalledWith({
         where: { status: 'ABERTA' },
       });
+    });
+  });
+
+  describe('exclusão por admin', () => {
+    it('obterAlertas oculta tipos marcados como excluídos para o usuário', async () => {
+      const findMany = jest
+        .fn()
+        .mockResolvedValue([{ tipo: 'ESTOQUE_BAIXO' }]);
+      const service = await criarService({
+        produtoCount: jest
+          .fn()
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(2),
+        pedidoCount: jest.fn().mockResolvedValue(0),
+        estaConectado: jest.fn().mockResolvedValue(true),
+        estadoAlertaAdmin: { findMany },
+      });
+
+      const alertas = await service.obterAlertas(7);
+
+      expect(alertas).toEqual([]);
+      expect(findMany).toHaveBeenCalled();
+    });
+
+    it('excluirAlerta grava o estado por usuarioId + tipo', async () => {
+      const upsert = jest.fn().mockResolvedValue(undefined);
+      const service = await criarService({
+        produtoCount: jest.fn().mockResolvedValue(0),
+        pedidoCount: jest.fn().mockResolvedValue(0),
+        estaConectado: jest.fn().mockResolvedValue(true),
+        estadoAlertaAdmin: { upsert },
+      });
+
+      await service.excluirAlerta(3, 'PEDIDO_NOVO');
+
+      expect(upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { usuarioId_tipo: { usuarioId: 3, tipo: 'PEDIDO_NOVO' } },
+        }),
+      );
     });
   });
 });
