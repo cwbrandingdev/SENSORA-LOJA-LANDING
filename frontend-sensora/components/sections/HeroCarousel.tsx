@@ -72,13 +72,13 @@ export default function HeroCarousel() {
             stopOnInteraction: false,
           }),
         ]}
-        className="h-[calc(100vh-var(--navbar-height))] w-full"
+        className="h-[calc(100vh-var(--navbar-height)-var(--faixa-cupom))] w-full"
       >
-        <CarouselContent className="ml-0 h-[calc(100vh-var(--navbar-height))] max-sm:touch-pan-y max-sm:touch-pinch-zoom">
+        <CarouselContent className="ml-0 h-[calc(100vh-var(--navbar-height)-var(--faixa-cupom))] max-sm:touch-pan-y max-sm:touch-pinch-zoom">
           {HERO_SLIDES.map((slide, slideIndex) => (
             <CarouselItem
               key={slide.id}
-              className="h-[calc(100vh-var(--navbar-height))] pl-0"
+              className="h-[calc(100vh-var(--navbar-height)-var(--faixa-cupom))] pl-0"
             >
               <div className="relative block h-full w-full overflow-hidden">
                 <div

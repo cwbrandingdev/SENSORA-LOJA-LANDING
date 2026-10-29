@@ -10,6 +10,7 @@ import { AlertasModule } from './alertas/alertas.module';
 import { AuthModule } from './auth/auth.module';
 import { CloudflareAwareThrottlerGuard } from './auth/guards/render-throttler.guard';
 import { CarrinhoModule } from './carrinho/carrinho.module';
+import { CuponsModule } from './cupons/cupons.module';
 import { CategoriasModule } from './categorias/categorias.module';
 import { ColecoesModule } from './colecoes/colecoes.module';
 import { CheckoutModule } from './checkout/checkout.module';
@@ -179,7 +180,11 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     AvaliacoesModule,
     CarrinhoModule,
     CategoriasModule,
+<<<<<<< HEAD
     ColecoesModule,
+=======
+    CuponsModule,
+>>>>>>> 86e6ed3a264bc824e8b92b67e6bd72aa771fe15f
     CheckoutModule,
     ClientesModule,
     DashboardModule,

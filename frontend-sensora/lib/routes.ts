@@ -30,6 +30,7 @@ export const ROUTES = {
   PEDIDOS: `${ADMIN_ROUTE}/pedidos`,
   // Sacola parada + checkouts PENDENTE — equipe fala com o cliente.
   PAGAMENTOS_EM_ABERTO: `${ADMIN_ROUTE}/pagamentos-em-aberto`,
+  CUPONS: `${ADMIN_ROUTE}/cupons`,
   /** Resumo mensal de vendas (faturamento, comparação entre meses) — ADMIN-only. */
   RESUMO: `${ADMIN_ROUTE}/resumo`,
   USUARIOS: `${ADMIN_ROUTE}/usuarios`,

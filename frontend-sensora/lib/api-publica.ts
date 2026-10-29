@@ -184,3 +184,19 @@ export async function listarProdutosPublicosOuFalha(): Promise<ProdutoPublico[]>
 export async function listarCategoriasPublicasOuFalha(): Promise<CategoriaPublica[]> {
   return getJSONOuLanca<CategoriaPublica[]>("/public/categorias", ["categorias"]);
 }
+
+export type FaixaCupomPublica = {
+  codigo: string;
+  mensagem: string;
+  tipoDesconto: "PERCENTUAL" | "FIXO";
+  valor: number;
+};
+
+// Faixa acima do menu. Sem token: o backend devolve o cupom de visitante.
+// Falha vira null — a loja abre normalmente, só sem a faixa.
+export async function buscarFaixaCupomPublica(): Promise<FaixaCupomPublica | null> {
+  const resposta = await getJSON<{ faixa: FaixaCupomPublica | null }>("/public/cupom-faixa", [
+    "cupons",
+  ]);
+  return resposta?.faixa ?? null;
+}

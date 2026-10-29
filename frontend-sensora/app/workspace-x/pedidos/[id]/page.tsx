@@ -411,6 +411,12 @@ export default function PedidoDetalhePage() {
                       .join(" · ") || "—"}
                   </p>
                   {pedido.freteValor != null && <p>{formatPrice.format(pedido.freteValor)}</p>}
+                  {pedido.cupomCodigo && (
+                    <p>
+                      Cupom {pedido.cupomCodigo}
+                      {pedido.desconto ? ` · −${formatPrice.format(pedido.desconto)}` : ""}
+                    </p>
+                  )}
                   {pedido.fretePrazoDias != null && (
                     <p>Prazo: {pedido.fretePrazoDias} dia(s)</p>
                   )}

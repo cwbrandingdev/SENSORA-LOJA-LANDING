@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Geist_Mono, Inter, Nunito } from "next/font/google";
 import "../globals.css";
 import Navbar from "@/components/layout/Navbar";
+import FaixaCupom from "@/components/layout/FaixaCupom";
 import SacolaDrawer from "@/components/loja/SacolaDrawer";
 import SiteMain from "@/components/layout/SiteMain";
 import SiteFooter from "@/components/layout/SiteFooter";
@@ -20,6 +21,7 @@ import JsonLd from "@/components/seo/JsonLd";
 import { listarColecoesPublicas } from "@/lib/api-publica";
 import { EMPRESA } from "@/lib/empresa";
 import { OPEN_GRAPH_PADRAO, SITE_URL, urlAbsoluta } from "@/lib/seo";
+import { buscarFaixaCupomPublica } from "@/lib/api-publica";
 
 // Roda antes da primeira pintura: se já existe um consentimento válido
 // (mesmas regras de parseStored em lib/cookieConsent.ts), marca o <html>
@@ -93,8 +95,12 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+<<<<<<< HEAD
   // Coleções festivas ligadas no Admin viram itens do menu.
   const colecoes = await listarColecoesPublicas();
+=======
+  const faixaInicial = await buscarFaixaCupomPublica();
+>>>>>>> 86e6ed3a264bc824e8b92b67e6bd72aa771fe15f
 
   return (
     <html
@@ -123,7 +129,15 @@ export default async function RootLayout({
                   redirect com um /login sem o parâmetro, perdendo o destino
                   de retorno. */}
               <AuthProvider>
+<<<<<<< HEAD
                 <Navbar colecoes={colecoes} />
+=======
+                {faixaInicial ? (
+                  <style>{`:root{--faixa-cupom:2.25rem}`}</style>
+                ) : null}
+                <FaixaCupom inicial={faixaInicial} />
+                <Navbar />
+>>>>>>> 86e6ed3a264bc824e8b92b67e6bd72aa771fe15f
               </AuthProvider>
               <SiteMain>{children}</SiteMain>
               <SiteFooter />

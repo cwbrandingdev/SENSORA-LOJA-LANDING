@@ -4,5 +4,5 @@
 // não por usePathname() evita o problema da regeneração ISR da home na
 // Vercel, que renderiza com pathname "/index" (e não "/").
 export default function SiteMain({ children }: { children: React.ReactNode }) {
-  return <main className="flex-1 pt-[var(--navbar-height)]">{children}</main>;
+  return <main className="flex-1 pt-[calc(var(--navbar-height)+var(--faixa-cupom))]">{children}</main>;
 }

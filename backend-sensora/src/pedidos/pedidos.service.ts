@@ -218,14 +218,13 @@ export class PedidosService {
   // Etapa 8.8 (integridade financeira de Pedido.total) — única rotina que
   // escreve Pedido.total: sempre derivado da soma de ItemPedido.subtotal
   // (já um preço histórico confiável, nunca recalculado a partir do preço
-  // ATUAL do Produto — ver ItensPedidoService) + freteValor (nunca
-  // recotado aqui, é o mesmo valor validado contra o Melhor Envio na
-  // criação do pedido, ver CheckoutService.createSession) — nunca aceito
-  // como número solto vindo de fora. Mesmo padrão de client opcional já
-  // usado em ProdutosService.removerEstoque/adicionarEstoque: default
-  // `this.prisma`, mas aceita um `tx` de uma transação já aberta por quem
-  // chama (ver ItensPedidoService.update()/remove(), que precisam que a
-  // escrita do item e o recálculo do total aconteçam atomicamente).
+  // ATUAL do Produto — ver ItensPedidoService) + freteValor − desconto do
+  // cupom gravado no checkout. O desconto nunca passa do subtotal dos
+  // produtos, então o frete continua integral. Mesmo padrão de client
+  // opcional já usado em ProdutosService.removerEstoque/adicionarEstoque:
+  // default `this.prisma`, mas aceita um `tx` de uma transação já aberta
+  // por quem chama (ver ItensPedidoService.update()/remove(), que precisam
+  // que a escrita do item e o recálculo do total aconteçam atomicamente).
   // Reaplica garantirMutavel() aqui também (não só nos callers) como defesa
   // em profundidade: nenhum uso futuro deste método pode, por engano,
   // destravar o total de um pedido PAGO/REEMBOLSO_SOLICITADO/REEMBOLSADO.
@@ -247,10 +246,14 @@ export class PedidosService {
     );
     const frete =
       pedidoAtual.freteValor !== null ? Number(pedidoAtual.freteValor) : 0;
+    const desconto = Math.min(
+      subtotalItens,
+      Number(pedidoAtual.desconto ?? 0),
+    );
 
     const atualizado = await client.pedido.update({
       where: { id: pedidoId },
-      data: { total: subtotalItens + frete },
+      data: { total: subtotalItens + frete - desconto },
     });
     return this.paraPedido(atualizado);
   }
@@ -1035,6 +1038,8 @@ export class PedidosService {
       freteTransportadora: pedido.freteTransportadora ?? undefined,
       freteServico: pedido.freteServico ?? undefined,
       fretePrazoDias: pedido.fretePrazoDias ?? undefined,
+      cupomCodigo: pedido.cupomCodigo ?? undefined,
+      desconto: Number(pedido.desconto ?? 0),
       statusEnvio: pedido.statusEnvio as StatusEnvio,
       enviadoEm: pedido.enviadoEm ?? undefined,
       recebidoEm: pedido.recebidoEm ?? undefined,
