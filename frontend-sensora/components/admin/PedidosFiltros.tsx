@@ -46,14 +46,27 @@ const STATUS_LABEL: Record<StatusPedido, string> = {
 type PedidosFiltrosProps = {
   value: PedidosFiltrosValue;
   onChange: (value: PedidosFiltrosValue) => void;
+  // Cancelado tem aba própria em /workspace-x/pedidos — some do select
+  // da aba de pedidos ativos para não filtrar uma lista que já exclui
+  // esse status. Na aba Cancelados o select inteiro fica oculto.
+  statusOcultos?: StatusPedido[];
+  ocultarStatus?: boolean;
 };
 
 const inputClass =
   "rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-brand-navy focus:outline-none focus:ring-1 focus:ring-brand-navy";
 const labelClass = "text-xs font-medium text-slate-500";
 
-export default function PedidosFiltros({ value, onChange }: PedidosFiltrosProps) {
+export default function PedidosFiltros({
+  value,
+  onChange,
+  statusOcultos = [],
+  ocultarStatus = false,
+}: PedidosFiltrosProps) {
   const filtroAtivo = temFiltroAtivo(value);
+  const statuses = Object.values(StatusPedido).filter(
+    (status) => !statusOcultos.includes(status),
+  );
 
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4">
@@ -71,26 +84,28 @@ export default function PedidosFiltros({ value, onChange }: PedidosFiltrosProps)
         />
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="filtro-status" className={labelClass}>
-          Status
-        </label>
-        <select
-          id="filtro-status"
-          value={value.status}
-          onChange={(e) =>
-            onChange({ ...value, status: e.target.value as PedidosFiltrosValue["status"] })
-          }
-          className={`${inputClass} w-44`}
-        >
-          <option value="TODOS">Todos</option>
-          {Object.values(StatusPedido).map((status) => (
-            <option key={status} value={status}>
-              {STATUS_LABEL[status]}
-            </option>
-          ))}
-        </select>
-      </div>
+      {!ocultarStatus && (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="filtro-status" className={labelClass}>
+            Status
+          </label>
+          <select
+            id="filtro-status"
+            value={value.status}
+            onChange={(e) =>
+              onChange({ ...value, status: e.target.value as PedidosFiltrosValue["status"] })
+            }
+            className={`${inputClass} w-44`}
+          >
+            <option value="TODOS">Todos</option>
+            {statuses.map((status) => (
+              <option key={status} value={status}>
+                {STATUS_LABEL[status]}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="flex flex-col gap-1">
         <label htmlFor="filtro-data-de" className={labelClass}>

@@ -309,9 +309,13 @@ export default function PedidoDetalhePage() {
                 Envio
               </p>
               <div className="mt-1 flex items-center gap-2">
-                <Badge tone={pedido.statusEnvio === StatusEnvio.ENVIADO ? "info" : "warning"}>
-                  {pedido.statusEnvio === StatusEnvio.ENVIADO ? "Enviado" : "Aguardando envio"}
-                </Badge>
+                {pedido.statusEnvio === StatusEnvio.ENVIADO ? (
+                  <Badge tone="info">Enviado</Badge>
+                ) : pedido.status === StatusPedido.PAGO && !pedido.recebidoEm ? (
+                  <Badge tone="warning">Aguardando envio</Badge>
+                ) : (
+                  !pedido.recebidoEm && <span className="text-sm text-slate-400">—</span>
+                )}
                 {pedido.statusEnvio === StatusEnvio.ENVIADO && pedido.enviadoEm && (
                   <span className="text-xs text-slate-500">
                     {new Date(pedido.enviadoEm).toLocaleDateString("pt-BR", {

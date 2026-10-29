@@ -402,7 +402,9 @@ test.describe("Admin / Pedidos — Exclusão (Etapa 8.2, HIGH-02)", () => {
     mockPedidos(page, [PEDIDO_CANCELADO]);
 
     await page.goto(PEDIDOS_URL);
+    await page.getByRole("tab", { name: /Cancelados/ }).click();
 
+    await expect(page.getByRole("cell", { name: "PED-6" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Remover" })).toHaveCount(0);
   });
 
@@ -484,6 +486,50 @@ test.describe("Admin / Pedidos — Status de Envio", () => {
     await page.goto(PEDIDOS_URL);
 
     await expect(page.getByRole("button", { name: "Marcar como enviado" })).toHaveCount(0);
+    // Sem pagamento confirmado o pedido não entra na fila de envio. O
+    // card "Nenhum pedido aguardando envio" usa outra capitalização, então
+    // exact isola o badge da tabela.
+    await expect(page.getByText("Aguardando envio", { exact: true })).toHaveCount(0);
+  });
+
+  test("pedido cancelado fica na aba Cancelados e não aparece como Aguardando envio", async ({
+    page,
+  }) => {
+    await seedSession(page);
+    mockPedidos(page, [
+      PEDIDO_PAGO,
+      {
+        ...PEDIDO_CANCELADO,
+        freteTransportadora: "Correios",
+        freteServico: "SEDEX",
+        freteValor: 25.78,
+      },
+      PEDIDO_PENDENTE,
+      PEDIDO_REEMBOLSO_SOLICITADO,
+    ]);
+
+    await page.goto(PEDIDOS_URL);
+
+    await expect(page.getByRole("tab", { name: /Pedidos/ })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("cell", { name: "PED-2" }).first()).toBeVisible();
+    await expect(page.getByRole("cell", { name: "PED-1" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "PED-4" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "PED-6" })).toHaveCount(0);
+    await expect(
+      page.getByRole("row", { name: /PED-1/ }).getByText("Aguardando envio", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("row", { name: /PED-4/ }).getByText("Aguardando envio", { exact: true }),
+    ).toHaveCount(0);
+
+    await page.getByRole("tab", { name: /Cancelados/ }).click();
+
+    const linhaCancelada = page.getByRole("row", { name: /PED-6/ });
+    await expect(linhaCancelada).toBeVisible();
+    await expect(linhaCancelada.getByText("Aguardando envio", { exact: true })).toHaveCount(0);
+    await expect(linhaCancelada.getByText(/Correios/)).toBeVisible();
+    await expect(page.getByRole("cell", { name: "PED-2" })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: "PED-1" })).toHaveCount(0);
   });
 
   test("clicar em 'Marcar como enviado' chama o endpoint e, após sucesso, mostra ENVIADO com a data — o botão some", async ({
@@ -624,6 +670,22 @@ test.describe("Admin / Pedidos — filtros vindos da URL", () => {
 
     await expect(page.getByRole("cell", { name: "PED-8" })).toHaveCount(2);
     await expect(page.getByRole("cell", { name: "PED-9" })).toHaveCount(0);
+  });
+
+  test("?status=CANCELADO abre a aba Cancelados", async ({ page }) => {
+    await seedSession(page);
+    mockPedidos(page, [PEDIDO_PENDENTE, PEDIDO_PAGO, PEDIDO_CANCELADO]);
+
+    await page.goto(`${PEDIDOS_URL}?status=CANCELADO`);
+
+    await expect(page.getByRole("tab", { name: /Cancelados/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(page.locator("#filtro-status")).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: "PED-6" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "PED-1" })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: "PED-2" })).toHaveCount(0);
   });
 
   test("valores desconhecidos na URL são ignorados", async ({ page }) => {

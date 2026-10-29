@@ -72,6 +72,10 @@ type PedidoTableProps = {
   // encontrou nada. Default false preserva o texto original para quem
   // ainda não usa filtro nenhum.
   filtrosAtivos?: boolean;
+  // Aba (Pedidos / Cancelados) — texto quando a lista da aba está vazia
+  // sem filtro de cliente/status/data. Com filtro ativo, o texto de
+  // "nenhum pedido encontrado" continua valendo.
+  vazio?: { title: string; message: string };
 };
 
 function EnvioPedido({ pedido }: { pedido: Pedido }) {
@@ -79,20 +83,27 @@ function EnvioPedido({ pedido }: { pedido: Pedido }) {
     pedido.freteTransportadora ||
     pedido.freteServico ||
     pedido.freteValor != null;
+  // "Aguardando envio" só existe depois do pagamento. Pendente, cancelado
+  // e reembolso não entram na fila de envio — o badge amarelo nesses
+  // casos fazia o pedido parecer pronto para postar.
+  const aguardandoEnvio =
+    pedido.status === StatusPedido.PAGO &&
+    pedido.statusEnvio === StatusEnvio.NAO_ENVIADO &&
+    !pedido.recebidoEm;
+  const temBadgeEnvio =
+    Boolean(pedido.recebidoEm) ||
+    pedido.statusEnvio === StatusEnvio.ENVIADO ||
+    aguardandoEnvio;
   return (
     <div className="flex flex-col gap-1">
       {/* Entregue = o cliente clicou em "Recebi meu pedido". */}
       {pedido.recebidoEm ? (
         <Badge tone="success">Entregue</Badge>
-      ) : (
-        <Badge
-          tone={pedido.statusEnvio === StatusEnvio.ENVIADO ? "info" : "warning"}
-        >
-          {pedido.statusEnvio === StatusEnvio.ENVIADO
-            ? "Enviado"
-            : "Aguardando envio"}
-        </Badge>
-      )}
+      ) : pedido.statusEnvio === StatusEnvio.ENVIADO ? (
+        <Badge tone="info">Enviado</Badge>
+      ) : aguardandoEnvio ? (
+        <Badge tone="warning">Aguardando envio</Badge>
+      ) : null}
       {pedido.statusEnvio === StatusEnvio.ENVIADO && pedido.enviadoEm && (
         <span className="text-xs text-slate-500">
           {pedido.recebidoEm
@@ -117,6 +128,9 @@ function EnvioPedido({ pedido }: { pedido: Pedido }) {
           {pedido.freteValor != null &&
             ` · ${formatPrice.format(pedido.freteValor)}`}
         </span>
+      )}
+      {!temBadgeEnvio && !temFrete && !pedido.codigoRastreio && (
+        <span className="text-sm text-slate-400">—</span>
       )}
     </div>
   );
@@ -212,22 +226,24 @@ export default function PedidoTable({
   onImprimirEtiqueta,
   etiquetaEmAndamentoId,
   filtrosAtivos = false,
+  vazio,
 }: PedidoTableProps) {
   if (!pedidos || pedidos.length === 0) {
-    return filtrosAtivos ? (
+    const vazioPadrao = filtrosAtivos
+      ? {
+          title: "Nenhum pedido encontrado",
+          message: "Nenhum pedido corresponde aos filtros selecionados.",
+        }
+      : vazio ?? {
+          title: "Nenhum pedido cadastrado",
+          message: "Ainda não há pedidos registrados.",
+        };
+    return (
       <EmptyState
         compact
         eyebrow="Pedidos"
-        title="Nenhum pedido encontrado"
-        message="Nenhum pedido corresponde aos filtros selecionados."
-        icon={ClipboardList}
-      />
-    ) : (
-      <EmptyState
-        compact
-        eyebrow="Pedidos"
-        title="Nenhum pedido cadastrado"
-        message="Ainda não há pedidos registrados."
+        title={vazioPadrao.title}
+        message={vazioPadrao.message}
         icon={ClipboardList}
       />
     );

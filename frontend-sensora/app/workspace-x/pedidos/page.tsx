@@ -53,6 +53,22 @@ function filtrosDaUrl(params: URLSearchParams): PedidosFiltrosValue {
   };
 }
 
+type AbaPedidos = "ativos" | "cancelados";
+
+// ?status=CANCELADO abre direto a aba Cancelados. O select de status dessa
+// aba não existe (todo mundo ali já é cancelado), então o filtro volta
+// para TODOS e cliente/data da URL continuam valendo.
+function estadoInicial(params: URLSearchParams): {
+  filtros: PedidosFiltrosValue;
+  aba: AbaPedidos;
+} {
+  const filtros = filtrosDaUrl(params);
+  if (filtros.status === StatusPedido.CANCELADO) {
+    return { aba: "cancelados", filtros: { ...filtros, status: "TODOS" } };
+  }
+  return { aba: "ativos", filtros };
+}
+
 // useSearchParams exige um limite de Suspense no App Router (mesmo padrão
 // de app/confirmar-email/page.tsx).
 export default function PedidosPage() {
@@ -89,12 +105,32 @@ function PedidosConteudo() {
 
   // Destaque "Pedidos para enviar" + filtros — inteiramente client-side
   // sobre a lista já carregada (nenhum parâmetro novo em GET /pedidos).
-  const [filtros, setFiltros] = useState<PedidosFiltrosValue>(() =>
-    filtrosDaUrl(new URLSearchParams(searchParams.toString())),
+  // Cancelados ficam numa aba separada: a lista principal nunca mistura
+  // pedido cancelado com pedido que ainda pode ser pago ou enviado.
+  const [aba, setAba] = useState<AbaPedidos>(
+    () => estadoInicial(new URLSearchParams(searchParams.toString())).aba,
   );
+  const [filtros, setFiltros] = useState<PedidosFiltrosValue>(
+    () => estadoInicial(new URLSearchParams(searchParams.toString())).filtros,
+  );
+
+  const quantidadeCancelados = pedidos.filter(
+    (pedido) => pedido.status === StatusPedido.CANCELADO,
+  ).length;
+  const quantidadeAtivos = pedidos.length - quantidadeCancelados;
+
+  function selecionarAba(proxima: AbaPedidos) {
+    setAba(proxima);
+    if (proxima === "cancelados" && filtros.status !== "TODOS") {
+      setFiltros((atual) => ({ ...atual, status: "TODOS" }));
+    }
+  }
 
   const pedidosFiltrados = useMemo(() => {
     return pedidos.filter((pedido) => {
+      const cancelado = pedido.status === StatusPedido.CANCELADO;
+      if (aba === "cancelados" ? !cancelado : cancelado) return false;
+
       if (filtros.status !== "TODOS" && pedido.status !== filtros.status) {
         return false;
       }
@@ -121,7 +157,7 @@ function PedidosConteudo() {
 
       return true;
     });
-  }, [pedidos, filtros]);
+  }, [pedidos, filtros, aba]);
 
   // "Aguardando envio" nunca é um status novo — é a mesma condição que já
   // habilita "Marcar como enviado" em PedidoTable.tsx (status PAGO +
@@ -317,21 +353,71 @@ function PedidosConteudo() {
         <InlineErrorState message={erro} onRetry={carregarPedidos} />
       ) : (
         <>
-          <PedidosParaEnviarCard pedidos={pedidosAguardandoEnvio} />
+          <div role="tablist" aria-label="Pedidos" className="flex flex-wrap gap-2">
+            {(
+              [
+                { id: "ativos" as const, rotulo: "Pedidos", quantidade: quantidadeAtivos },
+                { id: "cancelados" as const, rotulo: "Cancelados", quantidade: quantidadeCancelados },
+              ] as const
+            ).map((item) => {
+              const selecionada = aba === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selecionada}
+                  onClick={() => selecionarAba(item.id)}
+                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                    selecionada
+                      ? "border-brand-navy bg-brand-navy text-white"
+                      : "border-slate-300 text-slate-600 hover:border-brand-navy hover:text-brand-navy"
+                  }`}
+                >
+                  {item.rotulo}
+                  <span className={selecionada ? "text-white/80" : "text-slate-400"}>
+                    {item.quantidade}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-          <PedidosFiltros value={filtros} onChange={setFiltros} />
+          {aba === "ativos" && <PedidosParaEnviarCard pedidos={pedidosAguardandoEnvio} />}
 
-          <PedidoTable
-            pedidos={pedidosFiltrados}
-            onEdit={handleEdit}
-            onRemove={handleRemove}
-            onMarcarEnviado={handleAbrirMarcarEnviado}
-            marcandoEnviadoId={marcandoEnviadoId}
-            onGerarEtiqueta={setPedidoParaEtiqueta}
-            onImprimirEtiqueta={handleImprimirEtiqueta}
-            etiquetaEmAndamentoId={etiquetaEmAndamentoId}
-            filtrosAtivos={temFiltroAtivo(filtros)}
+          <PedidosFiltros
+            value={filtros}
+            onChange={setFiltros}
+            statusOcultos={aba === "ativos" ? [StatusPedido.CANCELADO] : undefined}
+            ocultarStatus={aba === "cancelados"}
           />
+
+          <div role="tabpanel">
+            <PedidoTable
+              pedidos={pedidosFiltrados}
+              onEdit={handleEdit}
+              onRemove={handleRemove}
+              onMarcarEnviado={handleAbrirMarcarEnviado}
+              marcandoEnviadoId={marcandoEnviadoId}
+              onGerarEtiqueta={setPedidoParaEtiqueta}
+              onImprimirEtiqueta={handleImprimirEtiqueta}
+              etiquetaEmAndamentoId={etiquetaEmAndamentoId}
+              filtrosAtivos={temFiltroAtivo(filtros)}
+              vazio={
+                aba === "cancelados"
+                  ? {
+                      title: "Nenhum pedido cancelado",
+                      message: "Quando um pedido for cancelado, ele aparece nesta aba.",
+                    }
+                  : pedidos.length > 0 && quantidadeAtivos === 0
+                    ? {
+                        title: "Nenhum pedido ativo",
+                        message: "Os pedidos cancelados estão na aba Cancelados.",
+                      }
+                    : undefined
+              }
+            />
+          </div>
         </>
       )}
 
