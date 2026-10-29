@@ -5,9 +5,12 @@
 // certa. Também oferece ativar as notificações do navegador.
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import { useAlertasAdmin } from "@/context/AlertasAdminContext";
 import { cn } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/errors";
+import type { AlertaTipo } from "@/lib/types/loja";
+import { toast } from "sonner";
 
 const COR_SEVERIDADE = {
   info: "bg-sky-500",
@@ -16,8 +19,9 @@ const COR_SEVERIDADE = {
 } as const;
 
 export default function SinoAlertas() {
-  const { alertas, atualizadoEm } = useAlertasAdmin();
+  const { alertas, atualizadoEm, excluirAlerta } = useAlertasAdmin();
   const [aberto, setAberto] = useState(false);
+  const [excluindo, setExcluindo] = useState<AlertaTipo | null>(null);
   const [permissao, setPermissao] = useState<
     NotificationPermission | "indisponivel"
   >("indisponivel");
@@ -42,6 +46,17 @@ export default function SinoAlertas() {
 
   async function ativarNotificacoes() {
     setPermissao(await Notification.requestPermission());
+  }
+
+  async function aoExcluir(tipo: AlertaTipo) {
+    setExcluindo(tipo);
+    try {
+      await excluirAlerta(tipo);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Não foi possível excluir o alerta."));
+    } finally {
+      setExcluindo(null);
+    }
   }
 
   return (
@@ -81,11 +96,11 @@ export default function SinoAlertas() {
           ) : (
             <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
               {alertas.map((alerta) => (
-                <li key={alerta.tipo}>
+                <li key={alerta.tipo} className="flex items-stretch">
                   <Link
                     href={alerta.link}
                     onClick={() => setAberto(false)}
-                    className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-slate-50"
+                    className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-slate-50"
                   >
                     <span
                       aria-hidden
@@ -99,6 +114,16 @@ export default function SinoAlertas() {
                       {alerta.quantidade}
                     </span>
                   </Link>
+                  <button
+                    type="button"
+                    title="Excluir"
+                    aria-label={`Excluir alerta: ${alerta.titulo}`}
+                    disabled={excluindo === alerta.tipo}
+                    onClick={() => aoExcluir(alerta.tipo)}
+                    className="inline-flex w-11 shrink-0 items-center justify-center text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600 disabled:opacity-50"
+                  >
+                    <X className="h-4 w-4" aria-hidden />
+                  </button>
                 </li>
               ))}
             </ul>

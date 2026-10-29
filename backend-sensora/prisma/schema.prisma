@@ -85,6 +85,9 @@ model Usuario {
   solicitacoesSuporte     SolicitacaoSuporte[]
   avaliacoes              Avaliacao[]
   cupons                  CupomUsuario[]
+  // Alertas operacionais que o admin dispensou no sininho/painel (GET
+  // /alertas continua sendo agregação; isto só oculta até a causa sumir).
+  alertasExcluidos        EstadoAlertaAdmin[]
 }
 
 // Task 8 (Carrinho/Checkout) — endereços de entrega do próprio usuário
@@ -911,4 +914,25 @@ enum StatusPropostaEmpresa {
   NOVA
   EM_CONTATO
   ENCERRADA
+}
+
+// Mesmos identificadores de backend/src/alertas/entities/alerta.entity.ts
+enum TipoAlertaAdmin {
+  ESTOQUE_BAIXO
+  REEMBOLSO_SOLICITADO
+  PEDIDO_AGUARDANDO_ENVIO
+  MELHOR_ENVIO_DESCONECTADO
+  DEVOLUCAO_SOLICITADA
+  PEDIDO_NOVO
+  SUPORTE_ABERTO
+  AVALIACAO_PENDENTE
+}
+
+model EstadoAlertaAdmin {
+  usuarioId  Int
+  tipo       TipoAlertaAdmin
+  excluidoEm DateTime        @default(now())
+  usuario    Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, tipo])
 }

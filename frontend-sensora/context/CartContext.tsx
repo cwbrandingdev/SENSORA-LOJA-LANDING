@@ -428,8 +428,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
     [itens],
   );
 
+  // Soma em centavos. preco * quantidade em ponto flutuante (19,90 × 3)
+  // vira 59.699999999999996, e o backend recusa o cupom quando o subtotal
+  // chega com mais de duas casas decimais.
   const subtotal = useMemo(
-    () => itens.reduce((acc, item) => acc + item.preco * item.quantidade, 0),
+    () =>
+      itens.reduce(
+        (centavos, item) =>
+          centavos + Math.round(item.preco * 100) * item.quantidade,
+        0,
+      ) / 100,
     [itens],
   );
 
