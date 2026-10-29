@@ -18,6 +18,7 @@ import {
   COOKIE_CONSENT_VERSION,
 } from "@/lib/cookieConsent";
 import JsonLd from "@/components/seo/JsonLd";
+import { listarColecoesPublicas } from "@/lib/api-publica";
 import { EMPRESA } from "@/lib/empresa";
 import { OPEN_GRAPH_PADRAO, SITE_URL, urlAbsoluta } from "@/lib/seo";
 import { buscarFaixaCupomPublica } from "@/lib/api-publica";
@@ -94,6 +95,8 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Coleções festivas ligadas no Admin viram itens do menu.
+  const colecoes = await listarColecoesPublicas();
   const faixaInicial = await buscarFaixaCupomPublica();
 
   return (
@@ -127,7 +130,7 @@ export default async function RootLayout({
                   <style>{`:root{--faixa-cupom:2.25rem}`}</style>
                 ) : null}
                 <FaixaCupom inicial={faixaInicial} />
-                <Navbar />
+                <Navbar colecoes={colecoes} />
               </AuthProvider>
               <SiteMain>{children}</SiteMain>
               <SiteFooter />

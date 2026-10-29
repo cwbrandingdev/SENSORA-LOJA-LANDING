@@ -24,6 +24,7 @@ import {
   LayoutDashboard,
   Package,
   Tags,
+  Gift,
   Users,
   ClipboardList,
   UserCog,
@@ -60,6 +61,7 @@ const baseGroups: SidebarGroup[] = [
     links: [
       { href: ROUTES.PRODUTOS, label: "Produtos", icon: Package },
       { href: ROUTES.CATEGORIAS, label: "Categorias", icon: Tags },
+      { href: ROUTES.COLECOES, label: "Coleções", icon: Gift },
     ],
   },
   {

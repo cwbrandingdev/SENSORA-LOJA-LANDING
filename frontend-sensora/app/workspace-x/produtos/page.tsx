@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ProdutosPainel from "@/components/admin/ProdutosPainel";
-import ProductForm, { type ProductFormValues } from "@/components/forms/ProductForm";
+import ProductForm, { produtoFormParaPayload, type ProductFormValues } from "@/components/forms/ProductForm";
 import FormButton from "@/components/ui/FormButton";
 import { useToast } from "@/context/ToastContext";
 import { getErrorMessage } from "@/lib/errors";
@@ -15,24 +15,7 @@ import {
 } from "@/services/produtos";
 import { listarCategorias } from "@/services/categorias";
 import { revalidarProdutos } from "@/lib/actions";
-import type { Categoria, CreateProdutoPayload, Produto } from "@/lib/types/loja";
-
-// Converte o valor cru do form (categoriaId como string do <select>, "" =
-// sem categoria) para o payload que a API espera (categoriaId?: number).
-function toPayload(data: ProductFormValues): CreateProdutoPayload {
-  return {
-    nome: data.nome,
-    // Sempre enviado (mesmo vazio): apagar o campo no formulário tira o aroma da loja.
-    aroma: data.aroma ?? "",
-    descricao: data.descricao || undefined,
-    preco: data.preco,
-    quantidade: data.quantidade,
-    categoriaId: data.categoriaId ? Number(data.categoriaId) : undefined,
-    imagens: data.imagens,
-    ativo: data.ativo,
-    destaque: data.destaque,
-  };
-}
+import type { Categoria, Produto } from "@/lib/types/loja";
 
 export default function ProdutosPage() {
   const toast = useToast();
@@ -76,7 +59,7 @@ export default function ProdutosPage() {
   }, []);
 
   async function handleSubmit(data: ProductFormValues) {
-    const payload = toPayload(data);
+    const payload = produtoFormParaPayload(data);
     const editando = Boolean(editingProduct);
     try {
       if (editingProduct) {

@@ -21,6 +21,12 @@ export async function revalidarAvaliacoes(): Promise<void> {
   updateTag("avaliacoes");
 }
 
+// Coleção ligada/desligada ou com produtos alterados aparece (ou some) no
+// menu e em /colecoes na hora.
+export async function revalidarColecoes(): Promise<void> {
+  updateTag("colecoes");
+}
+
 export async function revalidarCategorias(): Promise<void> {
   updateTag("categorias");
   // Produtos embutem a categoria (nome/slug) na resposta pública — uma

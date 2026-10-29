@@ -43,6 +43,19 @@ export type CategoriaPublica = {
   descricao?: string;
 };
 
+// Coleção de data festiva ligada no Admin (Natal, Páscoa...).
+export type ColecaoPublica = {
+  id: number;
+  nome: string;
+  slug: string;
+  descricao?: string;
+  imagemUrl?: string;
+};
+
+export type ColecaoPublicaComProdutos = ColecaoPublica & {
+  produtos: ProdutoPublico[];
+};
+
 // A seção que consome isso (Produtos em Destaque) é editorial, não
 // crítica: se a API estiver fora do ar ou NEXT_PUBLIC_API_URL não estiver
 // configurada, a Home inteira não pode quebrar por causa disso — por isso
@@ -120,6 +133,20 @@ export async function buscarProdutoPublicoPorSlug(slug: string): Promise<Produto
 export async function listarCategoriasPublicas(): Promise<CategoriaPublica[]> {
   const categorias = await getJSON<CategoriaPublica[]>("/public/categorias", ["categorias"]);
   return categorias ?? [];
+}
+
+// Só as ativas. Silenciosa como as de cima: API fora do ar = menu sem coleções.
+export async function listarColecoesPublicas(): Promise<ColecaoPublica[]> {
+  const colecoes = await getJSON<ColecaoPublica[]>("/public/colecoes", ["colecoes"]);
+  return colecoes ?? [];
+}
+
+// null quando a coleção não existe ou está desligada (a página vira 404).
+export async function buscarColecaoPublica(slug: string): Promise<ColecaoPublicaComProdutos | null> {
+  return getJSON<ColecaoPublicaComProdutos>(`/public/colecoes/${encodeURIComponent(slug)}`, [
+    "colecoes",
+    "produtos",
+  ]);
 }
 
 // Variantes que lançam em vez de engolir erro — isoladas de getJSON de

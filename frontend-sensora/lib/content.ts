@@ -176,7 +176,7 @@ export function getCategoryHref(slug: CategorySlug): string {
 // ---------------------------------------------------------------------------
 // Coleções — cada uma pertence a uma categoria via categorySlug. Uma nova
 // coleção (nesta ou em outra categoria) é só um novo item neste array: ela
-// saparece sozinha em /colecoes e na página da sua categoria.
+// saparece sozinha em /kits e na página da sua categoria.
 // ---------------------------------------------------------------------------
 
 const VELAS_4_ESTACOES: Collection = {
@@ -246,7 +246,7 @@ const VELAS_4_ESTACOES: Collection = {
 };
 
 // Card único do Kit 4 Estações — não é uma Collection (não tem items[], não
-// vira rota própria, não aparece em /colecoes nem em generateStaticParams).
+// vira rota própria, não aparece em /kits nem em generateStaticParams).
 // Vive só em /velas, logo abaixo da apresentação das 4 velas avulsas (ver
 // [category]/page.tsx), como UMA apresentação do kit físico — nunca como
 // 4 cards repetidos.
@@ -421,8 +421,8 @@ export function getItemHref(
 }
 
 // ---------------------------------------------------------------------------
-// Navegação — derivada de CATEGORIES, sem lista escrita à mão. "Coleções"
-// não é uma categoria de produto, é um índice transversal (/colecoes).
+// Navegação — derivada de CATEGORIES, sem lista escrita à mão. "Kits"
+// não é uma categoria de produto, é um índice transversal (/kits).
 // ---------------------------------------------------------------------------
 
 export const NAV_CATEGORIES: NavCategory[] = [
@@ -430,7 +430,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
     label: category.label,
     href: getCategoryHref(category.slug),
   })),
-  { label: "Kits", href: "/colecoes" },
+  { label: "Kits", href: "/kits" },
   { label: "Loja", href: "/loja" },
 ];
 
@@ -442,9 +442,9 @@ export const PRODUCT_CATEGORIES: ProductCategory[] = [
     imageSrc: category.imageSrc,
   })),
   {
-    id: "colecoes",
+    id: "kits",
     label: "Kits",
-    href: "/colecoes",
+    href: "/kits",
     imageSrc: "/images/categories/kits-4-estacoes.jpg",
   },
 ];

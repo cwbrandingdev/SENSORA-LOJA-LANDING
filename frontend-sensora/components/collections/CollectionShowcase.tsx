@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
 import ImageReveal from "@/components/ui/ImageReveal";
@@ -14,9 +15,13 @@ const formatPrice = new Intl.NumberFormat("pt-BR", {
 import type { Collection } from "@/lib/content";
 
 type CollectionShowcaseProps = {
-  collection: Collection;
+  // Sem categorySlug: as coleções de datas festivas (/colecoes/<slug>)
+  // também usam esta vitrine e não pertencem a uma categoria.
+  collection: Omit<Collection, "categorySlug">;
   /** Na página própria da coleção o título é o H1 (e os itens, H2). */
   principal?: boolean;
+  /** Mostrado logo abaixo do texto quando a coleção não tem itens. */
+  semItens?: ReactNode;
 };
 
 // Vitrine editorial de uma coleção: apresenta, não vende — o único caminho
@@ -27,6 +32,7 @@ type CollectionShowcaseProps = {
 export default function CollectionShowcase({
   collection,
   principal = false,
+  semItens,
 }: CollectionShowcaseProps) {
   const headingId = `${collection.slug}-heading`;
   const Titulo = principal ? "h1" : "h2";
@@ -58,6 +64,8 @@ export default function CollectionShowcase({
           {collection.description}
         </p>
       </RevealOnScroll>
+
+      {collection.items.length === 0 && semItens}
 
       {/* Flex + justify-center em vez de grid: com uma Collection de menos de
           4 itens (Sprays, Difusores), os cards centralizam como grupo na

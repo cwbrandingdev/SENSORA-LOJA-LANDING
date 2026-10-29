@@ -59,7 +59,7 @@ const ESTOQUE_TONE: Record<StatusEstoque, string> = {
 // `key={src}` no call site remonta o componente quando a imagem muda — evita
 // precisar de um useEffect só para resetar `falhou` (react-hooks/
 // set-state-in-effect), mesmo problema já presente em PlaceholderImage.tsx.
-function ProductThumb({ src, alt }: { src?: string | null; alt: string }) {
+export function ProductThumb({ src, alt }: { src?: string | null; alt: string }) {
   const [falhou, setFalhou] = useState(false);
 
   if (src && !falhou) {

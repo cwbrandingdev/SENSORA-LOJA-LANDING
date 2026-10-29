@@ -12,6 +12,7 @@ import { CloudflareAwareThrottlerGuard } from './auth/guards/render-throttler.gu
 import { CarrinhoModule } from './carrinho/carrinho.module';
 import { CuponsModule } from './cupons/cupons.module';
 import { CategoriasModule } from './categorias/categorias.module';
+import { ColecoesModule } from './colecoes/colecoes.module';
 import { CheckoutModule } from './checkout/checkout.module';
 import { ClientesModule } from './clientes/clientes.module';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -164,13 +165,10 @@ import { UsuariosModule } from './usuarios/usuarios.module';
           {
             name: 'default',
             limit:
-              Number(configService.get<string>('GLOBAL_RATE_LIMIT_MAX')) ||
-              30,
+              Number(configService.get<string>('GLOBAL_RATE_LIMIT_MAX')) || 30,
             ttl:
               (Number(
-                configService.get<string>(
-                  'GLOBAL_RATE_LIMIT_WINDOW_SECONDS',
-                ),
+                configService.get<string>('GLOBAL_RATE_LIMIT_WINDOW_SECONDS'),
               ) || 10) * 1000,
           },
         ],
@@ -182,6 +180,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     AvaliacoesModule,
     CarrinhoModule,
     CategoriasModule,
+    ColecoesModule,
     CuponsModule,
     CheckoutModule,
     ClientesModule,

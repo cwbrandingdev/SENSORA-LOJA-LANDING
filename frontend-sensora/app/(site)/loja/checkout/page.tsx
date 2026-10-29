@@ -30,7 +30,7 @@ import {
   getErrorCode,
   getErrorMessage,
 } from "@/lib/errors";
-import { loginComRedirect, possuiSessaoValida } from "@/lib/auth-redirect";
+import { garantirSessaoValida, loginComRedirect } from "@/lib/auth-redirect";
 import { decodeToken } from "@/lib/jwt";
 import { ROUTES } from "@/lib/routes";
 import { getToken, setCheckoutPendente } from "@/lib/storage";
@@ -131,11 +131,13 @@ export default function CheckoutPage() {
   const [confirmacaoReenviada, setConfirmacaoReenviada] = useState(false);
 
   useEffect(() => {
-    if (possuiSessaoValida()) {
-      setAutorizado(true);
-    } else {
-      router.replace(loginComRedirect(ROUTES.LOJA_CHECKOUT));
-    }
+    garantirSessaoValida().then((valida) => {
+      if (valida) {
+        setAutorizado(true);
+      } else {
+        router.replace(loginComRedirect(ROUTES.LOJA_CHECKOUT));
+      }
+    });
   }, [router]);
 
   useEffect(() => {
@@ -322,7 +324,7 @@ export default function CheckoutPage() {
   // Task 21) — sem SDK de pagamento, sem qualquer lógica de pagamento no
   // frontend.
   async function handleContinuar() {
-    if (!possuiSessaoValida()) {
+    if (!(await garantirSessaoValida())) {
       router.replace(loginComRedirect(ROUTES.LOJA_CHECKOUT));
       return;
     }
