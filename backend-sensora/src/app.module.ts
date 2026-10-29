@@ -180,11 +180,8 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     AvaliacoesModule,
     CarrinhoModule,
     CategoriasModule,
-<<<<<<< HEAD
     ColecoesModule,
-=======
     CuponsModule,
->>>>>>> 86e6ed3a264bc824e8b92b67e6bd72aa771fe15f
     CheckoutModule,
     ClientesModule,
     DashboardModule,

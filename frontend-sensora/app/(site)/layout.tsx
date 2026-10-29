@@ -95,12 +95,9 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-<<<<<<< HEAD
   // Coleções festivas ligadas no Admin viram itens do menu.
   const colecoes = await listarColecoesPublicas();
-=======
   const faixaInicial = await buscarFaixaCupomPublica();
->>>>>>> 86e6ed3a264bc824e8b92b67e6bd72aa771fe15f
 
   return (
     <html
@@ -129,15 +126,11 @@ export default async function RootLayout({
                   redirect com um /login sem o parâmetro, perdendo o destino
                   de retorno. */}
               <AuthProvider>
-<<<<<<< HEAD
-                <Navbar colecoes={colecoes} />
-=======
                 {faixaInicial ? (
                   <style>{`:root{--faixa-cupom:2.25rem}`}</style>
                 ) : null}
                 <FaixaCupom inicial={faixaInicial} />
-                <Navbar />
->>>>>>> 86e6ed3a264bc824e8b92b67e6bd72aa771fe15f
+                <Navbar colecoes={colecoes} />
               </AuthProvider>
               <SiteMain>{children}</SiteMain>
               <SiteFooter />
