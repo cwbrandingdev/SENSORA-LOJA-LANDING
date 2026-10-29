@@ -3,9 +3,10 @@
 // Etapa 6.5 (Frete) — seção "Entrega" do checkout. Mesmo padrão visual e de
 // acessibilidade de EnderecoCard (botão nativo com role="radio", radiogroup
 // no pai) — nenhum componente/biblioteca nova, só reaproveita o vocabulário
-// visual já usado para endereço. O preço/prazo exibidos aqui vêm sempre da
-// última cotação retornada pelo backend (services/frete.ts) — o componente
-// em si não calcula nada.
+// visual já usado para endereço. O preço e o prazo vêm da última cotação
+// retornada pelo backend (services/frete.ts). O prazo mostrado soma uma
+// folga de preparo ao prazo da transportadora; o valor gravado no pedido
+// continua sendo o prazo original da cotação.
 import FreteOptionsSkeleton from "./FreteOptionsSkeleton";
 import type { OpcaoFrete } from "@/lib/types/loja";
 
@@ -14,8 +15,11 @@ const formatPrice = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 
+const FOLGA_PREPARO_DIAS = 5;
+
 function formatarPrazo(prazoDias: number): string {
-  return prazoDias === 1 ? "1 dia útil" : `${prazoDias} dias úteis`;
+  const prazoComFolga = prazoDias + FOLGA_PREPARO_DIAS;
+  return prazoComFolga === 1 ? "1 dia útil" : `${prazoComFolga} dias úteis`;
 }
 
 type FreteOptionsProps = {

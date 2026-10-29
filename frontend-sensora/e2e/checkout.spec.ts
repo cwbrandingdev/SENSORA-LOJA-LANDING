@@ -1392,12 +1392,12 @@ test.describe("Checkout — Etapa 6.5: frete", () => {
 
     const correios = radiogroupFrete.getByRole("radio").filter({ hasText: "Correios" });
     await expect(correios).toContainText("PAC");
-    await expect(correios).toContainText("9 dias úteis");
+    await expect(correios).toContainText("14 dias úteis");
     await expect(correios).toContainText("R$ 23,50");
 
     const jadlog = radiogroupFrete.getByRole("radio").filter({ hasText: "Jadlog" });
     await expect(jadlog).toContainText(".Package");
-    await expect(jadlog).toContainText("5 dias úteis");
+    await expect(jadlog).toContainText("10 dias úteis");
     await expect(jadlog).toContainText("R$ 18,00");
   });
 
