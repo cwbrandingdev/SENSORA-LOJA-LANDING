@@ -31,6 +31,8 @@ type Props = {
   onRetry: () => void;
   onEdit: (produto: Produto) => void;
   onRemove: (produto: Produto) => void;
+  /** Ativa/desativa todos os produtos da categoria de uma vez. */
+  onAlterarAtivoCategoria: (categoria: Categoria, ativo: boolean) => void;
   /** Formulário de criar/editar já montado pela página (ou null se fechado). */
   formulario: ReactNode | null;
   onFecharFormulario: () => void;
@@ -65,7 +67,60 @@ function Resumo({ produtos }: { produtos: Produto[] }) {
   );
 }
 
-function ListaFiltrada({ produtos, categorias, onEdit, onRemove }: Pick<Props, "produtos" | "categorias" | "onEdit" | "onRemove">) {
+/** Aparece com uma categoria selecionada: ativa/desativa todos os produtos
+ *  dela (ignora a busca e os filtros de situação). */
+function AcoesDaCategoria({
+  categoria,
+  produtos,
+  onAlterarAtivoCategoria,
+}: {
+  categoria: Categoria;
+  produtos: Produto[];
+  onAlterarAtivoCategoria: Props["onAlterarAtivoCategoria"];
+}) {
+  const daCategoria = produtos.filter((p) => p.categoriaId === categoria.id);
+  const ativos = daCategoria.filter((p) => p.ativo).length;
+  const inativos = daCategoria.length - ativos;
+
+  if (daCategoria.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
+      <span className="text-slate-600">
+        <strong className="font-semibold text-brand-navy">{categoria.nome}</strong>: {ativos} ativo(s), {inativos}{" "}
+        inativo(s)
+      </span>
+      <div className="flex gap-2 sm:ml-auto">
+        {inativos > 0 && (
+          <button
+            type="button"
+            onClick={() => onAlterarAtivoCategoria(categoria, true)}
+            className="rounded-md px-3 py-1.5 text-xs font-semibold text-brand-navy ring-1 ring-slate-200 hover:bg-slate-50"
+          >
+            Ativar todos
+          </button>
+        )}
+        {ativos > 0 && (
+          <button
+            type="button"
+            onClick={() => onAlterarAtivoCategoria(categoria, false)}
+            className="rounded-md px-3 py-1.5 text-xs font-semibold text-red-700 ring-1 ring-red-200 hover:bg-red-50"
+          >
+            Desativar todos
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ListaFiltrada({
+  produtos,
+  categorias,
+  onEdit,
+  onRemove,
+  onAlterarAtivoCategoria,
+}: Pick<Props, "produtos" | "categorias" | "onEdit" | "onRemove" | "onAlterarAtivoCategoria">) {
   const [busca, setBusca] = useState("");
   const [categoriaId, setCategoriaId] = useState<number | "todas">("todas");
   const [situacao, setSituacao] = useState<FiltroSituacao>("todos");
@@ -82,6 +137,8 @@ function ListaFiltrada({ produtos, categorias, onEdit, onRemove }: Pick<Props, "
       return true;
     });
   }, [produtos, busca, categoriaId, situacao]);
+
+  const categoriaSelecionada = categorias.find((c) => c.id === categoriaId);
 
   const chip = (ativo: boolean) =>
     `whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -124,6 +181,14 @@ function ListaFiltrada({ produtos, categorias, onEdit, onRemove }: Pick<Props, "
           ))}
         </div>
       </div>
+
+      {categoriaSelecionada && (
+        <AcoesDaCategoria
+          categoria={categoriaSelecionada}
+          produtos={produtos}
+          onAlterarAtivoCategoria={onAlterarAtivoCategoria}
+        />
+      )}
 
       {filtrados.length === 0 && produtos.length > 0 ? (
         <EmptyState
@@ -177,6 +242,7 @@ export default function ProdutosPainel({
   onRetry,
   onEdit,
   onRemove,
+  onAlterarAtivoCategoria,
   formulario,
   onFecharFormulario,
 }: Props) {
@@ -191,7 +257,13 @@ export default function ProdutosPainel({
       ) : (
         <div className="flex flex-col gap-4">
           <Resumo produtos={produtos} />
-          <ListaFiltrada produtos={produtos} categorias={categorias} onEdit={onEdit} onRemove={onRemove} />
+          <ListaFiltrada
+            produtos={produtos}
+            categorias={categorias}
+            onEdit={onEdit}
+            onRemove={onRemove}
+            onAlterarAtivoCategoria={onAlterarAtivoCategoria}
+          />
         </div>
       )}
 

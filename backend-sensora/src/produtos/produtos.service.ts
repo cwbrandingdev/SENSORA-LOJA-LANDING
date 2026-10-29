@@ -70,6 +70,18 @@ export class ProdutosService {
     return this.paraProduto(produto);
   }
 
+  async alterarAtivoDaCategoria(
+    categoriaId: number,
+    ativo: boolean,
+  ): Promise<{ alterados: number }> {
+    await this.validarCategoriaExiste(categoriaId);
+    const { count } = await this.prisma.produto.updateMany({
+      where: { categoriaId },
+      data: { ativo },
+    });
+    return { alterados: count };
+  }
+
   async remove(id: number): Promise<void> {
     await this.findOne(id);
 
