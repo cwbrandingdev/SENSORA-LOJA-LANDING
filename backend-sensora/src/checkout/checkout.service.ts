@@ -130,6 +130,20 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     'PAYMENT_REFUND_DENIED',
   ]);
 
+  // Pix (e cartão) em que o cliente já pagou. CONFIRMED é o caso em que o
+  // Asaas recebeu o Pix mas ainda não liberou o saldo (bloqueio cautelar ou
+  // crédito no dia seguinte). O pedido da loja não espera essa liberação.
+  private static readonly EVENTOS_COBRANCA_PAGA = new Set([
+    'PAYMENT_CONFIRMED',
+    'PAYMENT_RECEIVED',
+  ]);
+
+  private static readonly STATUS_COBRANCA_PAGA = new Set([
+    'CONFIRMED',
+    'RECEIVED',
+    'RECEIVED_IN_CASH',
+  ]);
+
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
@@ -170,13 +184,19 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
-    void this.expirarPedidosPendentes();
-    void this.enviarLembretesCheckout();
+    void this.cicloPedidosPendentes();
     this.expiracaoTimer = setInterval(() => {
-      void this.expirarPedidosPendentes();
-      void this.enviarLembretesCheckout();
+      void this.cicloPedidosPendentes();
     }, INTERVALO_EXPIRAR_PENDENTES_MS);
     this.expiracaoTimer.unref();
+  }
+
+  // Reconcilia primeiro: um Pix já pago (mesmo com saldo bloqueado no
+  // Asaas) vira PAGO antes do job que cancela PENDENTE vencido.
+  private async cicloPedidosPendentes(): Promise<void> {
+    await this.reconciliarPagamentosAsaas();
+    await this.expirarPedidosPendentes();
+    await this.enviarLembretesCheckout();
   }
 
   onModuleDestroy(): void {
@@ -666,6 +686,7 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
   // PENDENTE não entra pela sacola (CarrinhoService já exclui). CANCELADO
   // / expirado fica de fora — o expire job já trata esses.
   async listarPendentesAdmin(): Promise<CheckoutPendenteAdmin[]> {
+    await this.reconciliarPagamentosAsaas();
     const [checkouts, carrinhos] = await Promise.all([
       this.listarCheckoutsPendentesAdmin(),
       this.carrinhoService?.listarAbandonadosAdmin?.() ??
@@ -1043,6 +1064,29 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     // NENHUM pedido vinculado a este sessionId (não deveria acontecer no
     // fluxo normal).
     if (pedido) {
+      if (pedido.status === StatusPedido.PENDENTE && pedido.asaasCheckoutId) {
+        try {
+          if (await this.confirmarSeCobrancaPaga(pedido.asaasCheckoutId)) {
+            const atualizado = await this.prisma.pedido.findUnique({
+              where: { id: pedido.id },
+            });
+            if (atualizado) {
+              return {
+                sessionId,
+                status: atualizado.status,
+                pedidoId: atualizado.id,
+                pedidoNumero: atualizado.numero,
+              };
+            }
+          }
+        } catch (erro) {
+          this.logger.warn(
+            `Não foi possível confirmar o checkout ${pedido.asaasCheckoutId} na consulta da sessão: ${
+              erro instanceof Error ? erro.message : String(erro)
+            }`,
+          );
+        }
+      }
       return {
         sessionId,
         status: pedido.status,
@@ -1155,14 +1199,16 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
       // Asaas embute o Payment completo no campo `payment` do webhook (ver
       // docs.asaas.com/docs/webhook-para-cobrancas). Só tipamos os campos
       // que realmente usamos aqui — não é um espelho completo do objeto.
-      payment?: { id?: string; status?: string; value?: number };
+      payment?: {
+        id?: string;
+        status?: string;
+        value?: number;
+        checkoutSession?: string | null;
+        externalReference?: string | null;
+      };
     };
     try {
-      body = JSON.parse(rawBody.toString('utf8')) as {
-        event?: string;
-        checkout?: { id?: string };
-        payment?: { id?: string; status?: string; value?: number };
-      };
+      body = JSON.parse(rawBody.toString('utf8')) as typeof body;
     } catch {
       throw new BadRequestException('Payload do webhook inválido');
     }
@@ -1174,6 +1220,14 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     if (body.event === 'CHECKOUT_PAID' && body.checkout?.id) {
       await this.confirmarPagamento({ asaasCheckoutId: body.checkout.id });
       await this.salvarAsaasPaymentId(body.checkout.id);
+    } else if (
+      body.event &&
+      CheckoutService.EVENTOS_COBRANCA_PAGA.has(body.event)
+    ) {
+      // Pix pago com saldo ainda bloqueado chega como PAYMENT_CONFIRMED,
+      // sem CHECKOUT_PAID. O pedido da loja acompanha o pagamento do
+      // cliente, não a liberação do saldo na conta Asaas.
+      await this.confirmarPorCobrancaAsaas(body.payment);
     } else if (body.event === 'CHECKOUT_EXPIRED' && body.checkout?.id) {
       await this.cancelarPedidoPendentePorCheckout(body.checkout.id);
     } else if (
@@ -1197,13 +1251,134 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     return { received: true };
   }
 
+  // Pedidos ainda PENDENTE cujo Pix (ou cartão) o Asaas já registrou como
+  // pago. Cobre webhook perdido e o caso em que o saldo fica bloqueado:
+  // a cobrança está CONFIRMED e o checkout pode nem ter virado PAID.
+  // Chamado ao abrir o dashboard, a lista de pedidos e a de pagamentos
+  // em aberto — a tela passa a mostrar o pedido como pago.
+  async reconciliarPagamentosAsaas(): Promise<void> {
+    if (this.gateway !== 'asaas') {
+      return;
+    }
+
+    let pendentes: { asaasCheckoutId: string | null }[];
+    try {
+      pendentes = await this.prisma.pedido.findMany({
+        where: {
+          status: StatusPedido.PENDENTE,
+          asaasCheckoutId: { not: null },
+        },
+        orderBy: { data: 'desc' },
+        take: 20,
+        select: { asaasCheckoutId: true },
+      });
+    } catch (erro) {
+      this.logger.warn(
+        `Não foi possível listar pedidos pendentes para reconciliar com o Asaas: ${
+          erro instanceof Error ? erro.message : String(erro)
+        }`,
+      );
+      return;
+    }
+
+    await Promise.all(
+      pendentes.map(async (pedido) => {
+        const checkoutId = pedido.asaasCheckoutId;
+        if (!checkoutId) {
+          return;
+        }
+        try {
+          await this.confirmarSeCobrancaPaga(checkoutId);
+        } catch (erro) {
+          this.logger.warn(
+            `Não foi possível reconciliar o checkout ${checkoutId}: ${
+              erro instanceof Error ? erro.message : String(erro)
+            }`,
+          );
+        }
+      }),
+    );
+  }
+
+  // true quando o pedido saiu de PENDENTE por causa desta consulta.
+  private async confirmarSeCobrancaPaga(
+    asaasCheckoutId: string,
+  ): Promise<boolean> {
+    if (!(await this.cobrancaAsaasPaga(asaasCheckoutId))) {
+      return false;
+    }
+    await this.confirmarPagamento({ asaasCheckoutId });
+    await this.salvarAsaasPaymentId(asaasCheckoutId);
+    return true;
+  }
+
+  private async cobrancaAsaasPaga(checkoutId: string): Promise<boolean> {
+    try {
+      const checkout = await this.asaasService.consultarCheckout(checkoutId);
+      if (checkout.status === 'PAID') {
+        return true;
+      }
+    } catch (erro) {
+      if (!(erro instanceof AsaasNaoEncontradoError)) {
+        this.logger.warn(
+          `Consulta do checkout ${checkoutId} falhou; a cobrança será consultada em seguida.`,
+        );
+      }
+    }
+
+    const resultado =
+      await this.asaasService.resolverPaymentIdPorCheckout(checkoutId);
+    return (
+      resultado.encontrado &&
+      CheckoutService.STATUS_COBRANCA_PAGA.has(resultado.payment.status)
+    );
+  }
+
+  private async confirmarPorCobrancaAsaas(payment?: {
+    id?: string;
+    checkoutSession?: string | null;
+    externalReference?: string | null;
+  }): Promise<void> {
+    const checkoutId = payment?.checkoutSession?.trim();
+    if (checkoutId) {
+      await this.confirmarPagamento({ asaasCheckoutId: checkoutId });
+      await this.salvarAsaasPaymentId(checkoutId, payment?.id);
+      return;
+    }
+
+    const referencia = payment?.externalReference?.trim();
+    if (!referencia || !/^\d+$/.test(referencia)) {
+      if (payment?.id) {
+        this.logger.warn(
+          `Cobrança ${payment.id} paga sem checkout nem referência do pedido — o painel não foi atualizado.`,
+        );
+      }
+      return;
+    }
+
+    const pedido = await this.prisma.pedido.findUnique({
+      where: { id: Number(referencia) },
+    });
+    if (!pedido?.asaasCheckoutId) {
+      return;
+    }
+    await this.confirmarPagamento({
+      asaasCheckoutId: pedido.asaasCheckoutId,
+    });
+    await this.salvarAsaasPaymentId(pedido.asaasCheckoutId, payment?.id);
+  }
+
   // O payload do CHECKOUT_PAID só traz o Checkout (chk_xxx), nunca o Payment
   // (pay_xxx) usado por reembolso e pelos webhooks PAYMENT_*. Resolve aqui,
   // logo após o pagamento, para as devoluções/reembolsos futuros não
   // dependerem de descobrir o Payment de novo. Nunca derruba o webhook: se
   // falhar, PedidosService.resolverPaymentId continua como alternativa.
   // Idempotente: só grava se o pedido ainda não tiver asaasPaymentId.
-  private async salvarAsaasPaymentId(asaasCheckoutId: string): Promise<void> {
+  // `paymentIdConhecido` vem do webhook da cobrança (pay_xxx já no payload).
+  private async salvarAsaasPaymentId(
+    asaasCheckoutId: string,
+    paymentIdConhecido?: string,
+  ): Promise<void> {
     try {
       const pedido = await this.prisma.pedido.findUnique({
         where: { asaasCheckoutId },
@@ -1212,18 +1387,22 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      const resultado =
-        await this.asaasService.resolverPaymentIdPorCheckout(asaasCheckoutId);
-      if (!resultado.encontrado) {
-        this.logger.warn(
-          `Payment do checkout ${asaasCheckoutId} ainda não encontrado no Asaas — asaasPaymentId do pedido ${pedido.id} não foi salvo.`,
-        );
-        return;
+      let paymentId = paymentIdConhecido;
+      if (!paymentId) {
+        const resultado =
+          await this.asaasService.resolverPaymentIdPorCheckout(asaasCheckoutId);
+        if (!resultado.encontrado) {
+          this.logger.warn(
+            `Payment do checkout ${asaasCheckoutId} ainda não encontrado no Asaas — asaasPaymentId do pedido ${pedido.id} não foi salvo.`,
+          );
+          return;
+        }
+        paymentId = resultado.payment.id;
       }
 
       await this.prisma.pedido.updateMany({
         where: { id: pedido.id, asaasPaymentId: null },
-        data: { asaasPaymentId: resultado.payment.id },
+        data: { asaasPaymentId: paymentId },
       });
     } catch (erro) {
       this.logger.warn(

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { CheckoutService } from '../checkout/checkout.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { PerfilUsuario } from '../usuarios/enums/perfil-usuario.enum';
@@ -21,7 +22,10 @@ import {
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly checkoutService: CheckoutService,
+  ) {}
 
   // Vistoria do Dashboard operacional (Admin) — substitui o padrão anterior
   // (frontend baixando GET /pedidos + /produtos + /categorias inteiros e
@@ -34,6 +38,10 @@ export class DashboardService {
   // `groupBy` sobre uma tabela Pedido vazia devolve `[]`, e o loop abaixo
   // preserva as 5 chaves de StatusPedido zeradas em vez de omiti-las.
   async obterResumo(): Promise<DashboardResumo> {
+    // Pix já pago no Asaas (mesmo com saldo bloqueado) entra no faturamento
+    // e na contagem de pagos antes de agregar.
+    await this.checkoutService.reconciliarPagamentosAsaas();
+
     const [
       pedidosPorStatus,
       produtosTotal,

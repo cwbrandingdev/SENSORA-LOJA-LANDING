@@ -208,8 +208,19 @@ describe('CheckoutService — lembrete de checkout PENDENTE', () => {
       ],
     };
 
+    function mockLista(pedidos: unknown[]) {
+      prisma.pedido.findMany.mockImplementation(
+        (query: { select?: { asaasCheckoutId?: boolean } }) => {
+          if (query?.select?.asaasCheckoutId) {
+            return Promise.resolve([]);
+          }
+          return Promise.resolve(pedidos);
+        },
+      );
+    }
+
     it('devolve PENDENTE dentro do TTL, com itens, telefone e lembrete', async () => {
-      prisma.pedido.findMany.mockResolvedValueOnce([pedidoPendente]);
+      mockLista([pedidoPendente]);
 
       const lista = await service.listarPendentesAdmin();
 
@@ -235,14 +246,16 @@ describe('CheckoutService — lembrete de checkout PENDENTE', () => {
         },
       ]);
       expect(lista[0].minutosRestantes).toBeGreaterThan(20 * 60);
-      const filtro = primeiraChamada(prisma.pedido.findMany) as {
+      const filtro = prisma.pedido.findMany.mock.calls
+        .map((chamada) => chamada[0] as { where?: { status?: StatusPedido; data?: { gt?: Date } } })
+        .find((query) => query.where?.data?.gt) as {
         where: { status: StatusPedido; data: { gt: Date } };
       };
       expect(filtro.where.status).toBe(StatusPedido.PENDENTE);
     });
 
     it('pedido já expirado na lista: fica de fora', async () => {
-      prisma.pedido.findMany.mockResolvedValueOnce([
+      mockLista([
         {
           ...pedidoPendente,
           id: 9,
@@ -258,7 +271,7 @@ describe('CheckoutService — lembrete de checkout PENDENTE', () => {
     });
 
     it('junta sacola abandonada com checkout, sem duplicar quem já está no pagamento', async () => {
-      prisma.pedido.findMany.mockResolvedValueOnce([pedidoPendente]);
+      mockLista([pedidoPendente]);
       listarCarrinhos.mockResolvedValueOnce([
         {
           usuarioId: 7,

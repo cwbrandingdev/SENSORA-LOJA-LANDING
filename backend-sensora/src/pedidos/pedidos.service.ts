@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -18,6 +19,7 @@ import {
   AsaasIndisponivelError,
   AsaasService,
 } from '../asaas/asaas.service';
+import { CheckoutService } from '../checkout/checkout.service';
 import { StatusDevolucao } from '../devolucoes/enums/status-devolucao.enum';
 import { UsuarioAutenticado } from '../auth/interfaces/usuario-autenticado.interface';
 import { escaparHtml } from '../common/utils/html.util';
@@ -90,6 +92,7 @@ export class PedidosService {
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
     private readonly pedidosRecebimentoService: PedidosRecebimentoService,
+    @Optional() private readonly checkoutService?: CheckoutService,
   ) {}
 
   // Etapa 10 / Task 5 (achado A6): ADMIN continua vendo/editando qualquer
@@ -130,6 +133,8 @@ export class PedidosService {
   ): Promise<Pedido[]> {
     if (user.perfil !== PerfilUsuario.ADMIN) {
       await this.pedidosRecebimentoService.aplicarRecebimentoPorPrazoNaListagem();
+    } else {
+      await this.checkoutService?.reconciliarPagamentosAsaas();
     }
     const where =
       user.perfil === PerfilUsuario.ADMIN ? {} : { usuarioId: user.id };

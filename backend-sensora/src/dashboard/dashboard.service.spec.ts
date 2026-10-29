@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { CheckoutService } from '../checkout/checkout.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StatusPedido } from '../pedidos/enums/status-pedido.enum';
 import { DashboardService } from './dashboard.service';
@@ -8,6 +9,10 @@ import { DashboardService } from './dashboard.service';
 // real), mesmo padrão de usuarios.service.spec.ts/pedidos.service.spec.ts:
 // cada método Prisma usado pelo service (groupBy/count) é um jest.fn()
 // isolado, sem depender de ordem de chamada.
+const checkoutService = {
+  reconciliarPagamentosAsaas: jest.fn().mockResolvedValue(undefined),
+};
+
 function criarPrismaMock(overrides: {
   pedidoGroupBy?: jest.Mock;
   pedidoFindMany?: jest.Mock;
@@ -48,7 +53,11 @@ describe('DashboardService — obterResumo', () => {
     });
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [DashboardService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        DashboardService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: CheckoutService, useValue: checkoutService },
+      ],
     }).compile();
     const service = module.get(DashboardService);
 
@@ -98,7 +107,11 @@ describe('DashboardService — obterResumo', () => {
     });
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [DashboardService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        DashboardService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: CheckoutService, useValue: checkoutService },
+      ],
     }).compile();
     const service = module.get(DashboardService);
 
@@ -171,7 +184,11 @@ describe('DashboardService — obterResumoMensal', () => {
     });
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [DashboardService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        DashboardService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: CheckoutService, useValue: checkoutService },
+      ],
     }).compile();
     const service = module.get(DashboardService);
 

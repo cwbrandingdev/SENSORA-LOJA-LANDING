@@ -1,5 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { AsaasModule } from '../asaas/asaas.module';
+import { CheckoutModule } from '../checkout/checkout.module';
 import { EnderecosModule } from '../enderecos/enderecos.module';
 import { MailModule } from '../mail/mail.module';
 import { ItensPedidoModule } from '../itens-pedido/itens-pedido.module';
@@ -29,6 +30,7 @@ import { PedidosService } from './pedidos.service';
     OcorrenciasModule,
     MelhorEnvioModule,
     MailModule,
+    CheckoutModule,
   ],
   controllers: [PedidosController, PedidoEtiquetaController],
   providers: [PedidosService, PedidoEtiquetaService, PedidosRecebimentoService],

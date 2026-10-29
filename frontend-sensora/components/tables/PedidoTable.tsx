@@ -29,7 +29,7 @@ const formatPrice = new Intl.NumberFormat("pt-BR", {
 // REEMBOLSADO usam tons próprios, nunca reaproveitando warning (PENDENTE)
 // ou danger (CANCELADO).
 const STATUS_LABEL: Record<StatusPedido, string> = {
-  [StatusPedido.PENDENTE]: "Pendente",
+  [StatusPedido.PENDENTE]: "Pagamento Pendente",
   [StatusPedido.PAGO]: "Pago",
   [StatusPedido.CANCELADO]: "Cancelado",
   [StatusPedido.REEMBOLSO_SOLICITADO]: "Reembolso solicitado",
@@ -76,15 +76,21 @@ type PedidoTableProps = {
 
 function EnvioPedido({ pedido }: { pedido: Pedido }) {
   const temFrete =
-    pedido.freteTransportadora || pedido.freteServico || pedido.freteValor != null;
+    pedido.freteTransportadora ||
+    pedido.freteServico ||
+    pedido.freteValor != null;
   return (
     <div className="flex flex-col gap-1">
       {/* Entregue = o cliente clicou em "Recebi meu pedido". */}
       {pedido.recebidoEm ? (
         <Badge tone="success">Entregue</Badge>
       ) : (
-        <Badge tone={pedido.statusEnvio === StatusEnvio.ENVIADO ? "info" : "warning"}>
-          {pedido.statusEnvio === StatusEnvio.ENVIADO ? "Enviado" : "Aguardando envio"}
+        <Badge
+          tone={pedido.statusEnvio === StatusEnvio.ENVIADO ? "info" : "warning"}
+        >
+          {pedido.statusEnvio === StatusEnvio.ENVIADO
+            ? "Enviado"
+            : "Aguardando envio"}
         </Badge>
       )}
       {pedido.statusEnvio === StatusEnvio.ENVIADO && pedido.enviadoEm && (
@@ -239,84 +245,95 @@ export default function PedidoTable({
 
   return (
     <>
-    {/* Celular: um card por pedido no lugar da tabela. */}
-    <ul className="flex flex-col gap-3 md:hidden">
-      {pedidos.map((pedido) => (
-        <li key={pedido.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="font-medium text-slate-900">{pedido.numero}</p>
-              <p className="text-xs text-slate-500">
-                {new Date(pedido.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
-              </p>
+      {/* Celular: um card por pedido no lugar da tabela. */}
+      <ul className="flex flex-col gap-3 md:hidden">
+        {pedidos.map((pedido) => (
+          <li
+            key={pedido.id}
+            className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-medium text-slate-900">{pedido.numero}</p>
+                <p className="text-xs text-slate-500">
+                  {new Date(pedido.data).toLocaleDateString("pt-BR", {
+                    timeZone: "UTC",
+                  })}
+                </p>
+              </div>
+              <p className="font-medium text-slate-900">{pedido.total}</p>
             </div>
-            <p className="font-medium text-slate-900">{pedido.total}</p>
-          </div>
-          <div className="mt-3 flex flex-wrap items-start gap-3">
-            <Badge tone={STATUS_TONE[pedido.status]}>{STATUS_LABEL[pedido.status]}</Badge>
-            <EnvioPedido pedido={pedido} />
-          </div>
-          <div className="mt-4 border-t border-slate-100 pt-3">
-            <AcoesPedido pedido={pedido} {...acoesProps} />
-          </div>
-        </li>
-      ))}
-    </ul>
-    <div className="hidden overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm md:block">
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-slate-200 bg-slate-50">
-            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Número
-            </th>
-            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Data
-            </th>
-            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Status
-            </th>
-            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Envio
-            </th>
-            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Total
-            </th>
-            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Ações
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {pedidos.map((pedido) => {
-            return (
-              <tr key={pedido.id} className="transition-colors hover:bg-slate-50/80">
-                <td className="px-4 py-3 font-medium text-slate-900">{pedido.numero}</td>
-                <td className="px-4 py-3 text-slate-600">
-                  {/* Achado da investigação (Editar pedido PENDENTE, Etapa
-                      6.6) — `pedido.data` é meia-noite UTC; sem `timeZone:
-                      "UTC"` aqui, toLocaleDateString converte para o fuso
-                      local (ex.: America/Sao_Paulo, UTC-3) e exibe o dia
-                      anterior, divergindo do valor real salvo (e do que o
-                      próprio formulário de edição mostra, que lê a string ISO
-                      diretamente sem passar por Date). */}
-                  {new Date(pedido.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
-                </td>
-                <td className="px-4 py-3">
-                  <Badge tone={STATUS_TONE[pedido.status]}>{STATUS_LABEL[pedido.status]}</Badge>
-                </td>
-                <td className="px-4 py-3">
-                  <EnvioPedido pedido={pedido} />
-                </td>
-                <td className="px-4 py-3 font-medium text-slate-900">{pedido.total}</td>
-                <td className="px-4 py-3">
-                  <AcoesPedido pedido={pedido} {...acoesProps} />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+            <div className="mt-3 flex flex-wrap items-start gap-3">
+              <Badge tone={STATUS_TONE[pedido.status]}>
+                {STATUS_LABEL[pedido.status]}
+              </Badge>
+              <EnvioPedido pedido={pedido} />
+            </div>
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <AcoesPedido pedido={pedido} {...acoesProps} />
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm md:block">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50">
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Número
+              </th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Data
+              </th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Status
+              </th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Envio
+              </th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Total
+              </th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Ações
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {pedidos.map((pedido) => {
+              return (
+                <tr
+                  key={pedido.id}
+                  className="transition-colors hover:bg-slate-50/80"
+                >
+                  <td className="px-4 py-3 font-medium text-slate-900">
+                    {pedido.numero}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {new Date(pedido.data).toLocaleDateString("pt-BR", {
+                      timeZone: "UTC",
+                    })}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge tone={STATUS_TONE[pedido.status]}>
+                      {STATUS_LABEL[pedido.status]}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <EnvioPedido pedido={pedido} />
+                  </td>
+                  <td className="px-4 py-3 font-medium text-slate-900">
+                    {pedido.total}
+                  </td>
+                  <td className="px-4 py-3">
+                    <AcoesPedido pedido={pedido} {...acoesProps} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }

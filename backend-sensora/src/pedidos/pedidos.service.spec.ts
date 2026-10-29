@@ -12,6 +12,7 @@ import {
   AsaasRefund,
   AsaasService,
 } from '../asaas/asaas.service';
+import { CheckoutService } from '../checkout/checkout.service';
 import {
   OcorrenciasService,
   RegistrarOcorrenciaInput,
@@ -1188,6 +1189,7 @@ describe('PedidosService — remove (Etapa 8.2, fechamento do HIGH-02)', () => {
 describe('PedidosService — findAll (ordenação da listagem do Admin)', () => {
   let service: PedidosService;
   let findMany: jest.Mock;
+  let reconciliarPagamentosAsaas: jest.Mock;
 
   const ADMIN: UsuarioAutenticado = {
     id: 99,
@@ -1197,11 +1199,16 @@ describe('PedidosService — findAll (ordenação da listagem do Admin)', () => 
 
   beforeEach(async () => {
     findMany = jest.fn().mockResolvedValue([]);
+    reconciliarPagamentosAsaas = jest.fn().mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PedidosService,
         { provide: PrismaService, useValue: { pedido: { findMany } } },
+        {
+          provide: CheckoutService,
+          useValue: { reconciliarPagamentosAsaas },
+        },
         { provide: ItensPedidoService, useValue: {} },
         { provide: ProdutosService, useValue: {} },
         { provide: AsaasService, useValue: {} },
@@ -1231,6 +1238,7 @@ describe('PedidosService — findAll (ordenação da listagem do Admin)', () => 
   it('com ordenarPorDataDesc: pede ao Prisma orderBy: { data: "desc" } (usado pelo GET /pedidos do Admin)', async () => {
     await service.findAll(ADMIN, { ordenarPorDataDesc: true });
 
+    expect(reconciliarPagamentosAsaas).toHaveBeenCalledTimes(1);
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { data: 'desc' } }),
     );
@@ -1241,6 +1249,7 @@ describe('PedidosService — findAll (ordenação da listagem do Admin)', () => 
 
     const argumentos = findMany.mock.calls[0][0] as Record<string, unknown>;
     expect(argumentos).not.toHaveProperty('orderBy');
+    expect(reconciliarPagamentosAsaas).not.toHaveBeenCalled();
   });
 
   it('pedido mais recente aparece primeiro, mais antigo depois (ordem devolvida pelo Prisma é preservada)', async () => {

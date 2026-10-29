@@ -34,5 +34,6 @@ import { CheckoutService } from './checkout.service';
   ],
   controllers: [CheckoutController, CheckoutAdminController],
   providers: [CheckoutService],
+  exports: [CheckoutService],
 })
 export class CheckoutModule {}

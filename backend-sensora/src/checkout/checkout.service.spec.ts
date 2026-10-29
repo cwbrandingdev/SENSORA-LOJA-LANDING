@@ -488,13 +488,17 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
   let prisma: {
     pedido: {
       findUnique: jest.Mock;
+      findMany: jest.Mock;
       updateMany: jest.Mock;
     };
     produto: { findMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let produtosService: { removerEstoque: jest.Mock };
-  let asaasService: { resolverPaymentIdPorCheckout: jest.Mock };
+  let asaasService: {
+    resolverPaymentIdPorCheckout: jest.Mock;
+    consultarCheckout: jest.Mock;
+  };
   let mailService: { enviarEmail: jest.Mock };
   let txPedidoUpdateMany: jest.Mock;
   let txItemPedidoUpdate: jest.Mock;
@@ -566,6 +570,7 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
     prisma = {
       pedido: {
         findUnique: jest.fn(() => pedidoFake),
+        findMany: jest.fn().mockResolvedValue([]),
         // Gravação do asaasPaymentId após o pagamento: só grava se ainda
         // estiver vazio (mesmo WHERE condicional usado no service).
         updateMany: jest.fn(
@@ -634,6 +639,7 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
         encontrado: true,
         payment: { id: 'pay_123', status: 'CONFIRMED' },
       })),
+      consultarCheckout: jest.fn(() => ({ id: 'chk_123', status: 'ACTIVE' })),
     };
 
     const configValues: Record<string, string> = {
@@ -858,6 +864,106 @@ describe('CheckoutService — webhook Asaas (Task 21, gateway padrão)', () => {
     expect(resultado2).toEqual({ received: true });
     expect(produtosService.removerEstoque).toHaveBeenCalledTimes(2);
     expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+  });
+
+  it('PAYMENT_CONFIRMED (Pix com saldo bloqueado) marca o pedido pago', async () => {
+    const payload = JSON.stringify({
+      id: 'evt_pix_confirmado',
+      event: 'PAYMENT_CONFIRMED',
+      payment: {
+        id: 'pay_bloqueado',
+        status: 'CONFIRMED',
+        billingType: 'PIX',
+        checkoutSession: 'chk_123',
+        externalReference: '1',
+      },
+    });
+
+    const resultado = await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(payload),
+    );
+
+    expect(resultado).toEqual({ received: true });
+    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+    expect(pedidoFake.asaasPaymentId).toBe('pay_bloqueado');
+    expect(asaasService.resolverPaymentIdPorCheckout).not.toHaveBeenCalled();
+    expect(produtosService.removerEstoque).toHaveBeenCalledTimes(2);
+  });
+
+  it('PAYMENT_RECEIVED marca o pedido pago pelo externalReference quando não há checkoutSession', async () => {
+    const payload = JSON.stringify({
+      id: 'evt_pix_recebido',
+      event: 'PAYMENT_RECEIVED',
+      payment: {
+        id: 'pay_recebido',
+        status: 'RECEIVED',
+        billingType: 'PIX',
+        externalReference: '1',
+      },
+    });
+
+    await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(payload),
+    );
+
+    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+    expect(pedidoFake.asaasPaymentId).toBe('pay_recebido');
+  });
+
+  it('PAYMENT_CREATED não marca o pedido como pago', async () => {
+    const payload = JSON.stringify({
+      id: 'evt_criado',
+      event: 'PAYMENT_CREATED',
+      payment: {
+        id: 'pay_novo',
+        status: 'PENDING',
+        billingType: 'PIX',
+        checkoutSession: 'chk_123',
+      },
+    });
+
+    await service.handleWebhook(
+      { asaasAccessToken: ASAAS_WEBHOOK_TOKEN },
+      Buffer.from(payload),
+    );
+
+    expect(pedidoFake.status).toBe(StatusPedido.PENDENTE);
+    expect(produtosService.removerEstoque).not.toHaveBeenCalled();
+  });
+
+  it('reconcilia cobrança CONFIRMED e marca o pedido pago mesmo sem webhook', async () => {
+    prisma.pedido.findMany.mockResolvedValueOnce([
+      { asaasCheckoutId: 'chk_123' },
+    ]);
+    asaasService.consultarCheckout.mockRejectedValueOnce(
+      new AsaasNaoEncontradoError('Checkout não encontrado no Asaas'),
+    );
+    asaasService.resolverPaymentIdPorCheckout.mockResolvedValueOnce({
+      encontrado: true,
+      payment: { id: 'pay_123', status: 'CONFIRMED' },
+    });
+
+    await service.reconciliarPagamentosAsaas();
+
+    expect(pedidoFake.status).toBe(StatusPedido.PAGO);
+    expect(produtosService.removerEstoque).toHaveBeenCalled();
+  });
+
+  it('reconcilia cobrança ainda PENDING e deixa o pedido pendente', async () => {
+    prisma.pedido.findMany.mockResolvedValueOnce([
+      { asaasCheckoutId: 'chk_123' },
+    ]);
+    asaasService.resolverPaymentIdPorCheckout.mockResolvedValueOnce({
+      encontrado: true,
+      payment: { id: 'pay_123', status: 'PENDING' },
+    });
+
+    await service.reconciliarPagamentosAsaas();
+
+    expect(pedidoFake.status).toBe(StatusPedido.PENDENTE);
+    expect(produtosService.removerEstoque).not.toHaveBeenCalled();
   });
 
   it('evento incompatível (CHECKOUT_CREATED): não marca pago nem altera estoque', async () => {
