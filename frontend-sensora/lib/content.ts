@@ -26,9 +26,6 @@ export type HeroSlide = {
   /** A arte já traz o botão desenhado: sem degradê nem o nosso botão, e o
    *  banner inteiro vira o link para `ctaHref` (título/texto continuam). */
   arteCompleta?: boolean;
-  /** Classes extras da imagem abaixo de `lg`, para adaptar no celular uma
-   *  arte larga enquanto não existe `imageSrcMobile` (ex.: mostrar inteira). */
-  ajusteMobile?: string;
 };
 
 export type ProductCategory = {
@@ -471,9 +468,7 @@ export const HERO_SLIDES: HeroSlide[] = [
     arteCompleta: true,
     imageAlt: "Banner natal sensora",
     imageSrc: "/images/hero/banner_natal.webp",
-    // Provisório até a arte de celular: mostra a arte inteira, com faixas
-    // da cor das bordas dela em cima e embaixo.
-    ajusteMobile: "max-lg:object-contain max-lg:bg-[#8c382b]",
+    imageSrcMobile: "/images/hero/banner_natal_mobile.webp",
   },
   {
     id: "velas-4-estacoes",

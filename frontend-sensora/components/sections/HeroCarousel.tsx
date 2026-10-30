@@ -116,7 +116,7 @@ export default function HeroCarousel() {
                       alt={slide.imageAlt}
                       label={slide.title}
                       priority={slideIndex === 0}
-                      className={`h-full w-full object-cover ${slide.ajusteMobile ?? ""}`}
+                      className="h-full w-full object-cover"
                       sizes={slideIndex === 0 ? "100vw" : undefined}
                     />
                   )}
