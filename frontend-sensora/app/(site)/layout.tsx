@@ -19,6 +19,8 @@ import {
 } from "@/lib/cookieConsent";
 import JsonLd from "@/components/seo/JsonLd";
 import { listarColecoesPublicas } from "@/lib/api-publica";
+import TemaNatalSite from "@/components/natal/TemaNatalSite";
+import { TEMA_NATAL_ATIVO } from "@/lib/tema-natal";
 import { EMPRESA } from "@/lib/empresa";
 import { OPEN_GRAPH_PADRAO, SITE_URL, urlAbsoluta } from "@/lib/seo";
 import { buscarFaixaCupomPublica } from "@/lib/api-publica";
@@ -135,6 +137,8 @@ export default async function RootLayout({
               <SiteMain>{children}</SiteMain>
               <SiteFooter />
               <SacolaDrawer />
+              {/* Tema de Natal temporário: liga/desliga em lib/tema-natal.ts. */}
+              {TEMA_NATAL_ATIVO && <TemaNatalSite />}
               <CookieConsentBanner />
               <OptionalAnalyticsScripts />
             </PageFadeIn>
