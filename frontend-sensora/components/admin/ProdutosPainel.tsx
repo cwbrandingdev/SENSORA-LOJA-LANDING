@@ -127,7 +127,7 @@ function ListaFiltrada({
 
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return produtos.filter((p) => {
+    const lista = produtos.filter((p) => {
       if (termo && !p.nome.toLowerCase().includes(termo)) return false;
       if (categoriaId !== "todas" && p.categoriaId !== categoriaId) return false;
       if (situacao === "inativos" && p.ativo) return false;
@@ -135,6 +135,12 @@ function ListaFiltrada({
       if (situacao === "estoque-baixo" && !estoqueBaixo(p)) return false;
       if (situacao === "esgotados" && p.quantidade > 0) return false;
       return true;
+    });
+
+    // Ativos primeiro, inativos no final; cada grupo em ordem alfabética.
+    return lista.sort((a, b) => {
+      if (a.ativo !== b.ativo) return a.ativo ? -1 : 1;
+      return a.nome.localeCompare(b.nome, "pt-BR");
     });
   }, [produtos, busca, categoriaId, situacao]);
 

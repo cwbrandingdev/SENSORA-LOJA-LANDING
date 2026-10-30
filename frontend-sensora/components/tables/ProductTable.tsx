@@ -111,7 +111,10 @@ export default function ProductTable({ produtos, categorias, onEdit, onRemove }:
     {/* Celular: um card por produto no lugar da tabela. */}
     <ul className="flex flex-col gap-3 md:hidden">
       {produtos.map((produto) => (
-        <li key={produto.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <li
+          key={produto.id}
+          className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${produto.ativo ? "" : "opacity-60"}`}
+        >
           <div className="flex items-start gap-3">
             <ProductThumb key={produto.imagemUrl ?? "sem-imagem"} src={produto.imagemUrl} alt={produto.nome} />
             <div className="min-w-0 flex-1">
@@ -166,7 +169,11 @@ export default function ProductTable({ produtos, categorias, onEdit, onRemove }:
             const estoque = statusEstoque(produto.quantidade);
 
             return (
-              <tr key={produto.id} className="transition-colors hover:bg-slate-50/70">
+              <tr
+                key={produto.id}
+                // Inativo fica levemente apagado (volta ao normal no hover).
+                className={`transition-colors hover:bg-slate-50/70 ${produto.ativo ? "" : "opacity-60 hover:opacity-100"}`}
+              >
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-3">
                     <ProductThumb key={produto.imagemUrl ?? "sem-imagem"} src={produto.imagemUrl} alt={produto.nome} />
