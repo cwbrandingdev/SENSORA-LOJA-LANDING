@@ -1,12 +1,16 @@
 # Sensora
 
-> Sensora (SensoraHome) é uma marca brasileira de aromatização de ambientes, de Curitiba/PR. Vende online velas aromáticas veganas, sprays de ambiente, difusores de ambiente e kits. Empresa: Cazarim & Souza Ltda, CNPJ 48.942.001/0001-81.
+> Sensora (SensoraHome) é uma marca brasileira de aromatização de ambientes, de Curitiba/PR. Vende online velas aromáticas veganas, sprays de ambiente, difusores de ambiente e kits, além de presentes personalizados para empresas. Empresa: Cazarim & Souza Ltda, CNPJ 48.942.001/0001-81.
 
 ## Produtos
 
-- Velas aromáticas — coleção 4 Estações: Frescor de Primavera, Luz de Verão, Manhã de Outono e Brisa de Inverno. Velas veganas de cera de coco 100% vegetal, sem parafina. Vendidas avulsas ou no Kit As Quatro Estações. Notas olfativas estão na página de cada produto.
-- Sprays de ambiente — aromas Baunilha, Especiarias e Flor de Laranjeira.
-- Difusores de ambiente — aromas Baunilha, Especiarias e Flor de Laranjeira.
+- Velas aromáticas — velas veganas de cera de coco 100% vegetal, sem parafina. Aromas: Bambu, Baunilha, Capim Limão, Cedro e Orvalho, Cereja e Avelã, Chá Branco, Cítrico Frutado, Especiarias, Flor de Laranjeira, Frutas Vermelhas, Lavanda e Madeira Nobre.
+- Sprays de ambiente — aromas Bambu, Baunilha, Chá Branco, Especiarias, Flor de Laranjeira e Lavanda.
+- Difusores de ambiente — aromas Bambu, Baunilha, Chá Branco, Especiarias, Flor de Laranjeira e Lavanda.
+- Kit 4 Estações — kit com quatro velas inspiradas nas estações do ano: Frescor de Primavera, Luz de Verão, Manhã de Outono e Brisa de Inverno.
+- Coleções especiais — coleções de datas comemorativas (como Natal), disponíveis por tempo limitado na temporada de cada data.
+
+Os aromas e a disponibilidade mudam com o tempo; o catálogo completo e atualizado, com preços, está em /loja/produtos. Notas olfativas estão na página de cada produto.
 
 ## Páginas principais
 
@@ -16,13 +20,16 @@
 - [Coleção Velas 4 Estações](https://www.sensorahome.com.br/velas/4-estacoes)
 - [Sprays de ambiente](https://www.sensorahome.com.br/sprays)
 - [Difusores](https://www.sensorahome.com.br/difusores)
-- [Kits](https://www.sensorahome.com.br/colecoes)
+- [Kits](https://www.sensorahome.com.br/kits)
+- [Coleções especiais](https://www.sensorahome.com.br/colecoes): coleções de datas comemorativas ativas no momento
+- [Para empresas](https://www.sensorahome.com.br/para-empresas): presentes sensoriais personalizados com a marca do cliente para colaboradores, clientes e eventos, a partir de 30 unidades, com proposta pelo site
 
 ## Compra e atendimento
 
 - [Perguntas frequentes](https://www.sensorahome.com.br/faq): compra, pagamento, frete, pedidos, nota fiscal
 - [Trocas e devoluções](https://www.sensorahome.com.br/trocas-e-devolucoes): 7 dias para devolução e garantia legal de 30 dias por defeito
 - [Quem somos](https://www.sensorahome.com.br/quem-somos): a marca Sensora Home (razão social, CNPJ e endereço ficam no rodapé do site)
+- Entrega: por enquanto, apenas Curitiba e região metropolitana
 - Contato: contato@sensorahome.com.br · Instagram [@sensoramarketingsensorial](https://www.instagram.com/sensoramarketingsensorial/)
 
 ## Opcional

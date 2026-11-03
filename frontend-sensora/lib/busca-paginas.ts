@@ -68,7 +68,12 @@ export const PAGINAS_BUSCA: PaginaBusca[] = [
   {
     titulo: "Kits",
     href: "/kits",
-    palavras: "kits presentes coleções 4 estações",
+    palavras: "kits presentes 4 estações",
+  },
+  {
+    titulo: "Coleções especiais",
+    href: "/colecoes",
+    palavras: "coleções especiais datas comemorativas natal edição limitada presentes",
   },
   { titulo: "Velas aromáticas", href: "/velas", palavras: "velas aromáticas" },
   {

@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { listarProdutosPublicos } from "@/lib/api-publica";
+import { listarColecoesPublicas, listarProdutosPublicos } from "@/lib/api-publica";
 import { LOJA_PRODUTO_URL } from "@/lib/config";
 import { CATEGORIES, COLLECTIONS, getCategoryHref } from "@/lib/content";
 import { SITE_URL } from "@/lib/seo";
@@ -13,6 +13,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // listarProdutosPublicos devolve [] se a API falhar — o sitemap continua
   // saindo só com as rotas estáticas.
   const produtos = await listarProdutosPublicos();
+  // Só as coleções ligadas no Admin (desligadas dão 404); [] se a API falhar.
+  const colecoes = await listarColecoesPublicas();
 
   const caminhos = [
     "/",
@@ -20,6 +22,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/loja/produtos",
     ...CATEGORIES.map((category) => getCategoryHref(category.slug)),
     "/kits",
+    "/colecoes",
+    ...colecoes.map((colecao) => `/colecoes/${colecao.slug}`),
     ...COLLECTIONS.map(
       (collection) => `${getCategoryHref(collection.categorySlug)}/${collection.slug}`,
     ),

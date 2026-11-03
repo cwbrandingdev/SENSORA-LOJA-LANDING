@@ -550,13 +550,13 @@ export const FAQ_ITEMS: FaqItem[] = [
     id: "produtos",
     question: "Quais tipos de produtos a Sensora oferece?",
     answer:
-      "Trabalhamos com velas aromáticas, sprays de ambiente e difusores de ambiente — produtos de SensoraHome pensados para perfumar e transformar a atmosfera de qualquer espaço.",
+      "Trabalhamos com velas aromáticas, sprays de ambiente, difusores de ambiente e kits — produtos de SensoraHome pensados para perfumar e transformar a atmosfera de qualquer espaço.",
   },
   {
     id: "colecoes",
     question: "Quais coleções estão disponíveis?",
     answer:
-      "Hoje temos três coleções: as Velas 4 Estações, os Sprays de Ambiente e os Difusores de Ambiente. Você encontra todas elas na página de Coleções.",
+      "Além das linhas de velas, sprays, difusores e kits, lançamos coleções especiais em datas comemorativas, como o Natal, disponíveis por tempo limitado. As coleções ativas no momento ficam na página Coleções, e os kits na página Kits.",
   },
   {
     id: "4-estacoes",
@@ -574,7 +574,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     id: "aromas",
     question: "Quais aromas estão disponíveis nos sprays e difusores?",
     answer:
-      "Os sprays de ambiente e os difusores de ambiente estão disponíveis nos aromas Baunilha, Especiarias e Flor de Laranjeira.",
+      "Os sprays de ambiente e os difusores de ambiente estão disponíveis nos aromas Bambu, Baunilha, Chá Branco, Especiarias, Flor de Laranjeira e Lavanda. Os aromas disponíveis no momento aparecem sempre na loja, em Ver tudo.",
   },
   {
     id: "como-comprar",
