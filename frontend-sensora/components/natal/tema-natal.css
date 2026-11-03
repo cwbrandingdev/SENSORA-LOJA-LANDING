@@ -110,6 +110,63 @@ html:has(.tema-natal) section[aria-labelledby="produtos-heading"] a.group::after
   pointer-events: none;
 }
 
+/* Faixa fina do topo: na home não aparece (lá tem a faixa grande). */
+html:has(.tema-natal-home) .natal-faixa-topo {
+  display: none;
+}
+
+/* Estrelinha dourada acima dos títulos principais das páginas. */
+html:has(.tema-natal) main h1.font-serif:not(.sr-only)::before {
+  content: "✦";
+  display: block;
+  margin-bottom: 0.35em;
+  color: #d9b36c;
+  font-size: 0.4em;
+}
+
+/* Cartões de produto da loja e das categorias, como presentes: moldura
+   dourada fina na foto sempre, e o laço aparece ao passar o mouse.
+   (ProductCard: foto com bg-brand-navy; CollectionShowcase: com shadow-md.) */
+html:has(.tema-natal) main .group div.relative.overflow-hidden.rounded-sm.bg-brand-navy,
+html:has(.tema-natal) main .group div.relative.overflow-hidden.rounded-sm.shadow-md {
+  --natal-laco: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 50'%3E%3Cpath d='M32 22C24 8 6 4 6 14s18 12 26 8z' fill='%23a8322d'/%3E%3Cpath d='M32 22c8-14 26-18 26-8s-18 12-26 8z' fill='%23a8322d'/%3E%3Cpath d='M32 22C26 13 13 10 12 15c4 4 13 7 20 7zM32 22c6-9 19-12 20-7-4 4-13 7-20 7z' fill='%237d1f1c'/%3E%3Cpath d='M30 24l-10 22 6-2 4 5 3-25zM34 24l10 22-6-2-4 5-3-25z' fill='%23a8322d'/%3E%3Ccircle cx='32' cy='22' r='5' fill='%23d9b36c'/%3E%3C/svg%3E");
+}
+html:has(.tema-natal) main .group div.relative.overflow-hidden.rounded-sm.bg-brand-navy::before,
+html:has(.tema-natal) main .group div.relative.overflow-hidden.rounded-sm.shadow-md::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  z-index: 20;
+  border: 1px solid rgb(217 179 108 / 0.4);
+  pointer-events: none;
+  transition: border-color 0.6s;
+}
+html:has(.tema-natal) main .group:hover div.relative.overflow-hidden.rounded-sm.bg-brand-navy::before,
+html:has(.tema-natal) main .group:hover div.relative.overflow-hidden.rounded-sm.shadow-md::before {
+  border-color: rgb(217 179 108 / 0.95);
+}
+html:has(.tema-natal) main .group div.relative.overflow-hidden.rounded-sm.bg-brand-navy::after,
+html:has(.tema-natal) main .group div.relative.overflow-hidden.rounded-sm.shadow-md::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 21;
+  width: 50px;
+  height: 40px;
+  background: var(--natal-laco) center / contain no-repeat;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.25));
+  opacity: 0;
+  transform: scale(0.6) rotate(-12deg);
+  transition: opacity 0.35s, transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+html:has(.tema-natal) main .group:hover div.relative.overflow-hidden.rounded-sm.bg-brand-navy::after,
+html:has(.tema-natal) main .group:hover div.relative.overflow-hidden.rounded-sm.shadow-md::after {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+
 /* Estrelinhas douradas piscando devagar. */
 @keyframes natal-brilho {
   0%,

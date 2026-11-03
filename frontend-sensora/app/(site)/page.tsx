@@ -31,7 +31,7 @@ export default function Home() {
   // Cores, neve e footer de Natal valem no site todo (TemaNatalSite, no
   // layout); aqui entram só os enfeites exclusivos da home.
   return (
-    <div className="tema-natal">
+    <div className="tema-natal tema-natal-home">
       <HeroCarousel />
       <FaixaNatal />
       <ProductCategories />

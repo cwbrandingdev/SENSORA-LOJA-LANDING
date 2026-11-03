@@ -19,6 +19,7 @@ import {
 } from "@/lib/cookieConsent";
 import JsonLd from "@/components/seo/JsonLd";
 import { listarColecoesPublicas } from "@/lib/api-publica";
+import FaixaNatalTopo from "@/components/natal/FaixaNatalTopo";
 import TemaNatalSite from "@/components/natal/TemaNatalSite";
 import { TEMA_NATAL_ATIVO } from "@/lib/tema-natal";
 import { EMPRESA } from "@/lib/empresa";
@@ -134,7 +135,10 @@ export default async function RootLayout({
                 <FaixaCupom inicial={faixaInicial} />
                 <Navbar colecoes={colecoes} />
               </AuthProvider>
-              <SiteMain>{children}</SiteMain>
+              <SiteMain>
+                {TEMA_NATAL_ATIVO && <FaixaNatalTopo />}
+                {children}
+              </SiteMain>
               <SiteFooter />
               <SacolaDrawer />
               {/* Tema de Natal temporário: liga/desliga em lib/tema-natal.ts. */}
