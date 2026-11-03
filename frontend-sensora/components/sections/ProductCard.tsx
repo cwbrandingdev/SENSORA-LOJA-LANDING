@@ -58,27 +58,32 @@ export default function ProductCard({
               Destaque
             </span>
           )}
-          <ImageReveal>
-            <PlaceholderImage
-              src={imagemKitRedimensionada(produto.imagemUrl, 700)}
-              alt={produto.nome}
+          {/* Esgotado: as duas fotos ficam apagadas juntas (sobre o fundo
+              azul). Apagar cada foto separada deixava a capa aparecer
+              através da 2ª foto no hover. */}
+          <div className={esgotado ? "absolute inset-0 opacity-60" : "contents"}>
+            <ImageReveal>
+              <PlaceholderImage
+                src={imagemKitRedimensionada(produto.imagemUrl, 700)}
+                alt={produto.nome}
+                label={produto.nome}
+                unoptimized={Boolean(produto.imagemUrl)}
+                sizes="(max-width: 639px) calc(100vw - 48px), (max-width: 1023px) calc(50vw - 36px), (max-width: 1231px) calc(25vw - 38px), 270px"
+                className="transition-transform duration-[1600ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03]"
+              />
+            </ImageReveal>
+            {/* 2ª foto da galeria por cima da capa enquanto o mouse está no cartão. */}
+            <HoverSecondImage
+              src={imagemKitRedimensionada(
+                segundaImagemDaGaleria(produto.imagens, produto.imagemUrl),
+                700,
+              )}
               label={produto.nome}
               unoptimized={Boolean(produto.imagemUrl)}
               sizes="(max-width: 639px) calc(100vw - 48px), (max-width: 1023px) calc(50vw - 36px), (max-width: 1231px) calc(25vw - 38px), 270px"
-              className={`transition-transform duration-[1600ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03] ${esgotado ? "opacity-60" : ""}`}
+              className="transition-transform duration-1600 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03]"
             />
-          </ImageReveal>
-          {/* 2ª foto da galeria por cima da capa enquanto o mouse está no cartão. */}
-          <HoverSecondImage
-            src={imagemKitRedimensionada(
-              segundaImagemDaGaleria(produto.imagens, produto.imagemUrl),
-              700,
-            )}
-            label={produto.nome}
-            unoptimized={Boolean(produto.imagemUrl)}
-            sizes="(max-width: 639px) calc(100vw - 48px), (max-width: 1023px) calc(50vw - 36px), (max-width: 1231px) calc(25vw - 38px), 270px"
-            className={`transition-transform duration-1600 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03] ${esgotado ? "opacity-60" : ""}`}
-          />
+          </div>
         </div>
 
         <h3 className="mt-5 font-serif text-lg font-normal text-brand-navy transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-fine:group-hover:-translate-y-0.5">

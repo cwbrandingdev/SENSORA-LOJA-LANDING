@@ -82,7 +82,9 @@ export default function LatestReleaseCard({
     <article className="group flex h-full flex-col text-center">
       <div className="relative overflow-hidden bg-white">
         <Link href={produto.href} className="block">
-          <div className="relative aspect-4/5 w-full">
+          <div
+            className={`relative aspect-4/5 w-full ${esgotado ? "opacity-60" : ""}`}
+          >
             {mostrarImagem ? (
               <>
                 <Image
@@ -93,7 +95,7 @@ export default function LatestReleaseCard({
                   alt={produto.nome}
                   fill
                   sizes="(max-width: 639px) 85vw, (max-width: 1023px) 50vw, (max-width: 1152px) 25vw, 270px"
-                  className={`object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.05] ${esgotado ? "opacity-60" : ""}`}
+                  className="object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.05]"
                   unoptimized
                   onError={() => setImagemQuebrou(true)}
                 />
@@ -106,7 +108,7 @@ export default function LatestReleaseCard({
                     aria-hidden
                     fill
                     sizes="(max-width: 639px) 85vw, (max-width: 1023px) 50vw, (max-width: 1152px) 25vw, 270px"
-                    className={`object-cover opacity-0 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.05] ${esgotado ? "pointer-fine:group-hover:opacity-60" : "pointer-fine:group-hover:opacity-100"}`}
+                    className={`object-cover opacity-0 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.05] pointer-fine:group-hover:opacity-100`}
                     unoptimized
                     onError={() => setImagemHoverQuebrou(true)}
                   />
