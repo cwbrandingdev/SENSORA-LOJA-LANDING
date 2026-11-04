@@ -14,6 +14,8 @@ import {
 import { HERO_SLIDES } from "@/lib/content";
 
 const AUTOPLAY_MS = 6000;
+const ALTURA_BANNER =
+  "h-[calc(100vh-var(--navbar-height)-var(--faixa-cupom))] lg:h-[min(calc(100vh-var(--navbar-height)-var(--faixa-cupom)),37.5vw)]";
 
 // Slide com arte de celular e de computador: um <picture> só, para o
 // navegador baixar apenas a arte da tela atual. Com duas <Image> (uma
@@ -111,14 +113,13 @@ export default function HeroCarousel() {
             stopOnInteraction: false,
           }),
         ]}
-        className="h-[calc(100vh-var(--navbar-height)-var(--faixa-cupom))] w-full"
+        className={`${ALTURA_BANNER} w-full`}
       >
-        <CarouselContent className="ml-0 h-[calc(100vh-var(--navbar-height)-var(--faixa-cupom))] max-sm:touch-pan-y max-sm:touch-pinch-zoom">
+        <CarouselContent
+          className={`ml-0 ${ALTURA_BANNER} max-sm:touch-pan-y max-sm:touch-pinch-zoom`}
+        >
           {HERO_SLIDES.map((slide, slideIndex) => (
-            <CarouselItem
-              key={slide.id}
-              className="h-[calc(100vh-var(--navbar-height)-var(--faixa-cupom))] pl-0"
-            >
+            <CarouselItem key={slide.id} className={`${ALTURA_BANNER} pl-0`}>
               <div className="relative block h-full w-full overflow-hidden">
                 <div
                   className={`relative h-full w-full motion-reduce:!scale-100 motion-reduce:!duration-0 sm:transition-transform sm:ease-linear ${
@@ -128,7 +129,8 @@ export default function HeroCarousel() {
                   }`}
                 >
                   {slideIndex > 0 &&
-                  !carregarDemais ? null : slide.imageSrcMobile && slide.imageSrc ? (
+                  !carregarDemais ? null : slide.imageSrcMobile &&
+                    slide.imageSrc ? (
                     <BannerArteDirecionada
                       mobile={slide.imageSrcMobile}
                       desktop={slide.imageSrc}
@@ -229,7 +231,9 @@ export default function HeroCarousel() {
               aria-label={`Ir para o slide ${slideIndex + 1}`}
               aria-current={slideIndex === index}
               className={`h-2.5 rounded-full bg-white shadow-sm transition-all duration-300 ${
-                slideIndex === index ? "w-8" : "w-2.5 opacity-70 hover:opacity-100"
+                slideIndex === index
+                  ? "w-8"
+                  : "w-2.5 opacity-70 hover:opacity-100"
               }`}
             />
           ))}

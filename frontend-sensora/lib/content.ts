@@ -473,7 +473,8 @@ export const HERO_SLIDES: HeroSlide[] = [
   {
     id: "velas-4-estacoes",
     title: "Kit 4 Estações",
-    subtitle: VELAS_4_ESTACOES.description,
+    subtitle:
+      "Do frescor da primavera ao aconchego do inverno, o ano inteiro cabe na sua casa.",
     ctaLabel: "Conhecer",
     ctaHref: getCollectionHref(VELAS_4_ESTACOES),
     imageAlt: VELAS_4_ESTACOES.heroImageAlt ?? "",
