@@ -93,7 +93,9 @@ function CategoryNav({
                 href={item.href}
                 className={cn(
                   "flex w-24 flex-col items-center gap-1 rounded-2xl py-1.5 transition-colors duration-500",
-                  azul ? "text-white hover:bg-white/10" : "text-brand-navy hover:bg-stone-100",
+                  azul
+                    ? "text-white hover:bg-white/10"
+                    : "text-brand-navy hover:bg-stone-100",
                   isActive(item.href) && "text-brand-orange",
                 )}
               >
@@ -165,7 +167,11 @@ function UtilityCluster({
 }
 
 // `colecoes`: coleções de datas festivas ligadas no Admin (vêm do layout).
-export default function Navbar({ colecoes = [] }: { colecoes?: { nome: string; slug: string }[] }) {
+export default function Navbar({
+  colecoes = [],
+}: {
+  colecoes?: { nome: string; slug: string }[];
+}) {
   const linksColecoes: NavLink[] = colecoes.map((colecao) => ({
     label: colecao.nome,
     href: `/colecoes/${colecao.slug}`,
@@ -214,7 +220,8 @@ export default function Navbar({ colecoes = [] }: { colecoes?: { nome: string; s
     window.addEventListener("scroll", aoRolar, { passive: true });
     return () => window.removeEventListener("scroll", aoRolar);
   }, []);
-  const menuAzul = pathname === "/" && !passouDoBanner;
+  const naHome = pathname === "/" || pathname === "/index;";
+  const menuAzul = naHome && !passouDoBanner;
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -384,7 +391,9 @@ export default function Navbar({ colecoes = [] }: { colecoes?: { nome: string; s
         <div
           className={cn(
             "pointer-events-auto hidden border-b transition-colors duration-500 lg:block",
-            menuAzul ? "border-white/10 bg-brand-navy" : "border-stone-200/80 bg-white",
+            menuAzul
+              ? "border-white/10 bg-brand-navy"
+              : "border-stone-200/80 bg-white",
           )}
         >
           <div className="mx-auto flex h-[calc(var(--navbar-height)-1px)] max-w-384 flex-col items-center justify-center px-8">
@@ -402,7 +411,11 @@ export default function Navbar({ colecoes = [] }: { colecoes?: { nome: string; s
             </Link>
 
             <div className="mt-1 flex items-center justify-center gap-4">
-              <CategoryNav isActive={isActive} linksColecoes={linksColecoes} azul={menuAzul} />
+              <CategoryNav
+                isActive={isActive}
+                linksColecoes={linksColecoes}
+                azul={menuAzul}
+              />
               <UtilityCluster
                 cartLabel={cartLabel}
                 totalItens={totalItens}
