@@ -220,7 +220,7 @@ export default function Navbar({
     window.addEventListener("scroll", aoRolar, { passive: true });
     return () => window.removeEventListener("scroll", aoRolar);
   }, []);
-  const naHome = pathname === "/" || pathname === "/index;";
+  const naHome = pathname === "/" || pathname === "/index";
   const menuAzul = naHome && !passouDoBanner;
 
   useEffect(() => {
