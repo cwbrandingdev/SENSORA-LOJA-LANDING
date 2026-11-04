@@ -391,9 +391,7 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
         freteServico: opcaoFrete.servico,
         fretePrazoDias: opcaoFrete.prazoDias,
         freteServicoId: opcaoFrete.id,
-        ...(cupomId !== undefined
-          ? { cupomId, cupomCodigo, desconto }
-          : {}),
+        ...(cupomId !== undefined ? { cupomId, cupomCodigo, desconto } : {}),
         itens: {
           create: itensPedido,
         },
@@ -543,9 +541,7 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     chargeTypes: AsaasChargeType[];
     installment?: { maxInstallmentCount: number };
   } {
-    const maxPorValor = Math.floor(
-      totalPedido / this.asaasMinValorParcela,
-    );
+    const maxPorValor = Math.floor(totalPedido / this.asaasMinValorParcela);
     const maxParcelas = Math.min(this.asaasMaxParcelas, maxPorValor);
     if (maxParcelas < 2) {
       return { chargeTypes: ['DETACHED'] };
@@ -659,9 +655,7 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
   async enviarLembretesCheckout(): Promise<void> {
     try {
       const agora = Date.now();
-      const limiteAbandono = new Date(
-        agora - this.abandonoMinutos * 60 * 1000,
-      );
+      const limiteAbandono = new Date(agora - this.abandonoMinutos * 60 * 1000);
       const limiteExpiracao = new Date(agora - this.expiraMs);
       const pedidos = await this.prisma.pedido.findMany({
         where: {
@@ -724,8 +718,7 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     await this.reconciliarPagamentosAsaas();
     const [checkouts, carrinhos] = await Promise.all([
       this.listarCheckoutsPendentesAdmin(),
-      this.carrinhoService?.listarAbandonadosAdmin?.() ??
-        Promise.resolve([]),
+      this.carrinhoService?.listarAbandonadosAdmin?.() ?? Promise.resolve([]),
     ]);
     const usuariosCheckout = new Set(
       checkouts
@@ -734,27 +727,51 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     );
     const sacolas = carrinhos
       .filter((carrinho) => !usuariosCheckout.has(carrinho.usuarioId))
-      .map(
-        (carrinho): CheckoutPendenteAdmin => ({
-          id: `carrinho-${carrinho.usuarioId}`,
-          tipo: 'CARRINHO',
-          clienteNome: carrinho.clienteNome,
-          clienteEmail: carrinho.clienteEmail,
-          clienteTelefone: carrinho.clienteTelefone,
-          usuarioId: carrinho.usuarioId,
-          itens: carrinho.itens,
-          total: carrinho.total,
-          paradoEm: carrinho.paradoEm,
-          minutosParado: this.minutosParado(carrinho.paradoEm),
-          lembreteEnviadoEm: carrinho.lembreteEnviadoEm,
-          pedidoId: null,
-          numero: null,
-          minutosRestantes: null,
-        }),
-      );
+      .map((carrinho): CheckoutPendenteAdmin => ({
+        id: `carrinho-${carrinho.usuarioId}`,
+        tipo: 'CARRINHO',
+        clienteNome: carrinho.clienteNome,
+        clienteEmail: carrinho.clienteEmail,
+        clienteTelefone: carrinho.clienteTelefone,
+        usuarioId: carrinho.usuarioId,
+        itens: carrinho.itens,
+        total: carrinho.total,
+        paradoEm: carrinho.paradoEm,
+        minutosParado: this.minutosParado(carrinho.paradoEm),
+        lembreteEnviadoEm: carrinho.lembreteEnviadoEm,
+        pedidoId: null,
+        numero: null,
+        minutosRestantes: null,
+      }));
     return [...checkouts, ...sacolas].sort(
       (a, b) => a.paradoEm.getTime() - b.paradoEm.getTime(),
     );
+  }
+
+  // Lixeira da lista "Para acompanhar": só marca como dispensado, não
+  // apaga nada (o pedido continua no histórico e a sacola, com o cliente).
+  async dispensarAcompanhamento(
+    ids: string[],
+  ): Promise<{ dispensados: number }> {
+    const agora = new Date();
+    const usuarioIds = ids
+      .filter((id) => id.startsWith('carrinho-'))
+      .map((id) => Number(id.slice('carrinho-'.length)));
+    const pedidoIds = ids
+      .filter((id) => id.startsWith('checkout-'))
+      .map((id) => Number(id.slice('checkout-'.length)));
+
+    const [carrinhos, pedidos] = await Promise.all([
+      this.prisma.carrinho.updateMany({
+        where: { usuarioId: { in: usuarioIds } },
+        data: { acompanhamentoDispensadoEm: agora },
+      }),
+      this.prisma.pedido.updateMany({
+        where: { id: { in: pedidoIds } },
+        data: { acompanhamentoDispensadoEm: agora },
+      }),
+    ]);
+    return { dispensados: carrinhos.count + pedidos.count };
   }
 
   private async listarCheckoutsPendentesAdmin(): Promise<
@@ -766,6 +783,7 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
       where: {
         status: StatusPedido.PENDENTE,
         data: { gt: limiteExpiracao },
+        acompanhamentoDispensadoEm: null,
         OR: [
           { asaasCheckoutId: { not: null } },
           { stripeSessionId: { not: null } },
@@ -868,7 +886,10 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
   private destinoEExpiracaoAsaas(
     pedidoId: number,
     minutesToExpire: number,
-  ): Pick<CriarCheckoutPayload, 'callback' | 'externalReference' | 'minutesToExpire'> {
+  ): Pick<
+    CriarCheckoutPayload,
+    'callback' | 'externalReference' | 'minutesToExpire'
+  > {
     return {
       callback: {
         successUrl: `${this.frontendUrl}/checkout/sucesso`,
@@ -953,7 +974,9 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async retomarSessaoAsaas(
-    pedido: NonNullable<Awaited<ReturnType<CheckoutService['encontrarPedidoPendente']>>>,
+    pedido: NonNullable<
+      Awaited<ReturnType<CheckoutService['encontrarPedidoPendente']>>
+    >,
   ): Promise<CheckoutSessionResponse> {
     if (!pedido.asaasCheckoutId) {
       return this.recriarSessaoAsaas(pedido);
@@ -998,7 +1021,9 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async recriarSessaoAsaas(
-    pedido: NonNullable<Awaited<ReturnType<CheckoutService['encontrarPedidoPendente']>>>,
+    pedido: NonNullable<
+      Awaited<ReturnType<CheckoutService['encontrarPedidoPendente']>>
+    >,
   ): Promise<CheckoutSessionResponse> {
     const produtos = pedido.itens.map((item) => ({
       name: item.produto.nome,
@@ -1017,7 +1042,9 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
       const transportadora = pedido.freteTransportadora ?? '';
       const servico = pedido.freteServico ?? '';
       itens.push({
-        name: `Frete - ${transportadora} ${servico}`.replace(/\s+/g, ' ').trim(),
+        name: `Frete - ${transportadora} ${servico}`
+          .replace(/\s+/g, ' ')
+          .trim(),
         quantity: 1,
         value: Number(pedido.freteValor),
       });
@@ -1049,7 +1076,9 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async retomarSessaoStripe(
-    pedido: NonNullable<Awaited<ReturnType<CheckoutService['encontrarPedidoPendente']>>>,
+    pedido: NonNullable<
+      Awaited<ReturnType<CheckoutService['encontrarPedidoPendente']>>
+    >,
   ): Promise<CheckoutSessionResponse> {
     if (!pedido.stripeSessionId || !this.stripe) {
       throw new BadRequestException('Não foi possível retomar o pagamento');
@@ -1280,10 +1309,7 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
       // Etapa 5B.5 — eventos de reembolso, tratados à parte de
       // CHECKOUT_PAID: identificam o Pedido por Payment (asaasPaymentId),
       // não por Checkout (asaasCheckoutId) — são recursos diferentes.
-      await this.processarEventoReembolsoAsaas(
-        body.event,
-        body.payment?.id,
-      );
+      await this.processarEventoReembolsoAsaas(body.event, body.payment?.id);
     }
 
     // Mesmo padrão de sempre (CHECKOUT_PAID, e qualquer evento
@@ -1726,7 +1752,11 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     await this.prisma.$transaction(async (tx) => {
       for (const item of itensElegiveis) {
         const claim = await tx.itemPedido.updateMany({
-          where: { id: item.id, estoqueBaixado: true, estoqueRestaurado: false },
+          where: {
+            id: item.id,
+            estoqueBaixado: true,
+            estoqueRestaurado: false,
+          },
           data: { estoqueRestaurado: true },
         });
 
@@ -1861,7 +1891,9 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      const produtoIds = [...new Set(pedido.itens.map((item) => item.produtoId))];
+      const produtoIds = [
+        ...new Set(pedido.itens.map((item) => item.produtoId)),
+      ];
       const produtos =
         produtoIds.length > 0
           ? await this.prisma.produto.findMany({
@@ -1869,7 +1901,9 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
               select: { id: true, nome: true },
             })
           : [];
-      const nomePorId = new Map(produtos.map((produto) => [produto.id, produto.nome]));
+      const nomePorId = new Map(
+        produtos.map((produto) => [produto.id, produto.nome]),
+      );
 
       const reais = (valor: unknown) =>
         new Intl.NumberFormat('pt-BR', {
@@ -1927,7 +1961,9 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
           `<p>Itens:</p><ul>${itensHtml}</ul>` +
           (freteNome
             ? `<p>Frete: ${escaparHtml(freteNome)}` +
-              (pedido.freteValor != null ? ` — ${reais(pedido.freteValor)}` : '') +
+              (pedido.freteValor != null
+                ? ` — ${reais(pedido.freteValor)}`
+                : '') +
               (prazo ? `<br />Prazo estimado: ${escaparHtml(prazo)}` : '') +
               '</p>'
             : '') +

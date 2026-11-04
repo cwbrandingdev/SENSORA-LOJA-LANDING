@@ -122,10 +122,14 @@ model Carrinho {
   usuarioId         Int            @unique
   atualizadoEm      DateTime       @default(now())
   lembreteEnviadoEm DateTime?
+  // Admin tirou da lista "Para acompanhar" (lixeira). Volta a aparecer se o
+  // cliente mexer na sacola depois disso.
+  acompanhamentoDispensadoEm DateTime?
   usuario           Usuario        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   itens             ItemCarrinho[]
 
   @@index([lembreteEnviadoEm, atualizadoEm])
+  
 }
 
 model ItemCarrinho {
@@ -291,6 +295,8 @@ model Pedido {
   // Carrinho.lembreteEnviadoEm: aquele cobre a sacola parada; este cobre
   // quem já abriu o pagamento e não concluiu.
   lembreteCheckoutEm DateTime?
+  // Admin tirou este pagamento em aberto da lista "Para acompanhar" (lixeira).
+  acompanhamentoDispensadoEm DateTime?
   // Código de rastreio da ida, colado pelo admin ao marcar como enviado
   // (ou atualizado depois). Não vem do Melhor Envio nesta etapa — a compra
   // de etiqueta de ida continua fora do sistema; isto só guarda o código

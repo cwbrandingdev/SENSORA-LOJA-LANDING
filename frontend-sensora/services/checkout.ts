@@ -23,7 +23,10 @@ import type {
 export async function criarSessaoCheckout(
   data: CriarSessaoCheckoutPayload,
 ): Promise<CheckoutSessionResponse> {
-  const response = await api.post<CheckoutSessionResponse>("/checkout/session", data);
+  const response = await api.post<CheckoutSessionResponse>(
+    "/checkout/session",
+    data,
+  );
   return response.data;
 }
 
@@ -63,7 +66,8 @@ export function isUrlDeCheckoutSegura(valor: unknown): valor is string {
 // rede/401 nunca deve quebrar o carrinho: o banner simplesmente não aparece.
 export async function buscarCheckoutPendente(): Promise<CheckoutPendente | null> {
   try {
-    const response = await api.get<CheckoutPendenteLookup>("/checkout/pendente");
+    const response =
+      await api.get<CheckoutPendenteLookup>("/checkout/pendente");
     return response.data?.pendente ?? null;
   } catch {
     return null;
@@ -86,12 +90,28 @@ export async function retomarCheckoutPendente(
 // Mesmo redirecionamento de POST /checkout/session: valida a URL, grava o
 // sessionId para /checkout/sucesso e sai para a página hospedada do Asaas.
 // GET /admin/checkout/pendentes — sacola parada + checkout PENDENTE.
-export async function listarCheckoutsPendentesAdmin(): Promise<CheckoutPendenteAdmin[]> {
-  const response = await api.get<CheckoutPendenteAdmin[]>("/admin/checkout/pendentes");
+export async function listarCheckoutsPendentesAdmin(): Promise<
+  CheckoutPendenteAdmin[]
+> {
+  const response = await api.get<CheckoutPendenteAdmin[]>(
+    "/admin/checkout/pendentes",
+  );
   return response.data;
 }
 
-export function redirecionarParaPagamento(sessao: CheckoutSessionResponse): boolean {
+export async function dispensarAcompanhamentoAdmin(
+  ids: string[],
+): Promise<number> {
+  const response = await api.post<{ dispensados: number }>(
+    "/admin/checkout/dispensar",
+    { ids },
+  );
+  return response.data.dispensados;
+}
+
+export function redirecionarParaPagamento(
+  sessao: CheckoutSessionResponse,
+): boolean {
   if (!isUrlDeCheckoutSegura(sessao.url)) return false;
   setCheckoutPendente(sessao.sessionId);
   window.location.assign(sessao.url);

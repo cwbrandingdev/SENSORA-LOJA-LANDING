@@ -109,7 +109,9 @@ export class CarrinhoService implements OnModuleInit, OnModuleDestroy {
             select: { id: true },
           });
     const validos = new Set(produtos.map((produto) => produto.id));
-    const filtrados = consolidados.filter((item) => validos.has(item.produtoId));
+    const filtrados = consolidados.filter((item) =>
+      validos.has(item.produtoId),
+    );
 
     const existente = await this.prisma.carrinho.findUnique({
       where: { usuarioId },
@@ -155,7 +157,11 @@ export class CarrinhoService implements OnModuleInit, OnModuleDestroy {
         : []),
       this.prisma.carrinho.update({
         where: { id: existente.id },
-        data: { atualizadoEm: agora, lembreteEnviadoEm: null },
+        data: {
+          atualizadoEm: agora,
+          lembreteEnviadoEm: null,
+          acompanhamentoDispensadoEm: null,
+        },
       }),
     ]);
 
@@ -191,12 +197,11 @@ export class CarrinhoService implements OnModuleInit, OnModuleDestroy {
   // Sacolas no prazo do lembrete (ou já lembradas), sem Pedido PENDENTE —
   // quem está no checkout aparece na lista de pagamento, não aqui.
   async listarAbandonadosAdmin(): Promise<CarrinhoAbandonadoAdmin[]> {
-    const limite = new Date(
-      Date.now() - this.abandonoMinutos * 60 * 1000,
-    );
+    const limite = new Date(Date.now() - this.abandonoMinutos * 60 * 1000);
     const carrinhos = await this.prisma.carrinho.findMany({
       where: {
         itens: { some: { produto: { ativo: true } } },
+        acompanhamentoDispensadoEm: null,
         OR: [
           { lembreteEnviadoEm: { not: null } },
           { atualizadoEm: { lte: limite } },
@@ -267,9 +272,7 @@ export class CarrinhoService implements OnModuleInit, OnModuleDestroy {
   // o cliente já está no pagamento. Nunca lança.
   async enviarLembretes(): Promise<void> {
     try {
-      const limite = new Date(
-        Date.now() - this.abandonoMinutos * 60 * 1000,
-      );
+      const limite = new Date(Date.now() - this.abandonoMinutos * 60 * 1000);
       const carrinhos = await this.prisma.carrinho.findMany({
         where: {
           lembreteEnviadoEm: null,

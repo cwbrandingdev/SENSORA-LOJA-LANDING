@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Autoplay from "embla-carousel-autoplay";
 import Link from "next/link";
+import { getImageProps } from "next/image";
 import PlaceholderImage from "@/components/ui/PlaceholderImage";
 import {
   Carousel,
@@ -13,6 +14,46 @@ import {
 import { HERO_SLIDES } from "@/lib/content";
 
 const AUTOPLAY_MS = 6000;
+
+// Slide com arte de celular e de computador: um <picture> só, para o
+// navegador baixar apenas a arte da tela atual. Com duas <Image> (uma
+// escondida por CSS) e preload nas duas, o celular baixava também a arte
+// grande do computador e a imagem principal demorava a aparecer. O 1º
+// slide vai com prioridade alta (é a imagem principal da home).
+function BannerArteDirecionada({
+  mobile,
+  desktop,
+  alt,
+  prioritario,
+}: {
+  mobile: string;
+  desktop: string;
+  alt: string;
+  prioritario: boolean;
+}) {
+  const comum = { alt, fill: true, sizes: "100vw" } as const;
+  const {
+    props: { srcSet: srcSetDesktop },
+  } = getImageProps({ ...comum, src: desktop });
+  const {
+    props: { srcSet: srcSetMobile, ...img },
+  } = getImageProps({
+    ...comum,
+    src: mobile,
+    loading: prioritario ? "eager" : "lazy",
+    fetchPriority: prioritario ? "high" : "auto",
+  });
+
+  return (
+    <picture>
+      {/* lg (1024px): mesmo ponto em que o site troca para o layout de computador. */}
+      <source media="(min-width: 1024px)" srcSet={srcSetDesktop} />
+      <source srcSet={srcSetMobile} />
+      {/* <img> com as props otimizadas de getImageProps (modelo oficial de art direction do Next). */}
+      <img {...img} alt={alt} className="object-cover" />
+    </picture>
+  );
+}
 
 export default function HeroCarousel() {
   const [api, setApi] = useState<CarouselApi>();
@@ -87,29 +128,13 @@ export default function HeroCarousel() {
                   }`}
                 >
                   {slideIndex > 0 &&
-                  !carregarDemais ? null : slide.imageSrcMobile ? (
-                    <>
-                      <div className="absolute inset-0 lg:hidden">
-                        <PlaceholderImage
-                          src={slide.imageSrcMobile}
-                          alt={slide.imageAlt}
-                          label={slide.title}
-                          priority={slideIndex === 0}
-                          className="h-full w-full object-cover"
-                          sizes={slideIndex === 0 ? "100vw" : undefined}
-                        />
-                      </div>
-                      <div className="absolute inset-0 hidden lg:block">
-                        <PlaceholderImage
-                          src={slide.imageSrc}
-                          alt={slide.imageAlt}
-                          label={slide.title}
-                          priority={slideIndex === 0}
-                          className="h-full w-full object-cover"
-                          sizes={slideIndex === 0 ? "100vw" : undefined}
-                        />
-                      </div>
-                    </>
+                  !carregarDemais ? null : slide.imageSrcMobile && slide.imageSrc ? (
+                    <BannerArteDirecionada
+                      mobile={slide.imageSrcMobile}
+                      desktop={slide.imageSrc}
+                      alt={slide.imageAlt}
+                      prioritario={slideIndex === 0}
+                    />
                   ) : (
                     <PlaceholderImage
                       src={slide.imageSrc}

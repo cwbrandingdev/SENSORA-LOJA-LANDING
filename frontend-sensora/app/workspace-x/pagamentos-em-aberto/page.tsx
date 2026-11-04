@@ -12,6 +12,7 @@ import {
   Mail,
   MessageCircle,
   ShoppingBag,
+  Trash2,
 } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
@@ -25,7 +26,10 @@ import type {
   CheckoutPendenteAdmin,
   TipoAcompanhamentoAdmin,
 } from "@/lib/types/loja";
-import { listarCheckoutsPendentesAdmin } from "@/services/checkout";
+import {
+  dispensarAcompanhamentoAdmin,
+  listarCheckoutsPendentesAdmin,
+} from "@/services/checkout";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -90,6 +94,8 @@ export default function PagamentosEmAbertoPage() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<Filtro>("TODOS");
+  const [selecionados, setSelecionados] = useState<string[]>([]);
+  const [apagando, setApagando] = useState(false);
 
   async function carregar() {
     setLoading(true);
@@ -114,12 +120,60 @@ export default function PagamentosEmAbertoPage() {
   }, []);
 
   const sacolas = itens?.filter((item) => item.tipo === "CARRINHO").length ?? 0;
-  const pagamentos = itens?.filter((item) => item.tipo === "CHECKOUT").length ?? 0;
+  const pagamentos =
+    itens?.filter((item) => item.tipo === "CHECKOUT").length ?? 0;
   const visiveis = useMemo(() => {
     if (!itens) return [];
     if (filtro === "TODOS") return itens;
     return itens.filter((item) => item.tipo === filtro);
   }, [itens, filtro]);
+
+  // Só conta o que está visível no filtro atual, para nunca apagar um
+  // cartão que a pessoa não está vendo.
+  const selecionadosVisiveis = selecionados.filter((id) =>
+    visiveis.some((item) => item.id === id),
+  );
+  const todosMarcados =
+    visiveis.length > 0 && selecionadosVisiveis.length === visiveis.length;
+
+  function alternar(id: string) {
+    if (selecionados.includes(id)) {
+      setSelecionados(selecionados.filter((s) => s !== id));
+    } else {
+      setSelecionados([...selecionados, id]);
+    }
+  }
+
+  function alternarTodos() {
+    setSelecionados(todosMarcados ? [] : visiveis.map((item) => item.id));
+  }
+
+  async function apagarSelecionados() {
+    const quantidade = selecionadosVisiveis.length;
+    if (
+      !window.confirm(
+        `Tirar ${quantidade} item(ns) da lista? Nada é apagado do sistema.`,
+      )
+    ) {
+      return;
+    }
+    setApagando(true);
+    try {
+      await dispensarAcompanhamentoAdmin(selecionadosVisiveis);
+      // Tira da tela na hora, sem precisar recarregar a lista.
+      setItens(
+        (atuais) =>
+          atuais?.filter((item) => !selecionadosVisiveis.includes(item.id)) ??
+          null,
+      );
+      setSelecionados([]);
+      toast.success(`${quantidade} item(ns) removido(s) da lista.`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Não foi possível remover agora."));
+    } finally {
+      setApagando(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -160,6 +214,31 @@ export default function PagamentosEmAbertoPage() {
             />
           </div>
 
+          {visiveis.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={todosMarcados}
+                  onChange={alternarTodos}
+                  className="h-4 w-4 accent-brand-navy"
+                />
+                Selecionar todos
+              </label>
+              <button
+                type="button"
+                onClick={apagarSelecionados}
+                disabled={selecionadosVisiveis.length === 0 || apagando}
+                className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-red-700 ring-1 ring-red-200 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Trash2 className="h-4 w-4" />
+                {apagando
+                  ? "Removendo…"
+                  : `Remover da lista (${selecionadosVisiveis.length})`}
+              </button>
+            </div>
+          )}
+
           {visiveis.length === 0 ? (
             <EmptyState
               compact
@@ -171,7 +250,12 @@ export default function PagamentosEmAbertoPage() {
           ) : (
             <ul className="flex flex-col gap-5">
               {visiveis.map((item) => (
-                <CardAcompanhamento key={item.id} item={item} />
+                <CardAcompanhamento
+                  key={item.id}
+                  item={item}
+                  selecionado={selecionados.includes(item.id)}
+                  onAlternar={() => alternar(item.id)}
+                />
               ))}
             </ul>
           )}
@@ -222,7 +306,15 @@ function ListaSkeleton() {
   );
 }
 
-function CardAcompanhamento({ item }: { item: CheckoutPendenteAdmin }) {
+function CardAcompanhamento({
+  item,
+  selecionado,
+  onAlternar,
+}: {
+  item: CheckoutPendenteAdmin;
+  selecionado: boolean;
+  onAlternar: () => void;
+}) {
   const nome = item.clienteNome?.trim() || "Cliente sem nome";
   const whatsapp = linkWhatsApp(item);
   const mailto = linkMailto(item);
@@ -234,6 +326,13 @@ function CardAcompanhamento({ item }: { item: CheckoutPendenteAdmin }) {
     <li className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="checkbox"
+            checked={selecionado}
+            onChange={onAlternar}
+            aria-label={`Selecionar ${nome}`}
+            className="mr-1 h-5 w-5 accent-brand-navy"
+          />
           {item.tipo === "CARRINHO" ? (
             <Badge tone="info">Sacola parada</Badge>
           ) : (
@@ -340,7 +439,9 @@ function CardAcompanhamento({ item }: { item: CheckoutPendenteAdmin }) {
           {item.minutosRestantes != null
             ? ` · ${formatarRestante(item.minutosRestantes)} restantes`
             : null}
-          <span className="text-slate-400">· {formatarQuando(item.paradoEm)}</span>
+          <span className="text-slate-400">
+            · {formatarQuando(item.paradoEm)}
+          </span>
         </p>
         {item.pedidoId ? (
           <Link
