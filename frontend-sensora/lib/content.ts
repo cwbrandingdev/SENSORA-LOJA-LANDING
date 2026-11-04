@@ -189,7 +189,7 @@ const VELAS_4_ESTACOES: Collection = {
   name: "Velas",
   tagline: "",
   description:
-    "Quatro aromas, quatro momentos: a essência de cada estação para transformar a sua casa o ano todo.",
+    "Velas aromáticas para transformar o ambiente com aconchego, com a assinatura Sensora.",
   heroImageSrc: "/images/hero/velas.png",
   heroImageAlt:
     "Kit de velas aromáticas 4 Estações da Sensora, com as quatro velas lado a lado sobre uma bancada",
