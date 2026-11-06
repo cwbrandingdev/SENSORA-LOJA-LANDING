@@ -67,7 +67,7 @@ function TopoPresentes({ colecao }: Props) {
           Ver presentes
         </a>
       </div>
-      <div className="relative mx-auto h-96 w-full max-w-md sm:h-112">
+      <div className="relative mx-auto h-[28rem] w-full max-w-md sm:h-[34rem]">
         {destaques.map((produto, indice) => (
           <div
             key={produto.id}
@@ -76,11 +76,8 @@ function TopoPresentes({ colecao }: Props) {
             <FotoProduto
               produto={produto}
               largura={500}
-              className="aspect-square w-full object-cover"
+              className="aspect-[3/4] w-full object-cover"
             />
-            <p className="mt-2 text-center font-serif text-sm text-brand-navy">
-              {produto.nome}
-            </p>
           </div>
         ))}
       </div>
