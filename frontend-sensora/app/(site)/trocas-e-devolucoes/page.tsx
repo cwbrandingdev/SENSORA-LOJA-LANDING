@@ -117,10 +117,10 @@ export default function TrocasEDevolucoesPage() {
           </li>
         </ol>
         <p>
-          No direito de arrependimento não exigimos lacre intacto. Produto
-          danificado por uso fora das instruções da página e da embalagem
-          (vela acesa sem supervisão, spray ou difusor ingerido ou aplicado na
-          pele, por exemplo) pode ser recusado na conferência.
+          Caso o produto enviado não esteja de acordo com nossa política, a
+          troca não será aceita e o mesmo será reenviado ao endereço de
+          origem, reservando à {EMPRESA.nomeFantasia} o direito de cobrar ou
+          não o frete.
         </p>
       </Secao>
 
