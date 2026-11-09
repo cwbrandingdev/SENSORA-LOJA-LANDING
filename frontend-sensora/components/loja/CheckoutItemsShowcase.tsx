@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 import PlaceholderImage from "@/components/ui/PlaceholderImage";
-import type { CartItem } from "@/context/CartContext";
+import { useCart, type CartItem } from "@/context/CartContext";
 import { imagemKitRedimensionada } from "@/lib/loja-imagens";
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
@@ -25,13 +26,28 @@ function ItemInfoCard({
   item: CartItem;
   visible: boolean;
 }) {
+  const { removerItem } = useCart();
+
   return (
     <div
       className={`rounded-sm border border-white/20 bg-white/10 px-4 py-3 text-white backdrop-blur-md transition-opacity duration-700 ease-in-out motion-reduce:transition-none ${
         visible ? "opacity-100" : "opacity-0"
       }`}
     >
-      <p className="font-serif text-lg font-normal leading-snug">{item.nome}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-serif text-lg font-normal leading-snug">{item.nome}</p>
+        {/* Remover direto daqui: sem isso, um item esgotado travava o
+            checkout e era preciso abrir a sacola para tirá-lo. */}
+        <button
+          type="button"
+          onClick={() => removerItem(item.produtoId)}
+          aria-label={`Remover "${item.nome}" do pedido`}
+          className="flex shrink-0 items-center gap-1.5 rounded-sm px-2 py-1 text-xs font-medium text-white/85 transition-colors hover:bg-white/15 hover:text-white"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden />
+          Remover
+        </button>
+      </div>
       <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
         <span className="text-white/75">Qtd. {item.quantidade}</span>
         <span className="font-semibold tabular-nums">

@@ -183,9 +183,9 @@ export default function SacolaDrawer() {
                         type="button"
                         onClick={() => removerItem(item.produtoId)}
                         aria-label={`Remover "${item.nome}" da sacola`}
-                        className="shrink-0 text-slate-300 transition-colors hover:text-brand-orange"
+                        className="-m-1.5 shrink-0 rounded-sm p-1.5 text-slate-500 transition-colors hover:bg-brand-orange/10 hover:text-brand-orange"
                       >
-                        <Trash2 className="h-4 w-4" strokeWidth={1.5} />
+                        <Trash2 className="h-[18px] w-[18px]" strokeWidth={1.75} />
                       </button>
                     </div>
                     <div className="flex items-center justify-between">
