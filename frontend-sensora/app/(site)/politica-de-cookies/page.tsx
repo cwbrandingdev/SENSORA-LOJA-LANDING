@@ -21,6 +21,7 @@ export const metadata: Metadata = {
   title: "Política de Cookies",
   description:
     "Como a Sensora usa cookies e armazenamento local essenciais para autenticação, carrinho e continuidade do checkout.",
+  alternates: { canonical: "/politica-de-cookies" },
 };
 
 function Secao({

@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: "Política de Privacidade",
   description:
     "Como a Cazarim & Souza Ltda (Sensora) trata dados pessoais na loja, com base na LGPD.",
+  alternates: { canonical: "/politica-de-privacidade" },
 };
 
 const mailtoPrivacidade = mailtoAssunto(

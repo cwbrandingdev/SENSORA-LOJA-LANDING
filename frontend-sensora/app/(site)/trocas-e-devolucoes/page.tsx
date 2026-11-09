@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: "Trocas e devoluções",
   description:
     "Direito de arrependimento de 7 dias e garantia legal por defeito nas compras da Sensora.",
+  alternates: { canonical: "/trocas-e-devolucoes" },
 };
 
 const mailtoArrependimento = mailtoAssunto(
