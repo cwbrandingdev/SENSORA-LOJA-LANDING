@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
 import CookiePreferencesTrigger from "@/components/layout/CookiePreferencesTrigger";
 import Logo from "@/components/ui/Logo";
 import {
@@ -119,6 +120,25 @@ export default function Footer() {
               </a>
             </li>
           </ul>
+        </div>
+
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-brand-orange">
+            Segurança
+          </h2>
+          {/* Selo próprio: o site roda em HTTPS (certificado SSL da hospedagem). */}
+          <div className="mt-4 inline-flex items-center gap-3 text-white/80">
+            <ShieldCheck className="h-9 w-9 text-emerald-400" aria-hidden />
+            <span className="leading-tight">
+              <span className="block text-[10px] uppercase tracking-widest text-white/60">
+                Compra segura
+              </span>
+              <span className="block text-sm font-semibold uppercase">Site protegido</span>
+              <span className="block text-[10px] uppercase tracking-widest text-white/60">
+                Certificado SSL
+              </span>
+            </span>
+          </div>
         </div>
       </div>
 
