@@ -165,14 +165,19 @@ export default function PoliticaDeCookiesPage() {
 
         <Secao title="Cookies de analytics e marketing">
           <p>
-            <strong>Analytics:</strong> se configurarmos uma ferramenta como
-            Google Analytics (variável{" "}
-            <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[12px]">
-              NEXT_PUBLIC_GA_MEASUREMENT_ID
-            </code>
-            ), ela só é carregada após você aceitar a categoria Analytics no
-            aviso de cookies. Mede visitas e desempenho de forma agregada;
-            pedimos anonimização de IP quando suportado pelo provedor.
+            <strong>Analytics:</strong> usamos o Google Analytics e o
+            Microsoft Clarity, que só são carregados depois que você aceita a
+            categoria Analytics no aviso de cookies. O Google Analytics mede
+            visitas e desempenho de forma agregada, com anonimização de IP. O
+            Clarity registra como as páginas são usadas (cliques, rolagem e
+            movimento do mouse) para gerar mapas de calor e gravações das
+            sessões, que nos ajudam a encontrar partes confusas do site.
+          </p>
+          <p>
+            O Clarity esconde automaticamente o que você digita em campos de
+            formulário, como senha, dados pessoais e de pagamento. Se você
+            retirar o consentimento nas preferências de cookies, as duas
+            ferramentas param de coletar dados.
           </p>
           <p>
             <strong>Marketing:</strong> hoje não utilizamos pixels de

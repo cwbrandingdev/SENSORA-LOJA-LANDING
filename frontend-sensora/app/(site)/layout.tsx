@@ -8,6 +8,7 @@ import SiteMain from "@/components/layout/SiteMain";
 import SiteFooter from "@/components/layout/SiteFooter";
 import CookieConsentBanner from "@/components/layout/CookieConsentBanner";
 import OptionalAnalyticsScripts from "@/components/layout/OptionalAnalyticsScripts";
+import ClarityScript from "@/components/layout/ClarityScript";
 import PageFadeIn from "@/components/ui/PageFadeIn";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
@@ -145,6 +146,7 @@ export default async function RootLayout({
               {TEMA_NATAL_ATIVO && <TemaNatalSite />}
               <CookieConsentBanner />
               <OptionalAnalyticsScripts />
+              <ClarityScript />
             </PageFadeIn>
           </ToastProvider>
         </CartProvider>
