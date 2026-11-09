@@ -12,6 +12,7 @@ import { ROUTES } from "@/lib/routes";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import AddToCartControls from "@/components/loja/AddToCartControls";
 import AvisosProduto from "@/components/loja/AvisosProduto";
+import CalcularFrete from "@/components/loja/CalcularFrete";
 import GaleriaProduto from "@/components/loja/GaleriaProduto";
 import ProdutosRelacionados from "@/components/loja/ProdutosRelacionados";
 import AvaliacoesProduto from "@/components/loja/AvaliacoesProduto";
@@ -234,6 +235,8 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
               }}
             />
           </div>
+
+          <CalcularFrete produtoId={produto.id} />
 
           <ul className="mt-8 grid grid-cols-3 gap-3 border-y border-slate-200 py-5">
             {CONFIANCA.map(({ icone: Icone, texto }) => (

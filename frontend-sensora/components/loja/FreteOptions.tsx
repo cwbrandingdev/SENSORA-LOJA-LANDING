@@ -17,7 +17,7 @@ const formatPrice = new Intl.NumberFormat("pt-BR", {
 
 const FOLGA_PREPARO_DIAS = 5;
 
-function formatarPrazo(prazoDias: number): string {
+export function formatarPrazo(prazoDias: number): string {
   const prazoComFolga = prazoDias + FOLGA_PREPARO_DIAS;
   return prazoComFolga === 1 ? "1 dia útil" : `${prazoComFolga} dias úteis`;
 }

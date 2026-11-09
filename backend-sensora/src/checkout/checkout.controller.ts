@@ -18,6 +18,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CheckoutService } from './checkout.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { CotarFreteDto } from './dto/cotar-frete.dto';
+import { CotarFreteProdutoDto } from './dto/cotar-frete-produto.dto';
 import { RetomarCheckoutDto } from './dto/retomar-checkout.dto';
 import {
   CheckoutPendenteLookupResponse,
@@ -53,6 +54,17 @@ export class CheckoutController {
     @Req() req: { user: UsuarioAutenticado },
   ): Promise<OpcaoFreteResponse[]> {
     return this.checkoutService.cotarFrete(dto, req.user.id);
+  }
+
+  // Prévia do frete na página do produto. Sem JwtAuthGuard de propósito:
+  // visitante sem login também calcula. O limite global de requisições
+  // (throttler do app.module) já protege contra abuso.
+  @Post('frete/produto')
+  @HttpCode(HttpStatus.OK)
+  cotarFreteDoProduto(
+    @Body() dto: CotarFreteProdutoDto,
+  ): Promise<OpcaoFreteResponse[]> {
+    return this.checkoutService.cotarFreteDoProduto(dto);
   }
 
   // Retomar um Pedido PENDENTE já criado (Asaas Checkout ainda ACTIVE, ou

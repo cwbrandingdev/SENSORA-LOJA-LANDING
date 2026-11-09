@@ -11,3 +11,9 @@ export async function cotarFrete(data: CotarFretePayload): Promise<OpcaoFrete[]>
   const response = await api.post<OpcaoFrete[]>("/checkout/frete/cotacao", data);
   return response.data;
 }
+
+// Prévia na página do produto (sem login): 1 unidade para o CEP digitado.
+export async function cotarFreteDoProduto(produtoId: number, cep: string): Promise<OpcaoFrete[]> {
+  const response = await api.post<OpcaoFrete[]>("/checkout/frete/produto", { produtoId, cep });
+  return response.data;
+}

@@ -30,6 +30,7 @@ import {
 } from '../ocorrencias/ocorrencias.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutosService } from '../produtos/produtos.service';
+import { CotarFreteProdutoDto } from './dto/cotar-frete-produto.dto';
 import { CuponsService } from '../cupons/cupons.service';
 import { ratearDesconto } from '../cupons/cupom-desconto';
 import { EnderecosService } from '../enderecos/enderecos.service';
@@ -430,6 +431,14 @@ export class CheckoutService implements OnModuleInit, OnModuleDestroy {
     }
 
     return this.cotarOpcoes(endereco, subtotal, quantidadeTotal);
+  }
+
+  // Prévia do frete na página do produto: 1 unidade, CEP digitado, sem login.
+  async cotarFreteDoProduto(
+    dto: CotarFreteProdutoDto,
+  ): Promise<OpcaoFreteResponse[]> {
+    const produto = await this.produtosService.findOne(dto.produtoId);
+    return this.cotarOpcoes({ cep: dto.cep }, produto.preco, 1);
   }
 
   // Recotiza contra o Melhor Envio e resolve `freteServicoId` entre as
