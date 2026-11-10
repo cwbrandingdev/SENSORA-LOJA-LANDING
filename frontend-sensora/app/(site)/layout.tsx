@@ -9,6 +9,7 @@ import SiteFooter from "@/components/layout/SiteFooter";
 import CookieConsentBanner from "@/components/layout/CookieConsentBanner";
 import OptionalAnalyticsScripts from "@/components/layout/OptionalAnalyticsScripts";
 import ClarityScript from "@/components/layout/ClarityScript";
+import GoogleTagManager from "@/components/layout/GoogleTagManager";
 import PageFadeIn from "@/components/ui/PageFadeIn";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
@@ -147,6 +148,7 @@ export default async function RootLayout({
               <CookieConsentBanner />
               <OptionalAnalyticsScripts />
               <ClarityScript />
+              <GoogleTagManager />
             </PageFadeIn>
           </ToastProvider>
         </CartProvider>
