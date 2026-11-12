@@ -4,6 +4,7 @@
 // vazio (o Google só tenta de novo na próxima busca).
 import { listarProdutosPublicos, type ProdutoPublico } from "@/lib/api-publica";
 import { LOJA_PRODUTO_URL } from "@/lib/config";
+import { nomeCompletoDoProduto } from "@/lib/nome-produto";
 import { SITE_URL } from "@/lib/seo";
 
 // Troca os caracteres que quebrariam o XML (&, <, > e aspas).
@@ -16,13 +17,10 @@ function escaparXml(texto: string): string {
     .replace(/'/g, "&apos;");
 }
 
-// Ex.: "Bambu - Difusores de Aroma". Só o nome ("Bambu") fica vago demais
-// para quem vê o anúncio, por isso juntamos a categoria quando existe.
+// Ex.: "Difusor de Ambiente Bambu" — mesmo nome do título da página do
+// produto (ver lib/nome-produto.ts). Só "Bambu" fica vago no anúncio.
 function tituloDoProduto(produto: ProdutoPublico): string {
-  if (produto.categoria) {
-    return `${produto.nome} - ${produto.categoria.nome}`;
-  }
-  return produto.nome;
+  return nomeCompletoDoProduto(produto);
 }
 
 function itemDoFeed(produto: ProdutoPublico): string {

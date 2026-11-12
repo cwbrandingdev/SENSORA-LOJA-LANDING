@@ -269,7 +269,7 @@ export const KIT_4_ESTACOES_SHOWCASE: KitShowcase = {
   imageSrc:
     "https://ik.imagekit.io/phof1v4q8/sensora/products/kit-velas-1789408972184_kPMp7Nbik.png",
   imageAlt: "Kit Velas Sensora — as quatro velas aromáticas reunidas",
-  lojaSlug: "kit-velas",
+  lojaSlug: "kit-4-estacoes",
 };
 
 export const SPRAYS_DE_AMBIENTE: Collection = {
@@ -295,7 +295,7 @@ export const SPRAYS_DE_AMBIENTE: Collection = {
       imageAlt: "Spray de ambiente Baunilha da Sensora",
       ctaLabel: "Conhecer spray",
       ctaHref: LOJA_URL,
-      lojaSlug: "spray-arroma-de-baunilha",
+      lojaSlug: "spray-de-ambiente-baunilha",
     },
     {
       slug: "especiarias",
@@ -307,7 +307,7 @@ export const SPRAYS_DE_AMBIENTE: Collection = {
       imageAlt: "Spray de ambiente Especiarias da Sensora",
       ctaLabel: "Conhecer spray",
       ctaHref: LOJA_URL,
-      lojaSlug: "spray-especiarias",
+      lojaSlug: "spray-de-ambiente-especiarias",
     },
     {
       slug: "flor-de-laranjeira",
@@ -319,7 +319,7 @@ export const SPRAYS_DE_AMBIENTE: Collection = {
       imageAlt: "Spray de ambiente Flor de Laranjeira da Sensora",
       ctaLabel: "Conhecer spray",
       ctaHref: LOJA_URL,
-      lojaSlug: "spray-flor-de-laranjeira",
+      lojaSlug: "spray-de-ambiente-flor-de-laranjeira",
     },
   ],
 };
@@ -347,7 +347,7 @@ export const DIFUSORES_DE_AROMA: Collection = {
       imageAlt: "Difusor de aroma Baunilha da Sensora",
       ctaLabel: "Conhecer difusor",
       ctaHref: LOJA_URL,
-      lojaSlug: "difusor-de-baunilha",
+      lojaSlug: "difusor-de-ambiente-baunilha",
     },
     {
       slug: "especiarias",
@@ -359,7 +359,7 @@ export const DIFUSORES_DE_AROMA: Collection = {
       imageAlt: "Difusor de aroma Especiarias da Sensora",
       ctaLabel: "Conhecer difusor",
       ctaHref: LOJA_URL,
-      lojaSlug: "difusor-de-especiarias",
+      lojaSlug: "difusor-de-ambiente-especiarias",
     },
     {
       slug: "flor-de-laranjeira",
@@ -371,7 +371,7 @@ export const DIFUSORES_DE_AROMA: Collection = {
       imageAlt: "Difusor de aroma Flor de Laranjeira da Sensora",
       ctaLabel: "Conhecer difusor",
       ctaHref: LOJA_URL,
-      lojaSlug: "difusor-de-flor-de-laranjeira",
+      lojaSlug: "difusor-de-ambiente-flor-de-laranjeira",
     },
   ],
 };

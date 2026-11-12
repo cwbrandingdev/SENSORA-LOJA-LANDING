@@ -24,6 +24,7 @@ describe('ProdutosService — galeria de imagens', () => {
   };
   let prisma: {
     produto: { create: jest.Mock; update: jest.Mock; findUnique: jest.Mock };
+    categoria: { findUnique: jest.Mock };
   };
   let service: ProdutosService;
 
@@ -42,6 +43,10 @@ describe('ProdutosService — galeria de imagens', () => {
         findUnique: jest.fn(({ where }: { where: { id?: number } }) =>
           where.id ? registro : null,
         ),
+      },
+      // Categoria 17 = Velas Aromáticas (para o endereço do produto novo).
+      categoria: {
+        findUnique: jest.fn(() => ({ id: 17, slug: 'velas-aromaticas' })),
       },
     };
     service = new ProdutosService(prisma as unknown as PrismaService);
@@ -64,6 +69,24 @@ describe('ProdutosService — galeria de imagens', () => {
     expect(produto).toMatchObject({
       imagemUrl: '/b.jpg',
       imagens: ['/b.jpg', '/c.jpg'],
+    });
+  });
+
+  it('produto novo ganha endereço com o tipo da categoria', async () => {
+    await service.create({ ...base, nome: 'Alecrim', categoriaId: 17 });
+
+    expect(prisma.produto.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        slug: 'vela-aromatica-alecrim',
+      }) as object,
+    });
+  });
+
+  it('nome que já começa com o tipo não repete a palavra no endereço', async () => {
+    await service.create({ ...base, nome: 'Vela Páscoa', categoriaId: 17 });
+
+    expect(prisma.produto.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ slug: 'vela-pascoa' }) as object,
     });
   });
 

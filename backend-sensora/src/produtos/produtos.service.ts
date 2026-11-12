@@ -28,6 +28,15 @@ function comCapa<T extends { imagemUrl?: string; imagens?: string[] }>(
   return dto;
 }
 
+// Tipo no singular, pelo slug da categoria. Mesma lista de
+// frontend-sensora/lib/nome-produto.ts: categoria nova precisa entrar nos dois.
+const TIPO_POR_CATEGORIA: Record<string, string> = {
+  'velas-aromaticas': 'Vela Aromática',
+  'sprays-de-ambientes': 'Spray de Ambiente',
+  'difusores-de-aroma': 'Difusor de Ambiente',
+  kits: 'Kit',
+};
+
 @Injectable()
 export class ProdutosService {
   constructor(private readonly prisma: PrismaService) {}
@@ -49,7 +58,9 @@ export class ProdutosService {
     if (createProdutoDto.categoriaId !== undefined) {
       await this.validarCategoriaExiste(createProdutoDto.categoriaId);
     }
-    const slug = await this.gerarSlugUnico(createProdutoDto.nome);
+    const slug = await this.gerarSlugUnico(
+      await this.nomeParaSlug(createProdutoDto),
+    );
     const produto = await this.prisma.produto.create({
       data: { ...comCapa(createProdutoDto), slug },
     });
@@ -242,5 +253,24 @@ export class ProdutosService {
       sufixo += 1;
     }
     return slug;
+  }
+
+  // Texto que vira o endereço do produto novo: "Bambu" em Velas Aromáticas
+  // → "Vela Aromática Bambu" → vela-aromatica-bambu. Sem categoria (ou
+  // categoria sem tipo na lista), fica só o nome.
+  private async nomeParaSlug(dto: CreateProdutoDto): Promise<string> {
+    if (!dto.categoriaId) return dto.nome;
+
+    const categoria = await this.prisma.categoria.findUnique({
+      where: { id: dto.categoriaId },
+    });
+    const tipo = categoria ? TIPO_POR_CATEGORIA[categoria.slug] : undefined;
+    if (!tipo) return dto.nome;
+
+    // Nome que já começa com o tipo ("Vela Noite Feliz") não repete a palavra.
+    const primeiraPalavra = tipo.split(' ')[0].toLowerCase();
+    if (dto.nome.toLowerCase().startsWith(primeiraPalavra)) return dto.nome;
+
+    return `${tipo} ${dto.nome}`;
   }
 }

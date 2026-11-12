@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ShieldCheck, Truck, Undo2 } from "lucide-react";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import {
   buscarAvaliacoesDoProduto,
   buscarProdutoPublicoPorSlug,
@@ -19,6 +19,8 @@ import AvaliacoesProduto from "@/components/loja/AvaliacoesProduto";
 import Estrelas from "@/components/loja/Estrelas";
 import { imagemKitRedimensionada } from "@/lib/loja-imagens";
 import { descricaoSemFichaTecnica, fichaTecnica } from "@/lib/descricao-produto";
+import { nomeCompletoDoProduto } from "@/lib/nome-produto";
+import { SLUGS_ANTIGOS } from "@/lib/slugs-antigos";
 import JsonLd from "@/components/seo/JsonLd";
 import { OPEN_GRAPH_PADRAO, breadcrumbJsonLd, resumir, urlAbsoluta } from "@/lib/seo";
 
@@ -48,21 +50,22 @@ export async function generateMetadata({
     if (!produto) {
       return { title: "Produto não encontrado" };
     }
+    const nomeCompleto = nomeCompletoDoProduto(produto);
     const description = resumir(
       (produto.descricao && descricaoSemFichaTecnica(produto.descricao)) ||
-        `${produto.nome}${produto.aroma ? ` — ${produto.aroma}` : ""}, da Sensora.`,
+        `${nomeCompleto}${produto.aroma ? ` — ${produto.aroma}` : ""}, da Sensora.`,
     );
     return {
-      title: produto.nome,
+      title: nomeCompleto,
       description,
       alternates: { canonical: LOJA_PRODUTO_URL(produto.slug) },
       openGraph: {
         ...OPEN_GRAPH_PADRAO,
-        title: produto.nome,
+        title: nomeCompleto,
         description,
         url: LOJA_PRODUTO_URL(produto.slug),
         ...(produto.imagemUrl && {
-          images: [{ url: imagemKitRedimensionada(produto.imagemUrl, 1200), alt: produto.nome }],
+          images: [{ url: imagemKitRedimensionada(produto.imagemUrl, 1200), alt: nomeCompleto }],
         }),
       },
     };
@@ -104,8 +107,13 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
   }
 
   if (!produto) {
+    // Endereço antigo (antes da troca de 12/11/2026): manda para o novo.
+    const slugNovo = SLUGS_ANTIGOS[slug];
+    if (slugNovo) permanentRedirect(LOJA_PRODUTO_URL(slugNovo));
     notFound();
   }
+
+  const nomeCompleto = nomeCompletoDoProduto(produto);
 
   // Produto de antes da galeria (ou backend ainda sem `imagens`): só a capa.
   const imagens = produto.imagens?.length
@@ -131,7 +139,7 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
   const produtoJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
-    name: produto.nome,
+    name: nomeCompleto,
     sku: String(produto.id),
     ...(descricao && { description: descricao }),
     ...(imagens.length > 0 && { image: imagens.map((url) => urlAbsoluta(url)) }),
@@ -171,7 +179,7 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
         data={breadcrumbJsonLd([
           { nome: "Início", caminho: "/" },
           { nome: "Catálogo", caminho: ROUTES.LOJA_PRODUTOS },
-          { nome: produto.nome, caminho: LOJA_PRODUTO_URL(produto.slug) },
+          { nome: nomeCompleto, caminho: LOJA_PRODUTO_URL(produto.slug) },
         ])}
       />
       <Link
@@ -188,7 +196,7 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
       <div className="mt-8 grid grid-cols-1 gap-12 lg:grid-cols-[1.2fr_1fr] lg:gap-20">
         <div>
           <div className="lg:sticky lg:top-28">
-            <GaleriaProduto imagens={imagens} nome={produto.nome} destaque={produto.destaque} />
+            <GaleriaProduto imagens={imagens} nome={nomeCompleto} destaque={produto.destaque} />
           </div>
         </div>
 
@@ -200,7 +208,7 @@ export default async function ProdutoPage({ params }: ProdutoPageProps) {
           )}
 
           <h1 className="mt-4 font-serif text-4xl font-normal tracking-tight leading-tight text-brand-navy sm:text-5xl">
-            {produto.nome}
+            {nomeCompleto}
           </h1>
 
           {produto.aroma && (
