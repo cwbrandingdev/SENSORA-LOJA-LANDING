@@ -67,9 +67,10 @@ function TopoPresentes({ colecao }: Props) {
           Ver presentes
         </a>
       </div>
-      {/* Altura pensada para as polaroides em pé (3:4) ficarem empilhadas:
-          mais alto, elas se separam; mais baixo, a de baixo esconde as fotos. */}
-      <div className="relative mx-auto h-[28rem] w-full max-w-md sm:h-[34rem]">
+      {/* Altura pensada para as polaroides quadradas ficarem empilhadas, com
+          a de baixo cobrindo cerca de metade das de cima: mais alto, elas se
+          separam; mais baixo, a de baixo esconde quase tudo. */}
+      <div className="relative mx-auto h-[22rem] w-full max-w-xl sm:h-[33rem]">
         {destaques.map((produto, indice) => (
           <div
             key={produto.id}
@@ -78,7 +79,7 @@ function TopoPresentes({ colecao }: Props) {
             <FotoProduto
               produto={produto}
               largura={500}
-              className="aspect-[3/4] w-full object-cover"
+              className="aspect-square w-full object-cover"
             />
           </div>
         ))}
