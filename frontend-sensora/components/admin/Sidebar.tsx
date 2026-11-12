@@ -221,7 +221,7 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
 
       <nav
         aria-label="Navegação administrativa"
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col justify-between overflow-y-auto bg-brand-navy px-3 py-5 transition-transform duration-300 ease-in-out motion-reduce:transition-none md:static md:z-auto md:w-60 md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col justify-between overflow-y-auto bg-brand-navy px-3 py-5 transition-transform duration-300 ease-in-out motion-reduce:transition-none md:sticky md:top-0 md:h-screen md:z-auto md:w-60 md:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
