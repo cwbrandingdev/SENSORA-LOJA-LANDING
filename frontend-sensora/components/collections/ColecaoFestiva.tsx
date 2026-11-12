@@ -67,6 +67,8 @@ function TopoPresentes({ colecao }: Props) {
           Ver presentes
         </a>
       </div>
+      {/* Altura pensada para as polaroides em pé (3:4) ficarem empilhadas:
+          mais alto, elas se separam; mais baixo, a de baixo esconde as fotos. */}
       <div className="relative mx-auto h-[28rem] w-full max-w-md sm:h-[34rem]">
         {destaques.map((produto, indice) => (
           <div
@@ -85,7 +87,7 @@ function TopoPresentes({ colecao }: Props) {
   );
 }
 
-// Produtos: foto quadrada e, pendurada nela, uma etiqueta de presente (com
+// Produtos: foto retangular (em pé, 3:4) e, pendurada nela, uma etiqueta de presente (com
 // furo e barbante) com o nome e o preço.
 function ProdutosComEtiqueta({ colecao }: Props) {
   return (
@@ -96,7 +98,7 @@ function ProdutosComEtiqueta({ colecao }: Props) {
           href={LOJA_PRODUTO_URL(produto.slug)}
           className="group relative block"
         >
-          <div className="relative aspect-square overflow-hidden rounded-sm shadow-md">
+          <div className="relative aspect-[3/4] overflow-hidden rounded-sm shadow-md">
             <FotoProduto
               produto={produto}
               largura={700}
