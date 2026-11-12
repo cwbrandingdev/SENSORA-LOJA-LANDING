@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AlertTriangle, Package, PackageX, Search, Star, X } from "lucide-react";
 import ProductTable from "@/components/tables/ProductTable";
+import ResumoEdicaoLote, { mudancasReais, temValorInvalido } from "@/components/admin/ResumoEdicaoLote";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import BarraEdicaoLote, { type AcaoEmLote } from "@/components/admin/BarraEdicaoLote";
 import EmptyState from "@/components/ui/EmptyState";
 import InlineErrorState from "@/components/ui/InlineErrorState";
 import TableSkeleton from "@/components/ui/TableSkeleton";
 import { LIMITE_ESTOQUE_BAIXO } from "@/lib/estoque";
-import type { Categoria, Produto } from "@/lib/types/loja";
+import type { AlteracaoProduto, Categoria, Produto } from "@/lib/types/loja";
 
 // Lista de produtos do Admin: números de resumo, busca/filtros (só no
 // navegador, sem chamada nova à API) e uma tabela única. O formulário de
@@ -33,6 +36,8 @@ type Props = {
   onRemove: (produto: Produto) => void;
   /** Ativa/desativa todos os produtos da categoria de uma vez. */
   onAlterarAtivoCategoria: (categoria: Categoria, ativo: boolean) => void;
+  /** Salva a edição em lote; devolve true se deu certo. */
+  onSalvarLote: (alteracoes: AlteracaoProduto[]) => Promise<boolean>;
   /** Formulário de criar/editar já montado pela página (ou null se fechado). */
   formulario: ReactNode | null;
   onFecharFormulario: () => void;
@@ -120,10 +125,58 @@ function ListaFiltrada({
   onEdit,
   onRemove,
   onAlterarAtivoCategoria,
-}: Pick<Props, "produtos" | "categorias" | "onEdit" | "onRemove" | "onAlterarAtivoCategoria">) {
+  onSalvarLote,
+}: Pick<Props, "produtos" | "categorias" | "onEdit" | "onRemove" | "onAlterarAtivoCategoria" | "onSalvarLote">) {
   const [busca, setBusca] = useState("");
   const [categoriaId, setCategoriaId] = useState<number | "todas">("todas");
   const [situacao, setSituacao] = useState<FiltroSituacao>("todos");
+  // Edição em lote: null = desligada; senão, as mudanças ainda não salvas.
+  const [rascunho, setRascunho] = useState<Record<number, AlteracaoProduto> | null>(null);
+
+  // Junta a mudança nova com o que já tinha sido alterado no mesmo produto.
+  function alterar(alteracao: AlteracaoProduto) {
+    setRascunho((atual) => ({
+      ...atual,
+      [alteracao.id]: { ...atual?.[alteracao.id], ...alteracao },
+    }));
+  }
+
+  // Produtos marcados na edição em lote (para as ações em grupo).
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+
+  function selecionar(ids: number[], marcar: boolean) {
+    setSelecionados((atual) => {
+      const novo = new Set(atual);
+      ids.forEach((id) => (marcar ? novo.add(id) : novo.delete(id)));
+      return novo;
+    });
+  }
+
+  // Aplica a mesma ação a todos os marcados (ex.: preço + 10%).
+  function aplicarNosSelecionados(acao: AcaoEmLote) {
+    produtos
+      .filter((produto) => selecionados.has(produto.id))
+      .forEach((produto) => alterar({ id: produto.id, ...acao(produto) }));
+  }
+
+  // Confirmação: só o que realmente muda, e trava se houver valor inválido.
+  const [confirmando, setConfirmando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const mudancas = rascunho ? mudancasReais(produtos, rascunho) : [];
+  const invalido = mudancas.some(temValorInvalido);
+
+  async function salvar() {
+    setSalvando(true);
+    const deuCerto = await onSalvarLote(mudancas);
+    setSalvando(false);
+
+    // Se deu erro, o rascunho continua na tela para revisar e tentar de novo.
+    if (deuCerto) {
+      setConfirmando(false);
+      setRascunho(null);
+      setSelecionados(new Set());
+    }
+  }
 
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -196,6 +249,20 @@ function ListaFiltrada({
         />
       )}
 
+      <BarraEdicaoLote
+        emEdicao={rascunho !== null}
+        totalMudancas={mudancas.length}
+        totalSelecionados={selecionados.size}
+        invalido={invalido}
+        onIniciar={() => setRascunho({})}
+        onCancelar={() => {
+          setRascunho(null);
+          setSelecionados(new Set());
+        }}
+        onSalvar={() => setConfirmando(true)}
+        onAplicar={aplicarNosSelecionados}
+      />
+
       {filtrados.length === 0 && produtos.length > 0 ? (
         <EmptyState
           compact
@@ -205,8 +272,27 @@ function ListaFiltrada({
           icon={Package}
         />
       ) : (
-        <ProductTable produtos={filtrados} categorias={categorias} onEdit={onEdit} onRemove={onRemove} />
+        <ProductTable
+          produtos={filtrados}
+          categorias={categorias}
+          onEdit={onEdit}
+          onRemove={onRemove}
+          rascunho={rascunho ?? undefined}
+          selecionados={selecionados}
+          onSelecionar={selecionar}
+        />
       )}
+      <ConfirmDialog
+        open={confirmando}
+        title={`Salvar ${mudancas.length} produto(s)?`}
+        description={<ResumoEdicaoLote produtos={produtos} mudancas={mudancas} />}
+        confirmLabel="Confirmar e salvar"
+        confirmingLabel="Salvando..."
+        confirmVariant="primary"
+        confirming={salvando}
+        onConfirm={salvar}
+        onCancel={() => setConfirmando(false)}
+      />
     </>
   );
 }
@@ -249,6 +335,7 @@ export default function ProdutosPainel({
   onEdit,
   onRemove,
   onAlterarAtivoCategoria,
+  onSalvarLote,
   formulario,
   onFecharFormulario,
 }: Props) {
@@ -269,6 +356,7 @@ export default function ProdutosPainel({
             onEdit={onEdit}
             onRemove={onRemove}
             onAlterarAtivoCategoria={onAlterarAtivoCategoria}
+            onSalvarLote={onSalvarLote}
           />
         </div>
       )}

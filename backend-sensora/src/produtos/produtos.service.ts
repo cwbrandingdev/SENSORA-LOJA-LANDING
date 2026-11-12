@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProdutoDto } from './dto/create-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
 import { Produto } from './entities/produto.entity';
+import { AlteracaoProdutoDto } from './dto/editar-produtos-lote.dto';
 
 // Mantém capa e galeria em sincronia: com `imagens`, a capa (imagemUrl) é
 // sempre a 1ª (ou nenhuma, se a galeria ficou vazia); só com `imagemUrl`
@@ -80,6 +81,27 @@ export class ProdutosService {
       data: { ativo },
     });
     return { alterados: count };
+  }
+
+  // Edição em lote do Admin. Tudo numa transação: se um produto falhar,
+  // nenhum é salvo (nunca fica metade com preço novo e metade antigo).
+  async editarEmLote(
+    alteracoes: AlteracaoProdutoDto[],
+  ): Promise<{ alterados: number }> {
+    const atualizacoes = alteracoes.map(
+      ({ id, preco, quantidade, somarEstoque, ativo }) =>
+        this.prisma.produto.update({
+          where: { id },
+          data: {
+            preco,
+            ativo,
+            quantidade: somarEstoque ? { increment: somarEstoque } : quantidade,
+          },
+        }),
+    );
+
+    await this.prisma.$transaction(atualizacoes);
+    return { alterados: atualizacoes.length };
   }
 
   async remove(id: number): Promise<void> {

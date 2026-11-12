@@ -12,10 +12,11 @@ import {
   atualizarProduto,
   removerProduto,
   alterarAtivoDaCategoria,
+  editarProdutosEmLote,
 } from "@/services/produtos";
 import { listarCategorias } from "@/services/categorias";
 import { revalidarProdutos } from "@/lib/actions";
-import type { Categoria, Produto } from "@/lib/types/loja";
+import type { AlteracaoProduto, Categoria, Produto } from "@/lib/types/loja";
 
 export default function ProdutosPage() {
   const toast = useToast();
@@ -110,6 +111,20 @@ export default function ProdutosPage() {
     }
   }
 
+  // Edição em lote: salva tudo de uma vez e atualiza a lista e a loja.
+  // Devolve true/false para o painel saber se pode limpar o rascunho.
+  async function handleSalvarLote(alteracoes: AlteracaoProduto[]): Promise<boolean> {
+    try {
+      const alterados = await editarProdutosEmLote(alteracoes);
+      toast.success(`${alterados} produto(s) atualizado(s).`);
+      await Promise.all([carregarProdutos(), revalidarProdutos()]);
+      return true;
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Não foi possível salvar a edição em lote."));
+      return false;
+    }
+  }
+
   function handleNovoProduto() {
     setEditingProduct(undefined);
     setShowForm(true);
@@ -138,6 +153,7 @@ export default function ProdutosPage() {
         onEdit={handleEdit}
         onRemove={handleRemove}
         onAlterarAtivoCategoria={handleAlterarAtivoCategoria}
+        onSalvarLote={handleSalvarLote}
         formulario={
           showForm ? (
             <ProductForm

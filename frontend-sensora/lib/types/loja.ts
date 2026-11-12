@@ -182,6 +182,16 @@ export type CreateProdutoPayload = {
 
 export type UpdateProdutoPayload = Partial<CreateProdutoPayload>;
 
+// Uma mudança da edição em lote. Espelha AlteracaoProdutoDto do backend:
+// só o id e os campos que mudam (preço, estoque ou status).
+export type AlteracaoProduto = {
+  id: number;
+  preco?: number;
+  quantidade?: number;
+  somarEstoque?: number;
+  ativo?: boolean;
+};
+
 export type Cliente = {
   id: number;
   nome: string;

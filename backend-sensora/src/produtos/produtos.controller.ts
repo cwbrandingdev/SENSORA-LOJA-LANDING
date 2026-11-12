@@ -21,6 +21,7 @@ import { CreateProdutoDto } from './dto/create-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
 import { Produto } from './entities/produto.entity';
 import { ProdutosService } from './produtos.service';
+import { EditarProdutosLoteDto } from './dto/editar-produtos-lote.dto';
 
 @Controller('produtos')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -59,6 +60,14 @@ export class ProdutosController {
     @Body() dto: AlterarAtivoCategoriaDto,
   ): Promise<{ alterados: number }> {
     return this.produtosService.alterarAtivoDaCategoria(categoriaId, dto.ativo);
+  }
+
+  // Edição em lote do Admin: preço, estoque e status de vários produtos.
+  @Patch('lote')
+  editarEmLote(
+    @Body() dto: EditarProdutosLoteDto,
+  ): Promise<{ alterados: number }> {
+    return this.produtosService.editarEmLote(dto.alteracoes);
   }
 
   @Delete(':id')
