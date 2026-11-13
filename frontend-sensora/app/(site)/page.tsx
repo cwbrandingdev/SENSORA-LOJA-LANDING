@@ -16,11 +16,11 @@ export const metadata: Metadata = {
 };
 
 export default async function Home() {
-  // Tema de Natal desligado (ver lib/tema-natal.ts): a home fica como
+  // Tema de Natal (ver lib/tema-natal.ts): desligado, a home fica como
   // sempre foi.
   const colecoes = await listarColecoesPublicas();
   const temaNatal = temaNatalAtivo(colecoes);
-  const slides = slidesDaHome(HERO_SLIDES, temaNatal);
+  const slides = slidesDaHome(HERO_SLIDES);
 
   if (!temaNatal) {
     return (

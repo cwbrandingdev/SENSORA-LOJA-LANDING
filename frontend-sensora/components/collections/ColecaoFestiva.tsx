@@ -156,7 +156,7 @@ function ProdutosComEtiqueta({ colecao }: Props) {
             className="absolute -bottom-6 left-10 h-10 w-px bg-[#a8322d]"
           />
           <div
-            className={`absolute -bottom-14 left-4 w-44 bg-[#f4ece2] px-4 pb-3 pt-5 shadow-md transition-transform group-hover:rotate-0 [clip-path:polygon(12%_0,88%_0,100%_18%,100%_100%,0_100%,0_18%)] ${indice % 2 === 0 ? "-rotate-3" : "rotate-2"}`}
+            className={`absolute -bottom-14 left-4 z-30 w-44 bg-[#f4ece2] px-4 pb-3 pt-5 shadow-md transition-transform group-hover:rotate-0 [clip-path:polygon(12%_0,88%_0,100%_18%,100%_100%,0_100%,0_18%)] ${indice % 2 === 0 ? "-rotate-3" : "rotate-2"}`}
           >
             <span
               aria-hidden
