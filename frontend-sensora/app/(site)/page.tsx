@@ -7,19 +7,25 @@ import AboutSection from "@/components/sections/AboutSection";
 import BoasFestas from "@/components/natal/BoasFestas";
 import DivisorNatal from "@/components/natal/DivisorNatal";
 import FaixaNatal from "@/components/natal/FaixaNatal";
-import { TEMA_NATAL_ATIVO } from "@/lib/tema-natal";
+import { slidesDaHome, temaNatalAtivo } from "@/lib/tema-natal";
+import { HERO_SLIDES } from "@/lib/content";
+import { listarColecoesPublicas } from "@/lib/api-publica";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-export default function Home() {
-  // Tema de Natal (temporário): desligado em lib/tema-natal.ts, a home
-  // fica exatamente como sempre foi.
-  if (!TEMA_NATAL_ATIVO) {
+export default async function Home() {
+  // Tema de Natal desligado (ver lib/tema-natal.ts): a home fica como
+  // sempre foi.
+  const colecoes = await listarColecoesPublicas();
+  const temaNatal = temaNatalAtivo(colecoes);
+  const slides = slidesDaHome(HERO_SLIDES, temaNatal);
+
+  if (!temaNatal) {
     return (
       <>
-        <HeroCarousel />
+        <HeroCarousel slides={slides} />
         <ProductCategories />
         <FeaturedProducts />
         <LatestReleases />
@@ -32,7 +38,7 @@ export default function Home() {
   // layout); aqui entram só os enfeites exclusivos da home.
   return (
     <div className="tema-natal tema-natal-home">
-      <HeroCarousel />
+      <HeroCarousel slides={slides} />
       <FaixaNatal />
       <ProductCategories />
       <DivisorNatal />
