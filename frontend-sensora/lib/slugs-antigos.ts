@@ -30,4 +30,6 @@ export const SLUGS_ANTIGOS: Record<string, string> = {
   "lavanda-3": "difusor-de-ambiente-lavanda",
   "madeira-nobre": "vela-aromatica-madeira-nobre",
   "spray-noite-estralada": "spray-noite-feliz",
+  // Nome corrigido de "Jasmin" para "Jasmim" (16/11/2026).
+  "spray-de-ambiente-jasmin": "spray-de-ambiente-jasmim",
 };

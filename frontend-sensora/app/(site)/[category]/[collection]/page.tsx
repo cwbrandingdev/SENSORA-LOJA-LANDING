@@ -31,13 +31,13 @@ export async function generateMetadata({ params }: CollectionPageProps): Promise
   const collection = getCollection(category, collectionSlug);
   if (!collection) return {};
   return {
-    title: collection.name,
-    description: collection.description,
+    title: collection.seoTitle ?? collection.name,
+    description: collection.seoDescription ?? collection.description,
     alternates: { canonical: getCollectionHref(collection) },
     openGraph: {
       ...OPEN_GRAPH_PADRAO,
-      title: collection.name,
-      description: collection.description,
+      title: collection.seoTitle ?? collection.name,
+      description: collection.seoDescription ?? collection.description,
       url: getCollectionHref(collection),
     },
   };
