@@ -5,6 +5,7 @@
 // qualquer outro perfil; o aviso abaixo é só a camada visual (mesmo padrão
 // de /workspace-x/devolucoes). O backend guarda só os últimos 30 dias.
 import { useEffect, useState } from "react";
+import { Bug } from "lucide-react";
 import EmptyState from "@/components/ui/EmptyState";
 import InlineErrorState from "@/components/ui/InlineErrorState";
 import TableSkeleton from "@/components/ui/TableSkeleton";
@@ -18,6 +19,11 @@ import {
 } from "@/lib/types/loja";
 import { listarOcorrencias } from "@/services/ocorrencias";
 import OcorrenciasQuadro from "@/components/admin/OcorrenciasQuadro";
+
+// Lista de erros do Sentry. O endereço genérico leva cada pessoa à própria
+// organização (é preciso estar logada no Sentry). Para abrir direto no
+// projeto da Sensora, troque por o endereço dele (sentry.io/organizations/...).
+const URL_ERROS_SENTRY = "https://sentry.io/issues/";
 
 function Filtro({
   id,
@@ -105,11 +111,25 @@ export default function OcorrenciasAdminPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-xl font-semibold text-brand-navy">Ocorrências</h2>
-        <p className="text-sm text-slate-500">
-          O que aconteceu em reembolsos e devoluções nos últimos 30 dias.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-brand-navy">Ocorrências</h2>
+          <p className="text-sm text-slate-500">
+            O que aconteceu em reembolsos e devoluções nos últimos 30 dias.
+          </p>
+        </div>
+
+        {/* Erros técnicos (falhas do site e do servidor) ficam no Sentry, não
+            aqui: esta aba mostra só eventos de negócio. */}
+        <a
+          href={URL_ERROS_SENTRY}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold text-brand-navy ring-1 ring-slate-200 hover:bg-slate-50"
+        >
+          <Bug className="h-4 w-4" aria-hidden />
+          Ver erros no Sentry
+        </a>
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4">
