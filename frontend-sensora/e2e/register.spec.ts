@@ -29,7 +29,7 @@ async function preencherCadastro(
 }
 
 test.describe("Criar conta — /register", () => {
-  test("sem aceitar os termos, o botão fica desabilitado e o backend não é chamado", async ({
+  test("sem aceitar os termos, o cadastro não segue e o backend não é chamado", async ({
     page,
   }) => {
     const chamadas: unknown[] = [];
@@ -46,7 +46,12 @@ test.describe("Criar conta — /register", () => {
       confirmar: "senhaSegura123",
     });
 
-    await expect(page.locator(SUBMIT_BUTTON)).toBeDisabled();
+    // O botão fica clicável de propósito: no celular ele é o único controle
+    // visível, e um botão apagado fazia a pessoa achar que a página travou.
+    // Sem o aceite, a validação segura o envio e explica o que falta.
+    await expect(page.locator(SUBMIT_BUTTON)).toBeEnabled();
+    await page.locator(SUBMIT_BUTTON).click();
+    await expect(page.getByText("Aceite os termos para criar a conta")).toBeVisible();
     expect(chamadas).toHaveLength(0);
   });
 

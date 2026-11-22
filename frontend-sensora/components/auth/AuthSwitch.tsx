@@ -92,6 +92,7 @@ export default function AuthSwitch({ initialMode }: { initialMode: AuthMode }) {
               <SignUpForm
                 active={isSignUp}
                 onSuccess={() => setIsSignUp(false)}
+                onSwitchToLogin={() => setIsSignUp(false)}
               />
             </div>
           </div>
@@ -448,9 +449,11 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 function SignUpForm({
   active,
   onSuccess,
+  onSwitchToLogin,
 }: {
   active: boolean;
   onSuccess: () => void;
+  onSwitchToLogin: () => void;
 }) {
   const [serverError, setServerError] = useState("");
   // `success` só trava o botão de submit depois do cadastro (disabled=
@@ -476,7 +479,6 @@ function SignUpForm({
     },
   });
 
-  const aceiteTermos = watch("aceiteTermos");
   const senhaValor = watch("senha");
   const confirmarValor = watch("confirmarSenha");
   const sugestaoEmail = sugerirEmail(watch("email") ?? "");
@@ -514,10 +516,21 @@ function SignUpForm({
   return (
     <form
       className="authswitch-form authswitch-sign-up-form"
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={handleSubmit(onSubmit, () => {
+        // No celular os campos rolam e o botão fica fixo. Sem isso, o
+        // erro de um campo que ficou para cima (senha, telefone) aparece
+        // fora da área visível e a pessoa acha que o botão não fez nada.
+        requestAnimationFrame(() => {
+          const erro = document.querySelector(
+            ".authswitch-sign-up-form .authswitch-field-error, .authswitch-sign-up-form .has-error",
+          );
+          erro?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        });
+      })}
       inert={!active}
       aria-hidden={!active}
     >
+      <div className="authswitch-form-body">
       <h2 className="authswitch-title">Criar conta</h2>
       <p className="authswitch-subtitle">
         Leva menos de um minuto para começar.
@@ -751,6 +764,9 @@ function SignUpForm({
         )}
       </div>
 
+      </div>
+
+      <div className="authswitch-form-actions">
       {serverError && (
         <p role="alert" className="authswitch-alert">
           {serverError}
@@ -762,21 +778,24 @@ function SignUpForm({
           id="register-aceite"
           type="checkbox"
           tabIndex={active ? 0 : -1}
+          aria-invalid={!!errors.aceiteTermos}
           {...register("aceiteTermos")}
         />{" "}
-        Li e aceito os{" "}
-        <Link href="/termos-de-uso" target="_blank" rel="noopener noreferrer">
-          Termos de Uso
-        </Link>{" "}
-        e a{" "}
-        <Link
-          href="/politica-de-privacidade"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Política de Privacidade
-        </Link>
-        .
+        <span>
+          Li e aceito os{" "}
+          <Link href="/termos-de-uso" target="_blank" rel="noopener noreferrer">
+            Termos de Uso
+          </Link>{" "}
+          e a{" "}
+          <Link
+            href="/politica-de-privacidade"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Política de Privacidade
+          </Link>
+          .
+        </span>
       </label>
       {errors.aceiteTermos && (
         <p className="authswitch-field-error">{errors.aceiteTermos.message}</p>
@@ -785,7 +804,7 @@ function SignUpForm({
       <button
         type="submit"
         className="authswitch-btn"
-        disabled={!aceiteTermos || isSubmitting || success}
+        disabled={isSubmitting || success}
         tabIndex={active ? 0 : -1}
       >
         {isSubmitting ? (
@@ -797,6 +816,18 @@ function SignUpForm({
           "Criar conta"
         )}
       </button>
+
+      <p className="authswitch-alt">
+        Já tem uma conta?{" "}
+        <button
+          type="button"
+          tabIndex={active ? 0 : -1}
+          onClick={onSwitchToLogin}
+        >
+          Entrar
+        </button>
+      </p>
+      </div>
 
       {emailEnviado && (
         <AvisoEmailEnviado
@@ -963,15 +994,37 @@ const AUTH_SWITCH_CSS = `
      do formulário de login (que por padrão já fica perto do azul do lado
      dele) para "Criar conta" ficar igual, perto do azul, no lado dele. */
   align-items: flex-end;
-  /* CPF + aceite aumentam a altura. O painel continua na mesma transição
-     (left 75%↔25%); o formulário só passa a rolar dentro da tela. Mesmo
-     fallback vh→dvh de .authswitch-page acima. */
+  /* Os campos rolam; termos + "Criar conta" ficam fora desse scroll
+     (flex-shrink: 0), então o botão não some quando a tela é baixa.
+     max-height limita; quando o conteúdo passa disso o body encolhe. */
   max-height: 100vh;
   max-height: 100dvh;
-  overflow-y: auto;
+  overflow: hidden;
   justify-content: safe center;
   padding-top: 1.5rem;
   padding-bottom: 1.5rem;
+}
+
+.authswitch-form-body,
+.authswitch-form-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.authswitch-form-body {
+  /* 0 de grow: em tela alta o botão fica logo abaixo dos campos, sem um
+     vão no meio. 1 de shrink + min-height 0: em tela baixa os campos
+     rolam e termos/"Criar conta" continuam na área visível. */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.authswitch-form-actions {
+  flex: 0 0 auto;
 }
 
 .authswitch-sign-in-form {
@@ -1148,10 +1201,21 @@ const AUTH_SWITCH_CSS = `
 .authswitch-legal {
   width: 100%;
   max-width: 420px;
-  margin-top: 0.85rem;
-  font-size: 0.75rem;
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
   line-height: 1.45;
   color: #6b7280;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  cursor: pointer;
+}
+.authswitch-legal input {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.12rem;
+  flex-shrink: 0;
+  accent-color: var(--brand-navy);
 }
 .authswitch-legal a {
   color: var(--brand-navy);
@@ -1299,6 +1363,32 @@ const AUTH_SWITCH_CSS = `
   box-shadow: none;
 }
 
+/* No celular o "Entrar" do painel azul some: o único botão de ação é
+   "Criar conta". A troca de modo fica neste link, embaixo do botão. */
+.authswitch-alt {
+  display: none;
+  width: 100%;
+  max-width: 420px;
+  margin: 0.15rem 0 0;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+.authswitch-alt button {
+  background: none;
+  border: none;
+  padding: 0.15rem;
+  font: inherit;
+  font-weight: 700;
+  color: var(--brand-navy);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.authswitch-alt button:hover {
+  color: var(--brand-orange);
+}
+
 .authswitch-right-panel .authswitch-content {
   transform: translateX(800px);
 }
@@ -1378,28 +1468,23 @@ const AUTH_SWITCH_CSS = `
   }
   /* No mobile o formulário ocupa a largura toda e não há mais painel azul
      do lado — os dois formulários voltam a alinhar à esquerda, como o
-     resto dos formulários do Sensora. */
-  /* Correção (achado IMPORTANTE da auditoria mobile) — 58vh escondia o
-     checkbox de termos e o botão "Criar conta" abaixo da dobra em telas
-     pequenas. Testei aumentar bem mais esse teto (92dvh) e reverti: em
-     320×568 o formulário passou a invadir a faixa do painel inferior
-     (.authswitch-right-panel, linha 3 do grid "1fr 2fr 1fr" — mede ~65% da
-     altura da tela) — esse painel tem pointer-events:all neste estado
-     (para o botão "Entrar" funcionar) e z-index maior que o formulário,
-     então passou a interceptar/bloquear os cliques no checkbox e no botão
-     "Criar conta" que caíam ali, tornando-os PIORES que antes (visíveis
-     mas inclicáveis). 60dvh é o máximo que ainda cabe antes dessa faixa
-     (medido: painel começa a ~65% da tela, formulário começa em top:5%) —
-     ganho real ainda modesto sobre 58vh, mas sem esse conflito. O alcance
-     de verdade do checkbox/botão em telas muito baixas continua vindo do
-     scroll interno já existente (overflow-y:auto acima) — ver também a
-     correção de pointer-events do painel inferior logo abaixo, que garante
-     que esse scroll chega até os campos sem cliques sendo engolidos pelo
-     painel, mesmo perto da borda. */
+     resto dos formulários do Sensora.
+     60dvh vale só fora do modo cadastro: os dois forms dividem a mesma
+     célula do grid, então a altura do form oculto empurra o de entrar.
+     No modo cadastro o bloco mais abaixo solta esse teto. */
   .authswitch-sign-up-form {
     align-items: flex-start;
+    /* Altura fixa (não só max-height): o form de cadastro, mesmo invisível,
+       define a célula compartilhada com o de entrar. Sem isso o bloco de
+       entrar sobe e abre um vão entre o painel azul e os campos. */
+    height: 60vh;
+    height: 60dvh;
     max-height: 60vh;
     max-height: 60dvh;
+  }
+  .authswitch-form-body,
+  .authswitch-form-actions {
+    align-items: flex-start;
   }
   .authswitch-signin-signup,
   .authswitch-container.sign-up-mode .authswitch-signin-signup {
@@ -1486,6 +1571,57 @@ const AUTH_SWITCH_CSS = `
   }
   .authswitch-container.sign-up-mode .authswitch-right-panel .authswitch-btn-transparent {
     pointer-events: auto;
+  }
+
+  /* Cadastro no celular: a pessoa via "Entrar" no painel azul e não achava
+     "Criar conta", que ficava no scroll. O form passa a ocupar a tela, os
+     campos rolam, e termos + botão + "Já tem uma conta?" ficam fixos
+     embaixo. O painel azul (e o círculo) saem — o link .authswitch-alt
+     faz a troca para entrar. */
+  .authswitch-container.sign-up-mode {
+    --auth-mobile-footer: env(safe-area-inset-bottom, 0px);
+  }
+  .authswitch-container.sign-up-mode .authswitch-signin-signup {
+    top: 0;
+    height: calc(100% - var(--auth-mobile-footer));
+    transform: translate(-50%, 0);
+    overflow: hidden;
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .authswitch-container.sign-up-mode .authswitch-sign-up-form {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    justify-content: safe center;
+    padding: 1.15rem 1.25rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+  }
+  .authswitch-container.sign-up-mode .authswitch-title {
+    font-size: 1.85rem;
+    margin-bottom: 0.15rem;
+  }
+  .authswitch-container.sign-up-mode .authswitch-subtitle {
+    margin-bottom: 0.65rem;
+    font-size: 0.92rem;
+  }
+  .authswitch-container.sign-up-mode .authswitch-field {
+    margin: 0.38rem 0;
+  }
+  .authswitch-container.sign-up-mode .authswitch-input-field {
+    height: 50px;
+  }
+  .authswitch-container.sign-up-mode .authswitch-btn {
+    margin-top: 0.55rem;
+  }
+  .authswitch-container.sign-up-mode .authswitch-alt {
+    display: block;
+  }
+  .authswitch-container.sign-up-mode .authswitch-right-panel {
+    visibility: hidden;
+  }
+  .authswitch-container.sign-up-mode::before {
+    transform: translate(-50%, 100%);
+    bottom: 0;
   }
 }
 
