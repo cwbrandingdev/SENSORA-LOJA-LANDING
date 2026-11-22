@@ -1,6 +1,6 @@
 // Portado de frontend/services/produtos.js — mesmos endpoints e métodos.
 import api from "./api";
-import type { CreateProdutoPayload, Produto, UpdateProdutoPayload } from "@/lib/types/loja";
+import type { AlteracaoProduto, CreateProdutoPayload, Produto, UpdateProdutoPayload } from "@/lib/types/loja";
 
 export async function listarProdutos(): Promise<Produto[]> {
   const response = await api.get<Produto[]>("/produtos");
@@ -29,4 +29,10 @@ export async function alterarAtivoDaCategoria(categoriaId: number, ativo: boolea
 
 export async function removerProduto(id: number): Promise<void> {
   await api.delete(`/produtos/${id}`);
+}
+
+// Salva preço, estoque e status de vários produtos de uma vez (tudo ou nada).
+export async function editarProdutosEmLote(alteracoes: AlteracaoProduto[]): Promise<number> {
+  const response = await api.patch<{ alterados: number }>("/produtos/lote", { alteracoes });
+  return response.data.alterados;
 }

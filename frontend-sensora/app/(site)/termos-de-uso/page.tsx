@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: "Termos de Uso",
   description:
     "Condições de uso da loja Sensora, operada pela Cazarim & Souza Ltda: compra, entrega, pagamento, arrependimento e garantia.",
+  alternates: { canonical: "/termos-de-uso" },
 };
 
 const linkClass = "text-brand-navy underline underline-offset-4";

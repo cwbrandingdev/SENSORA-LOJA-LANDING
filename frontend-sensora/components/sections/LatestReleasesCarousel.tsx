@@ -24,7 +24,19 @@ export default function LatestReleasesCarousel({
   const centralizar = `${n <= 1 ? "justify-center" : ""} ${n <= 2 ? "sm:justify-center" : "sm:justify-start"} ${n <= 4 ? "lg:justify-center" : "lg:justify-start"}`;
 
   return (
-    <Carousel opts={{ align: "start", loop: false }} className="w-full">
+    <Carousel
+      opts={{
+        // No celular o card fica centralizado (inclusive o primeiro e o último).
+        align: "center",
+        containScroll: false,
+        loop: false,
+        // A partir do tablet (640px) volta ao alinhamento à esquerda.
+        breakpoints: {
+          "(min-width: 640px)": { align: "start", containScroll: "trimSnaps" },
+        },
+      }}
+      className="w-full"
+    >
       <CarouselContent className={`-ml-3 max-sm:touch-pan-y max-sm:touch-pinch-zoom ${centralizar}`}>
         {produtos.map((produto) => (
           <CarouselItem

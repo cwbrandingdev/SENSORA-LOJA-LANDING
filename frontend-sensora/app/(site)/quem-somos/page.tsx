@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "Quem somos",
   description:
     "Na Sensora Home, acreditamos que os aromas têm o poder de transformar a atmosfera de um ambiente. Conheça a Sensora.",
+  alternates: { canonical: "/quem-somos" },
 };
 
 const CITACAO =

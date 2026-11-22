@@ -32,7 +32,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import Badge from "@/components/ui/Badge";
 import RowActions from "@/components/ui/RowActions";
 import { statusEstoque, type StatusEstoque } from "@/lib/estoque";
-import type { Categoria, Produto } from "@/lib/types/loja";
+import type { AlteracaoProduto, Categoria, Produto } from "@/lib/types/loja";
 
 type ProductTableProps = {
   produtos: Produto[];
@@ -42,6 +42,11 @@ type ProductTableProps = {
   categorias: Categoria[];
   onEdit: (produto: Produto) => void;
   onRemove: (produto: Produto) => void;
+  /** Edição em lote: mostra os valores do rascunho (só leitura) em destaque. */
+  rascunho?: Record<number, AlteracaoProduto>;
+  /** Produtos marcados para as ações em lote (caixinhas da primeira coluna). */
+  selecionados?: Set<number>;
+  onSelecionar?: (ids: number[], marcar: boolean) => void;
 };
 
 const formatPrice = new Intl.NumberFormat("pt-BR", {
@@ -55,6 +60,11 @@ const ESTOQUE_TONE: Record<StatusEstoque, string> = {
   POUCAS_UNIDADES: "text-amber-600",
   DISPONIVEL: "text-slate-700",
 };
+
+// Valor mudado pela edição em lote (ainda não salvo): contorno laranja.
+function destaqueAlterado(alterado: boolean) {
+  return alterado ? "rounded-md bg-orange-50 px-1.5 py-0.5 ring-1 ring-brand-orange" : "";
+}
 
 // `key={src}` no call site remonta o componente quando a imagem muda — evita
 // precisar de um useEffect só para resetar `falhou` (react-hooks/
@@ -88,7 +98,7 @@ export function ProductThumb({ src, alt }: { src?: string | null; alt: string })
   );
 }
 
-export default function ProductTable({ produtos, categorias, onEdit, onRemove }: ProductTableProps) {
+export default function ProductTable({ produtos, categorias, onEdit, onRemove, rascunho, selecionados, onSelecionar }: ProductTableProps) {
   if (!produtos || produtos.length === 0) {
     return (
       <EmptyState
@@ -143,6 +153,16 @@ export default function ProductTable({ produtos, categorias, onEdit, onRemove }:
       <table className="w-full table-fixed text-left text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50/80">
+            {rascunho && (
+              <th className="w-10 px-3 py-3.5">
+                <input
+                  type="checkbox"
+                  aria-label="Marcar todos os produtos da lista"
+                  checked={produtos.every((p) => selecionados?.has(p.id))}
+                  onChange={(e) => onSelecionar?.(produtos.map((p) => p.id), e.target.checked)}
+                />
+              </th>
+            )}
             <th className="w-[280px] px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               Produto
             </th>
@@ -166,7 +186,13 @@ export default function ProductTable({ produtos, categorias, onEdit, onRemove }:
         <tbody className="divide-y divide-slate-100">
           {produtos.map((produto) => {
             const categoria = nomeCategoria(produto);
-            const estoque = statusEstoque(produto.quantidade);
+            // O que já foi alterado neste produto pela edição em lote (ou nada).
+            const mudanca = rascunho?.[produto.id];
+            // Valores que vão ficar depois de salvar (sem rascunho, os atuais).
+            const preco = mudanca?.preco ?? produto.preco;
+            const quantidade = mudanca?.quantidade ?? produto.quantidade + (mudanca?.somarEstoque ?? 0);
+            const ativo = mudanca?.ativo ?? produto.ativo;
+            const estoque = statusEstoque(quantidade);
 
             return (
               <tr
@@ -174,6 +200,16 @@ export default function ProductTable({ produtos, categorias, onEdit, onRemove }:
                 // Inativo fica levemente apagado (volta ao normal no hover).
                 className={`transition-colors hover:bg-slate-50/70 ${produto.ativo ? "" : "opacity-60 hover:opacity-100"}`}
               >
+                {rascunho && (
+                  <td className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`Marcar ${produto.nome}`}
+                      checked={selecionados?.has(produto.id) ?? false}
+                      onChange={(e) => onSelecionar?.([produto.id], e.target.checked)}
+                    />
+                  </td>
+                )}
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-3">
                     <ProductThumb key={produto.imagemUrl ?? "sem-imagem"} src={produto.imagemUrl} alt={produto.nome} />
@@ -197,18 +233,22 @@ export default function ProductTable({ produtos, categorias, onEdit, onRemove }:
                   )}
                 </td>
                 <td className="px-5 py-3 text-right font-semibold tabular-nums text-slate-900">
-                  {formatPrice.format(produto.preco)}
+                  <span className={destaqueAlterado(mudanca?.preco !== undefined)}>{formatPrice.format(preco)}</span>
                 </td>
                 <td className="px-5 py-3 text-right">
-                  <span className={`font-medium tabular-nums ${ESTOQUE_TONE[estoque]}`}>
-                    {produto.quantidade}
+                  <span
+                    className={`font-medium tabular-nums ${ESTOQUE_TONE[estoque]} ${destaqueAlterado(
+                      mudanca?.quantidade !== undefined || mudanca?.somarEstoque !== undefined,
+                    )}`}
+                  >
+                    {quantidade}
                   </span>
                 </td>
                 <td className="px-5 py-3">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <Badge tone={produto.ativo ? "success" : "neutral"}>
-                      {produto.ativo ? "Ativo" : "Inativo"}
-                    </Badge>
+                    <span className={destaqueAlterado(mudanca?.ativo !== undefined)}>
+                      <Badge tone={ativo ? "success" : "neutral"}>{ativo ? "Ativo" : "Inativo"}</Badge>
+                    </span>
                     {produto.destaque && <Badge tone="info" dot={false}>Destaque</Badge>}
                   </div>
                 </td>

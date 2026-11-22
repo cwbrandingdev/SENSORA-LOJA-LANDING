@@ -613,8 +613,11 @@ export default function CheckoutPage() {
       ) : (
         <section className="relative pb-24 sm:pb-32 lg:pb-0">
           {/* Começa logo abaixo do menu fixo: antes ficava atrás dele e o
-              topo das fotos (ex.: o gatilho do spray) sumia. */}
-          <div className="fixed right-0 bottom-0 top-[calc(var(--navbar-height)+var(--faixa-cupom))] z-0 hidden w-[min(480px,42vw)] lg:block xl:w-[min(520px,38vw)]">
+              topo das fotos (ex.: o gatilho do spray) sumia. Fica na frente
+              do conteúdo (z-20): o bloco do formulário ocupa a largura toda
+              (só tem padding à direita) e, por cima, engolia os cliques no
+              "Remover" e nas bolinhas do carrossel. */}
+          <div className="fixed right-0 bottom-0 top-[calc(var(--navbar-height)+var(--faixa-cupom))] z-20 hidden w-[min(480px,42vw)] lg:block xl:w-[min(520px,38vw)]">
             <CheckoutItemsShowcase itens={itens} className="h-full" />
           </div>
 

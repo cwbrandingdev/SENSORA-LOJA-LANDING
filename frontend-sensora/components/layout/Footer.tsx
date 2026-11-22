@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
 import CookiePreferencesTrigger from "@/components/layout/CookiePreferencesTrigger";
 import Logo from "@/components/ui/Logo";
 import {
@@ -9,6 +10,22 @@ import {
 } from "@/lib/content";
 import { EMPRESA, ENDERECO_LINHA, ROTAS_LEGAIS } from "@/lib/empresa";
 import { ROUTES } from "@/lib/routes";
+
+// Formas aceitas no checkout do Asaas: Pix e as bandeiras de crédito que
+// aparecem no próprio Asaas ("Aceitamos"). Ícones em public/images/pagamentos
+// (Shopify payment_icons, MIT). Banescard, Credz, Sorocred e Credsystem
+// também são aceitas, mas não têm ícone nessa biblioteca.
+const FORMAS_DE_PAGAMENTO = [
+  { arquivo: "pix", nome: "Pix" },
+  { arquivo: "visa", nome: "Visa" },
+  { arquivo: "mastercard", nome: "Mastercard" },
+  { arquivo: "elo", nome: "Elo" },
+  { arquivo: "diners", nome: "Diners Club" },
+  { arquivo: "discover", nome: "Discover" },
+  { arquivo: "amex", nome: "American Express" },
+  { arquivo: "cabal", nome: "Cabal" },
+  { arquivo: "jcb", nome: "JCB" },
+];
 
 export default function Footer() {
   const year = new Date().getFullYear();
@@ -118,6 +135,42 @@ export default function Footer() {
                 {FOOTER_CONTENT.contact.email}
               </a>
             </li>
+          </ul>
+        </div>
+
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-brand-orange">
+            Segurança
+          </h2>
+          {/* Selo próprio: o site roda em HTTPS (certificado SSL da hospedagem). */}
+          <div className="mt-4 inline-flex items-center gap-3 text-white/80">
+            <ShieldCheck className="h-9 w-9 text-emerald-400" aria-hidden />
+            <span className="leading-tight">
+              <span className="block text-[10px] uppercase tracking-widest text-white/60">
+                Compra segura
+              </span>
+              <span className="block text-sm font-semibold uppercase">Site protegido</span>
+              <span className="block text-[10px] uppercase tracking-widest text-white/60">
+                Certificado SSL
+              </span>
+            </span>
+          </div>
+
+          <h2 className="mt-8 text-xs font-semibold uppercase tracking-widest text-brand-orange">
+            Pagamento
+          </h2>
+          <ul className="mt-4 flex max-w-48 flex-wrap gap-2">
+            {FORMAS_DE_PAGAMENTO.map((forma) => (
+              <li key={forma.arquivo}>
+                <img
+                  src={`/images/pagamentos/${forma.arquivo}.svg`}
+                  alt={forma.nome}
+                  title={forma.nome}
+                  width={38}
+                  height={24}
+                />
+              </li>
+            ))}
           </ul>
         </div>
       </div>

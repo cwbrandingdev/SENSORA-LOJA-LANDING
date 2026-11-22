@@ -88,16 +88,21 @@ export default function TextReveal({ children, delayMs = 0, className = "" }: Te
     // este heading (ex.: o parágrafo com mt-6 depois do título).
     <span ref={containerRef} className={`relative flow-root ${className}`}>
       {/* Cópia invisível só para medir onde o texto quebra de linha nesta
-          largura — nunca é vista nem lida por leitor de tela. */}
+          largura — nunca é vista nem lida por leitor de tela. A palavra vem
+          do atributo data-palavra (via ::before), e não como texto: assim o
+          título não aparece duas vezes no HTML lido pelo Google (isso
+          deixava o H1 do FAQ repetido). */}
       <span aria-hidden className="invisible absolute inset-0">
         {words.map((word, i) => (
           <span
             key={i}
+            data-palavra={word}
+            className="before:content-[attr(data-palavra)]"
             ref={(el) => {
               wordRefs.current[i] = el;
             }}
           >
-            {word}{" "}
+            {" "}
           </span>
         ))}
       </span>

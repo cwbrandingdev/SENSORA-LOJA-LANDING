@@ -1,6 +1,7 @@
 // Página de uma coleção festiva (/colecoes/<slug>): no topo, o texto e as
-// fotos dos produtos empilhadas como presentes; embaixo, cada produto com
+// fotos empilhadas como polaroides (ver FOTOS_TOPO); embaixo, cada produto com
 // uma etiqueta de presente pendurada (nome e preço).
+import Image from "next/image";
 import Link from "next/link";
 import type {
   ColecaoPublicaComProdutos,
@@ -39,10 +40,35 @@ function FotoProduto({
 
 type Props = { colecao: ColecaoPublicaComProdutos };
 
-// Topo: texto à esquerda e as fotos dos produtos sobrepostas à direita.
+type FotoTopo = { url: string; alt: string };
+
+// Fotos das polaroides do topo, por coleção (chave = slug da coleção).
+// Para trocar: coloque a imagem em public/images/section-natal/ e mude o
+// caminho aqui. A ordem é a posição: 1ª em cima à esquerda, 2ª em cima à
+// direita, 3ª embaixo (na frente).
+const FOTOS_TOPO: Record<string, FotoTopo[]> = {
+  "colecao-natal": [
+    { url: "/images/section-natal/difusor-noite-feliz.webp", alt: "Difusor Noite Feliz" },
+    { url: "/images/section-natal/spray-noite-feliz.webp", alt: "Spray Noite Feliz" },
+    { url: "/images/section-natal/vela-noite-feliz.webp", alt: "Vela Noite Feliz" },
+  ],
+};
+
+// Coleção sem fotos na lista acima usa a capa dos 3 primeiros produtos.
+function fotosDoTopo(colecao: ColecaoPublicaComProdutos): FotoTopo[] {
+  const fotos = FOTOS_TOPO[colecao.slug];
+  if (fotos) return fotos;
+
+  return colecao.produtos
+    .filter((produto) => produto.imagemUrl)
+    .slice(0, 3)
+    .map((produto) => ({ url: imagemKitRedimensionada(produto.imagemUrl!, 600), alt: produto.nome }));
+}
+
+// Topo: texto à esquerda e as fotos (polaroides) sobrepostas à direita.
 function TopoPresentes({ colecao }: Props) {
   const titulo = colecao.titulo || colecao.nome;
-  const destaques = colecao.produtos.filter((p) => p.imagemUrl).slice(0, 3);
+  const fotos = fotosDoTopo(colecao);
   const inclinacoes = ["-rotate-6", "rotate-3", "-rotate-2"];
   const posicoes = ["left-0 top-6", "right-0 top-0", "left-1/4 bottom-0"];
 
@@ -67,17 +93,27 @@ function TopoPresentes({ colecao }: Props) {
           Ver presentes
         </a>
       </div>
-      <div className="relative mx-auto h-[28rem] w-full max-w-md sm:h-[34rem]">
-        {destaques.map((produto, indice) => (
+      {/* Altura pensada para as polaroides quadradas ficarem empilhadas, com
+          a de baixo cobrindo cerca de metade das de cima: mais alto, elas se
+          separam; mais baixo, a de baixo esconde quase tudo. */}
+      <div className="relative mx-auto h-[22rem] w-full max-w-xl sm:h-[33rem]">
+        {fotos.map((foto, indice) => (
           <div
-            key={produto.id}
+            key={foto.url}
             className={`absolute w-1/2 bg-white p-2 pb-8 shadow-xl ${inclinacoes[indice]} ${posicoes[indice]}`}
           >
-            <FotoProduto
-              produto={produto}
-              largura={500}
-              className="aspect-[3/4] w-full object-cover"
-            />
+            {/* As fotos locais são grandes (~3500 px): o next/image entrega
+                cada uma no tamanho da tela. As do ImageKit já vêm reduzidas. */}
+            <div className="relative aspect-square w-full">
+              <Image
+                src={foto.url}
+                alt={foto.alt}
+                fill
+                sizes="(min-width: 640px) 288px, 50vw"
+                unoptimized={foto.url.startsWith("http")}
+                className="object-cover"
+              />
+            </div>
           </div>
         ))}
       </div>
@@ -85,7 +121,7 @@ function TopoPresentes({ colecao }: Props) {
   );
 }
 
-// Produtos: foto quadrada e, pendurada nela, uma etiqueta de presente (com
+// Produtos: foto retangular (em pé, 3:4) e, pendurada nela, uma etiqueta de presente (com
 // furo e barbante) com o nome e o preço.
 function ProdutosComEtiqueta({ colecao }: Props) {
   return (
@@ -96,7 +132,7 @@ function ProdutosComEtiqueta({ colecao }: Props) {
           href={LOJA_PRODUTO_URL(produto.slug)}
           className="group relative block"
         >
-          <div className="relative aspect-square overflow-hidden rounded-sm shadow-md">
+          <div className="relative aspect-[3/4] overflow-hidden rounded-sm shadow-md">
             <FotoProduto
               produto={produto}
               largura={700}
@@ -120,7 +156,7 @@ function ProdutosComEtiqueta({ colecao }: Props) {
             className="absolute -bottom-6 left-10 h-10 w-px bg-[#a8322d]"
           />
           <div
-            className={`absolute -bottom-14 left-4 w-44 bg-[#f4ece2] px-4 pb-3 pt-5 shadow-md transition-transform group-hover:rotate-0 [clip-path:polygon(12%_0,88%_0,100%_18%,100%_100%,0_100%,0_18%)] ${indice % 2 === 0 ? "-rotate-3" : "rotate-2"}`}
+            className={`absolute -bottom-14 left-4 z-30 w-44 bg-[#f4ece2] px-4 pb-3 pt-5 shadow-md transition-transform group-hover:rotate-0 [clip-path:polygon(12%_0,88%_0,100%_18%,100%_100%,0_100%,0_18%)] ${indice % 2 === 0 ? "-rotate-3" : "rotate-2"}`}
           >
             <span
               aria-hidden

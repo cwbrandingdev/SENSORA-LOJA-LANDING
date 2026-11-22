@@ -11,7 +11,7 @@ import {
   CarouselContent,
   CarouselItem,
 } from "@/components/ui/carousel";
-import { HERO_SLIDES } from "@/lib/content";
+import type { HeroSlide } from "@/lib/content";
 
 const AUTOPLAY_MS = 6000;
 const ALTURA_BANNER =
@@ -57,7 +57,7 @@ function BannerArteDirecionada({
   );
 }
 
-export default function HeroCarousel() {
+export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
   const [api, setApi] = useState<CarouselApi>();
   const [index, setIndex] = useState(0);
   // Só a foto do 1º slide entra no carregamento inicial; as dos outros
@@ -118,7 +118,7 @@ export default function HeroCarousel() {
         <CarouselContent
           className={`ml-0 ${ALTURA_BANNER} max-sm:touch-pan-y max-sm:touch-pinch-zoom`}
         >
-          {HERO_SLIDES.map((slide, slideIndex) => (
+          {slides.map((slide, slideIndex) => (
             <CarouselItem key={slide.id} className={`${ALTURA_BANNER} pl-0`}>
               <div className="relative block h-full w-full overflow-hidden">
                 <div
@@ -223,7 +223,7 @@ export default function HeroCarousel() {
 
         {/* Pontinhos no lugar das setas: o do slide atual vira um traço. */}
         <div className="absolute inset-x-0 bottom-5 flex justify-center gap-2 sm:bottom-6">
-          {HERO_SLIDES.map((slide, slideIndex) => (
+          {slides.map((slide, slideIndex) => (
             <button
               key={slide.id}
               type="button"

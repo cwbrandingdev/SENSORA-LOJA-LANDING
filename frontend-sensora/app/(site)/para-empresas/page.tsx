@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: "Para empresas",
   description:
     "Presentes sensoriais personalizados com a sua marca: velas, sprays, difusores e kits para colaboradores, clientes e eventos. Pedidos a partir de 30 unidades.",
+  alternates: { canonical: "/para-empresas" },
 };
 
 const PRODUTOS = [

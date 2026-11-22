@@ -60,6 +60,16 @@ const GA_CONNECT_ORIGINS = [
 ];
 const gaEnabled = Boolean(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID);
 
+// Microsoft Clarity (components/layout/ClarityScript.tsx), também só após
+// consentimento. Script e envio de dados vêm de subdomínios *.clarity.ms;
+// c.bing.com é usado pelo Clarity para sincronizar a sessão.
+const CLARITY_ORIGINS = "https://*.clarity.ms https://c.bing.com";
+
+// Google Tag Manager (components/layout/GoogleTagManager.tsx), também só
+// após consentimento. Tags novas criadas no painel do GTM que usem outros
+// domínios precisam ter esses domínios liberados aqui também.
+const GTM_ORIGIN = "https://www.googletagmanager.com";
+
 // Sentry (lib/sentry.ts): o navegador envia os erros para o host do DSN.
 // Sem NEXT_PUBLIC_SENTRY_DSN (ou malformado), nada é liberado.
 function obterOrigemSentry(): string | null {
@@ -80,6 +90,8 @@ const connectSrcParts = [
   LANGUAGETOOL_ORIGIN,
   obterOrigemSentry(),
   ...(gaEnabled ? GA_CONNECT_ORIGINS : []),
+  CLARITY_ORIGINS,
+  GTM_ORIGIN,
 ];
 const connectSrc = connectSrcParts
   .filter((origem): origem is string => Boolean(origem))
@@ -90,6 +102,8 @@ const scriptSrcParts = [
   "'unsafe-inline'",
   ...(process.env.NODE_ENV !== "production" ? ["'unsafe-eval'"] : []),
   ...(gaEnabled ? [GA_SCRIPT_ORIGINS] : []),
+  "https://*.clarity.ms",
+  GTM_ORIGIN,
 ];
 const scriptSrc = `script-src ${scriptSrcParts.join(" ")}`;
 
@@ -121,7 +135,7 @@ const CSP = [
   "default-src 'self'",
   scriptSrc,
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: ${IMAGEKIT_DELIVERY_ORIGIN}${gaImgOrigins}`,
+  `img-src 'self' data: blob: ${IMAGEKIT_DELIVERY_ORIGIN}${gaImgOrigins} ${CLARITY_ORIGINS} ${GTM_ORIGIN}`,
   "font-src 'self'",
   `connect-src ${connectSrc}`,
   "object-src 'none'",

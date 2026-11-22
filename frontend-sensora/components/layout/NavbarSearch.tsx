@@ -157,9 +157,7 @@ export default function NavbarSearch({
         onChange={(evento) => setQuery(evento.target.value)}
         placeholder="Buscar no site"
         autoComplete="off"
-        aria-autocomplete="list"
         aria-controls={mostrarPainel ? listaId : undefined}
-        aria-expanded={mostrarPainel}
         className={cn(
           "h-10 min-w-0 bg-transparent text-[15px] text-brand-navy outline-none placeholder:text-brand-navy/40 p-4",
           "transition-opacity duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",

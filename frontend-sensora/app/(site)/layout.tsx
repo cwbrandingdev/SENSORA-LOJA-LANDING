@@ -8,6 +8,8 @@ import SiteMain from "@/components/layout/SiteMain";
 import SiteFooter from "@/components/layout/SiteFooter";
 import CookieConsentBanner from "@/components/layout/CookieConsentBanner";
 import OptionalAnalyticsScripts from "@/components/layout/OptionalAnalyticsScripts";
+import ClarityScript from "@/components/layout/ClarityScript";
+import GoogleTagManager from "@/components/layout/GoogleTagManager";
 import PageFadeIn from "@/components/ui/PageFadeIn";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
@@ -21,7 +23,7 @@ import JsonLd from "@/components/seo/JsonLd";
 import { listarColecoesPublicas } from "@/lib/api-publica";
 import FaixaNatalTopo from "@/components/natal/FaixaNatalTopo";
 import TemaNatalSite from "@/components/natal/TemaNatalSite";
-import { TEMA_NATAL_ATIVO } from "@/lib/tema-natal";
+import { temaNatalAtivo } from "@/lib/tema-natal";
 import { EMPRESA } from "@/lib/empresa";
 import { OPEN_GRAPH_PADRAO, SITE_URL, urlAbsoluta } from "@/lib/seo";
 import { buscarFaixaCupomPublica } from "@/lib/api-publica";
@@ -100,6 +102,7 @@ export default async function RootLayout({
 }) {
   // Coleções festivas ligadas no Admin viram itens do menu.
   const colecoes = await listarColecoesPublicas();
+  const temaNatal = temaNatalAtivo(colecoes);
   const faixaInicial = await buscarFaixaCupomPublica();
 
   return (
@@ -136,15 +139,17 @@ export default async function RootLayout({
                 <Navbar colecoes={colecoes} />
               </AuthProvider>
               <SiteMain>
-                {TEMA_NATAL_ATIVO && <FaixaNatalTopo />}
+                {temaNatal && <FaixaNatalTopo />}
                 {children}
               </SiteMain>
               <SiteFooter />
               <SacolaDrawer />
               {/* Tema de Natal temporário: liga/desliga em lib/tema-natal.ts. */}
-              {TEMA_NATAL_ATIVO && <TemaNatalSite />}
+              {temaNatal && <TemaNatalSite />}
               <CookieConsentBanner />
               <OptionalAnalyticsScripts />
+              <ClarityScript />
+              <GoogleTagManager />
             </PageFadeIn>
           </ToastProvider>
         </CartProvider>
