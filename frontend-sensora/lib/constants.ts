@@ -5,6 +5,10 @@ export const TOKEN_KEY = "sensora_token";
 // novo sem pedir login de novo. Ver lib/sessao.ts.
 export const REFRESH_TOKEN_KEY = "sensora_refresh_token";
 
+// "Lembrar de mim" do login: guarda "0" quando o login foi feito SEM marcar
+// (a sessão acaba ao fechar o navegador). Sem a chave, a sessão é lembrada.
+export const LEMBRAR_KEY = "sensora_lembrar";
+
 // Chave do carrinho local (CartContext) — mesmo namespace de TOKEN_KEY.
 export const CART_STORAGE_KEY = "sensora_carrinho";
 

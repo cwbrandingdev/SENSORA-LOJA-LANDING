@@ -7,7 +7,13 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { getRefreshToken, getToken, removeToken, syncAuthCookieFromStorage } from "@/lib/storage";
+import {
+  getRefreshToken,
+  getToken,
+  removeToken,
+  sessaoDoNavegadorAcabou,
+  syncAuthCookieFromStorage,
+} from "@/lib/storage";
 import { decodeToken, isTokenExpired } from "@/lib/jwt";
 import { MARGEM_RENOVACAO_MS, renovarSessao, revogarSessaoNoServidor } from "@/lib/sessao";
 import { ROUTES } from "@/lib/routes";
@@ -79,6 +85,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function sincronizarComToken() {
+    // Login sem "Lembrar de mim": o navegador foi fechado, a sessão acaba.
+    if (sessaoDoNavegadorAcabou()) {
+      encerrarSessao();
+      return;
+    }
+
     // Token presente mas com `exp` vencido (ou não decodificável) (Task 17):
     // tenta renovar com o refresh token antes de encerrar a sessão.
     if (getToken() && isTokenExpired(getToken())) {

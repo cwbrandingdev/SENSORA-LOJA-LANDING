@@ -55,7 +55,7 @@ import { z } from "zod";
 import { isAxiosError } from "axios";
 import { Mail, Lock, User, Phone, Eye, EyeOff, X } from "lucide-react";
 import { login, register as registerUser } from "@/services/auth";
-import { setRefreshToken, setToken } from "@/lib/storage";
+import { setLembrar, setRefreshToken, setToken } from "@/lib/storage";
 import { isDestinoInternoValido } from "@/lib/auth-redirect";
 import { ROUTES } from "@/lib/routes";
 import {
@@ -172,6 +172,8 @@ function SignInForm({ active }: { active: boolean }) {
   const { login: markAuthenticated } = useAuth();
   const [serverError, setServerError] = useState("");
   const [senhaVisivel, setSenhaVisivel] = useState(false);
+  // Fora do formulário validado: não faz parte do que é enviado à API.
+  const [lembrarDeMim, setLembrarDeMim] = useState(false);
   const toast = useToast();
 
   const {
@@ -187,6 +189,8 @@ function SignInForm({ active }: { active: boolean }) {
 
     try {
       const { access_token, refresh_token } = await login(data);
+      // Antes do token: o cookie da sessão depende da escolha.
+      setLembrar(lembrarDeMim);
       setToken(access_token);
       setRefreshToken(refresh_token);
       markAuthenticated();
@@ -321,6 +325,16 @@ function SignInForm({ active }: { active: boolean }) {
           </p>
         )}
       </div>
+
+      <label className="authswitch-remember">
+        <input
+          type="checkbox"
+          checked={lembrarDeMim}
+          onChange={(evento) => setLembrarDeMim(evento.target.checked)}
+          tabIndex={active ? 0 : -1}
+        />
+        Lembrar de mim
+      </label>
 
       <div className="authswitch-forgot">
         <BackLink
@@ -1180,6 +1194,48 @@ const AUTH_SWITCH_CSS = `
 }
 .authswitch-email-sugestao:hover {
   color: #c2410c;
+}
+
+.authswitch-remember {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 420px;
+  margin: 0.2rem 0 0.1rem 0.85rem;
+  font-size: 0.8rem;
+  color: var(--brand-navy);
+  cursor: pointer;
+}
+/* Interruptor: cinza desligado, azul-marinho ligado. */
+.authswitch-remember input {
+  appearance: none;
+  flex-shrink: 0;
+  position: relative;
+  cursor: pointer;
+  width: 2.3rem;
+  height: 1.3rem;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background-color 0.2s;
+}
+.authswitch-remember input::after {
+  content: "";
+  position: absolute;
+  top: 0.15rem;
+  left: 0.15rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: transform 0.2s;
+}
+.authswitch-remember input:checked {
+  background: var(--brand-navy);
+}
+.authswitch-remember input:checked::after {
+  transform: translateX(1rem);
 }
 
 .authswitch-forgot {
