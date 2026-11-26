@@ -5,6 +5,14 @@ import type { ResumoAvaliacoes } from "@/lib/types/loja";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+// Catálogo público fica em cache no Next por 1 hora. Um visitante ou um
+// crawler não chama a API de novo enquanto essa cópia vale, então a máquina
+// do backend pode dormir. Salvar no Admin limpa o cache na hora (updateTag
+// em lib/actions.ts). Este prazo só atrasa mudança que não passa pelo Admin,
+// como a quantidade exibida depois de uma venda. O checkout continua
+// conferindo o estoque real na API.
+const REVALIDACAO_CATALOGO_SEGUNDOS = 60 * 60;
+
 // Timeout nativo (sem dependência) para toda chamada a esta API — evita que
 // um backend lento/travado prenda a renderização SSR indefinidamente. Tratado
 // pelos mesmos caminhos de erro já existentes: em getJSON vira `null` (como
@@ -64,14 +72,14 @@ export type ColecaoPublicaComProdutos = ColecaoPublica & {
 // "sem dados" (a seção simplesmente não aparece).
 // `tags` habilita invalidação sob demanda (ver revalidarProdutos/
 // revalidarCategorias em lib/actions.ts, chamadas pelo Admin após cada
-// mutação) além do teto de 60s — sem isso, uma edição no Admin só aparece
+// mutação) além do teto de 1 hora — sem isso, uma edição no Admin só aparece
 // na Loja quando o timer expirar (ver auditoria de latência Admin→Loja).
 async function getJSON<T>(path: string, tags: string[]): Promise<T | null> {
   if (!API_URL) return null;
 
   try {
     const res = await fetch(`${API_URL}${path}`, {
-      next: { revalidate: 60, tags },
+      next: { revalidate: REVALIDACAO_CATALOGO_SEGUNDOS, tags },
       signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
@@ -114,7 +122,7 @@ export async function buscarProdutoPublicoPorSlug(slug: string): Promise<Produto
   let res: Response;
   try {
     res = await fetch(`${API_URL}/public/produtos/${encodeURIComponent(slug)}`, {
-      next: { revalidate: 60, tags: ["produtos"] },
+      next: { revalidate: REVALIDACAO_CATALOGO_SEGUNDOS, tags: ["produtos"] },
       signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
   } catch {
@@ -162,7 +170,7 @@ async function getJSONOuLanca<T>(path: string, tags: string[]): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
-      next: { revalidate: 60, tags },
+      next: { revalidate: REVALIDACAO_CATALOGO_SEGUNDOS, tags },
       signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
   } catch {
