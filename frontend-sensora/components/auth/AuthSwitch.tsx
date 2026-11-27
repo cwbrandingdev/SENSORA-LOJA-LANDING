@@ -112,7 +112,7 @@ export default function AuthSwitch({ initialMode }: { initialMode: AuthMode }) {
                 </p>
                 <button
                   type="button"
-                  className="authswitch-btn authswitch-btn-transparent"
+                  className="authswitch-btn authswitch-btn-transparent "
                   onClick={() => setIsSignUp(true)}
                 >
                   Criar conta
@@ -1516,6 +1516,19 @@ const AUTH_SWITCH_CSS = `
 }
 
 @media (max-width: 870px) {
+  /* No celular, "Voltar ao início" fica na linha do "Esqueci minha senha":
+     solto no topo, ele caía por cima do título "Entrar" em telas baixas. */
+  .authswitch-container .authswitch-forgot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+  .authswitch-forgot .authswitch-back-link {
+    position: static;
+  }
   .authswitch-signin-signup {
     width: 100%;
     top: 95%;
