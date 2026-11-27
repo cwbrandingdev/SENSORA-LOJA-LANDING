@@ -126,7 +126,6 @@ function resolverChaveCarrinho(): string {
   if (typeof sub !== "number") return CART_STORAGE_KEY;
 
   const chaveConta = `${CART_STORAGE_KEY}_${sub}`;
-  mesclarCarrinhoVisitanteNaConta(chaveConta);
 
   return chaveConta;
 }
@@ -187,31 +186,6 @@ function mesclarItens(itensConta: CartItem[], itensVisitante: CartItem[]): CartI
   return resultado;
 }
 
-// União localStorage + banco por produtoId, quantidade = máximo (nunca
-// soma: a cópia local já é o eco do último PUT, somar dobraria no reload).
-// Campos de produto do servidor vencem (preço/estoque atuais).
-function mesclarPorMaximo(
-  locais: CartItem[],
-  servidor: CartItem[],
-): CartItem[] {
-  const porId = new Map<number, CartItem>();
-  for (const item of locais) {
-    porId.set(item.produtoId, { ...item });
-  }
-  for (const item of servidor) {
-    const existente = porId.get(item.produtoId);
-    if (!existente) {
-      porId.set(item.produtoId, { ...item });
-      continue;
-    }
-    porId.set(item.produtoId, {
-      ...item,
-      quantidade: Math.max(existente.quantidade, item.quantidade),
-    });
-  }
-  return [...porId.values()];
-}
-
 function paraCartItem(item: ItemCarrinho): CartItem | null {
   const candidato: CartItem = {
     produtoId: item.produtoId,
@@ -228,24 +202,6 @@ function paraCartItem(item: ItemCarrinho): CartItem | null {
 function temSessaoValida(): boolean {
   const token = getToken();
   return Boolean(token && !isTokenExpired(token));
-}
-
-// Migra (com merge, nunca substituição cega) o carrinho de visitante para a
-// chave da conta informada. Idempotente por construção: a chave de
-// visitante é sempre esvaziada ao final, então uma segunda chamada (reload,
-// remount do CartProvider com a mesma sessão) não encontra nada para
-// mesclar de novo — nenhuma quantidade é somada duas vezes. No-op (nem lê
-// nem grava a chave da conta) quando o visitante não tem itens, para nunca
-// sobrescrever um carrinho de conta já existente com um merge vazio à toa.
-function mesclarCarrinhoVisitanteNaConta(chaveConta: string): void {
-  const itensVisitante = lerCarrinhoDoStorage(CART_STORAGE_KEY);
-  if (itensVisitante.length === 0) return;
-
-  const itensConta = lerCarrinhoDoStorage(chaveConta);
-  const mesclado = mesclarItens(itensConta, itensVisitante);
-
-  window.localStorage.setItem(chaveConta, JSON.stringify(mesclado));
-  window.localStorage.setItem(CART_STORAGE_KEY, "[]");
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -276,29 +232,35 @@ export function CartProvider({ children }: { children: ReactNode }) {
     let cancelado = false;
     const chave = resolverChaveCarrinho();
     chaveRef.current = chave;
+    const logado = chave !== CART_STORAGE_KEY;
     const locais = lerCarrinhoDoStorage(chave);
+
+    const visitante = logado ? lerCarrinhoDoStorage(CART_STORAGE_KEY) : [];
     setItens(locais);
 
-    if (!temSessaoValida()) {
+    if (!logado) {
       setHidratado(true);
       return;
     }
 
+    const pendente = window.localStorage.getItem(`${chave}_pendente`) === "1";
+
+    function concluir(itensDaConta: CartItem[]) {
+      if (cancelado) return;
+      setItens(mesclarItens(itensDaConta, visitante));
+      window.localStorage.setItem(CART_STORAGE_KEY, "[]");
+      setHidratado(true);
+    }
+
     void buscarCarrinho()
       .then((servidor) => {
-        if (cancelado) return;
         const doServidor = servidor
           .map(paraCartItem)
           .filter((item): item is CartItem => item !== null);
-        setItens(mesclarPorMaximo(locais, doServidor));
+
+        concluir(pendente ? locais : doServidor);
       })
-      .catch(() => {
-        if (cancelado) return;
-        setItens(locais);
-      })
-      .finally(() => {
-        if (!cancelado) setHidratado(true);
-      });
+      .catch(() => concluir(locais));
 
     return () => {
       cancelado = true;
@@ -322,6 +284,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     if (!temSessaoValida()) return;
 
+    const chavePendente = `${chaveRef.current}_pendente`;
+    window.localStorage.setItem(chavePendente, "1");
+
     window.clearTimeout(sincroniaTimer.current);
     sincroniaTimer.current = window.setTimeout(() => {
       void salvarCarrinho(
@@ -329,9 +294,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
           produtoId: item.produtoId,
           quantidade: item.quantidade,
         })),
-      ).catch(() => {
-        // Sync em segundo plano — não quebra adicionar/remover.
-      });
+      )
+        .then(() => window.localStorage.removeItem(chavePendente))
+        .catch(() => {
+          // Sync em segundo plano — não quebra adicionar/remover.
+        });
     }, DEBOUNCE_SINCRONIA_MS);
 
     return () => window.clearTimeout(sincroniaTimer.current);
